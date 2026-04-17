@@ -1,0 +1,23 @@
+{
+  "model_para": {
+    "en_0.vrm": {
+      "camera": {
+        "poseNet": {
+          "arm_horizontal_offset_percent": 35,
+          "arm_vertical_offset_percent": 4
+        }
+      }
+    }
+  },
+  "XR_Animator_settings_patch": {
+    "shoulder_adjust": "Full",
+    "user_camera": {
+      "ML_models": {
+        "pose": {
+          "arm_horizontal_offset_percent": 35,
+          "arm_vertical_offset_percent": 4
+        }
+      }
+    }
+  }
+}

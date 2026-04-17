@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(kill %1)",
+      "Bash(xargs -I{} kill {})",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm ls *)",
+      "Bash(awk '{print $2}')",
+      "Bash(node -e \"const k = require\\('kalidokit'\\); console.log\\(Object.keys\\(k\\)\\)\")",
+      "Bash(node -e \"import\\('kalidokit'\\).then\\(k => console.log\\(Object.keys\\(k.default ?? k\\)\\)\\).catch\\(e => console.log\\('err:', e.message\\)\\)\")"
+    ]
+  }
+}
