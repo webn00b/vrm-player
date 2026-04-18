@@ -169,7 +169,7 @@ export function mountDebugPanel(
           <button class="dbg-toggle off" id="cal-reset-btn" title="Reset sliders to 1.00">Reset</button>
         </div>
       </div>
-      <div class="dbg-hint">Hold T-pose while calibrating (arms out, straight)</div>
+      <div class="dbg-hint">Auto-scales each frame from hip width — no T-pose needed</div>
       <div class="dbg-stat" id="mocap-calib-stat">—</div>
       <div class="dbg-row">
         <span class="dbg-label">📐 Shoulder × <span id="cal-sh-val">1.00</span></span>
@@ -512,11 +512,12 @@ export function mountDebugPanel(
     };
     originalMocap.onCalibrationChange = (s) => {
       if (s.calibrated) {
+        const body = (s.bodyScale * 100).toFixed(0);
         const l = (s.leftArmScale * 100).toFixed(0);
         const r = (s.rightArmScale * 100).toFixed(0);
-        calibStat.textContent = `✓ arms L ${l}%  R ${r}%`;
+        calibStat.textContent = `✓ body ${body}%  L ${l}%  R ${r}%`;
       } else {
-        calibStat.textContent = `collecting ${s.sampleCount}/${s.sampleTarget}`;
+        calibStat.textContent = 'waiting for hip landmarks…';
       }
     };
   }

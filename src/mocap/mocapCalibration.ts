@@ -1,247 +1,164 @@
 /**
- * Per-performer body-proportion calibration.
+ * Per-frame hip-anchored body scale for mocap IK.
  *
- * Motivation: pure angle-driven retargeting (see DirectPoseApplier) sets each
- * bone's rotation from landmark directions. When the performer's proportions
- * differ from the avatar's — wider shoulders, longer forearms — the avatar's
- * hand ends up in a different world-space position than the performer's hand,
- * so the two hands don't "meet" in shots where they should.
+ * Philosophy: the avatar and the performer almost always have different body
+ * proportions. To make the avatar's hand land where the performer's hand lands
+ * we need to scale the performer's landmark positions to avatar-space. The
+ * most stable anchor for that scale is the HIP WIDTH — hips are large, always
+ * visible when the body is in frame, don't bend, and MediaPipe's world-
+ * landmarks deliver them in real metres.
  *
- * Fix: measure the performer's limb lengths from MediaPipe world-landmarks,
- * compare against the avatar's rest-pose bone lengths, and expose per-chain
- * scale ratios that a two-bone-IK solver can use to translate a performer
- * landmark position into an avatar-space target.
+ *   scale = avatarHipWidth / performerHipWidth      (per-frame)
  *
- * Calibration is automatic: we accumulate samples from frames where all four
- * torso landmarks plus the arm landmarks have visibility ≥ 0.9, and finalise
- * after SAMPLE_TARGET accepted samples using the median to shrug off jitter
- * and occasional landmark mis-detections. A manual recalibrate() resets the
- * accumulator — use it after the performer swaps or changes camera distance.
+ * This is what SystemAnimator / sysAnimOnline does, and it's the reason their
+ * output is stable without a T-pose calibration step. Performer distance from
+ * camera, arm bend, per-session body differences — all handled automatically
+ * because the scale is re-derived each frame from a stable reference.
+ *
+ * Previous version required 30 T-pose samples and measured arm length — that
+ * was noisy along MediaPipe's Z axis and blew up when the arms were bent.
+ *
+ * User-facing slider overrides (shoulder / leftArm / rightArm) are kept and
+ * now layer on top of the per-frame hip scale, so a stylised avatar with
+ * unusual proportions can be tuned manually.
  */
 
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import type { PoseFrame, Landmark3D } from './poseDetector';
 
-// MediaPipe landmark indices (duplicated from directPoseApplier to avoid a cycle).
 const LM = {
-  LEFT_SHOULDER:  11, RIGHT_SHOULDER: 12,
-  LEFT_ELBOW:     13, RIGHT_ELBOW:    14,
-  LEFT_WRIST:     15, RIGHT_WRIST:    16,
   LEFT_HIP:       23, RIGHT_HIP:      24,
 } as const;
 
-const SAMPLE_TARGET = 30;
-const VIS_GATE = 0.9;
-// Samples are only accepted when both arms are substantially straight — a bent
-// arm's shoulder→wrist distance in MediaPipe world-landmarks is noisy along Z,
-// and a bent-arm segment sum underestimates the real anatomy, inflating
-// armScale and pushing the IK target out of reach. dist(s,w) ≥ STRAIGHT_GATE ×
-// (dist(s,e)+dist(e,w)) ≈ 0.9 accepts near-T-pose frames where the length
-// measurement actually matches the performer's arm.
-const STRAIGHT_GATE = 0.88;
+const VIS_GATE = 0.7;
+const EMA_ALPHA = 0.15;  // smoothing of hip-width measurement — enough to kill
+                         // jitter, light enough to follow if the performer
+                         // steps toward/away from the camera.
 
 export interface CalibrationStatus {
   calibrated: boolean;
-  sampleCount: number;
-  sampleTarget: number;
-  leftArmScale: number;   // avatarArm / performerArm — 1 when not calibrated
-  rightArmScale: number;
-  shoulderWidthScale: number;
+  /** avatarHipWidth / performerHipWidth — the core scale factor. 1 when uncal. */
+  bodyScale: number;
+  leftArmScale: number;   // bodyScale * leftArm override
+  rightArmScale: number;  // bodyScale * rightArm override
+  shoulderWidthScale: number; // bodyScale * shoulder override
 }
-
-interface Sample {
-  shoulderWidth: number;
-  leftUpperArm: number;
-  leftLowerArm: number;
-  rightUpperArm: number;
-  rightLowerArm: number;
-}
-
-const _v = new THREE.Vector3();
 
 function distance(a: Landmark3D, b: Landmark3D): number {
   const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-function median(arr: number[]): number {
-  if (arr.length === 0) return 0;
-  const sorted = [...arr].sort((a, b) => a - b);
-  const mid = sorted.length >> 1;
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
 export class MocapCalibration {
-  // Avatar bone lengths — read once at construction from VRM rest pose.
-  readonly avatarShoulderWidth: number;
+  /** Avatar hip width (distance between leftUpperLeg and rightUpperLeg world
+   *  positions in rest pose), read once at construction. */
+  readonly avatarHipWidth: number;
+
+  /** Avatar limb bone lengths — still needed by the IK solver. */
   readonly avatarLeftUpperArm:  number;
   readonly avatarLeftLowerArm:  number;
   readonly avatarRightUpperArm: number;
   readonly avatarRightLowerArm: number;
 
-  // Accumulating samples until we have enough.
-  private samples: Sample[] = [];
-
-  // Performer lengths (medianed across all samples). 0 until calibrated.
-  private performerShoulderWidth = 0;
-  private performerLeftUpperArm  = 0;
-  private performerLeftLowerArm  = 0;
-  private performerRightUpperArm = 0;
-  private performerRightLowerArm = 0;
-
+  /** Live EMA of performer hip width in metres. 0 until first valid frame. */
+  private performerHipWidth = 0;
   private _calibrated = false;
 
-  // User-facing slider multipliers — applied on top of auto-calibration so the
-  // user can nudge the fit without re-running the sample buffer. Default 1.
+  // User slider multipliers — 1 = neutral.
   private _overrideShoulder = 1;
   private _overrideLeftArm  = 1;
   private _overrideRightArm = 1;
 
-  /** Called when calibration state or sample count changes. */
   onStatusChange: ((s: CalibrationStatus) => void) | null = null;
 
   constructor(vrm: VRM) {
-    // Normalized humanoid: each child bone's local .position is the rest-pose
-    // offset from its parent in the parent's local frame. Its length is the
-    // bone length (since normalization aligns the bone along its local Y).
     const humanoid = vrm.humanoid;
+    vrm.scene.updateMatrixWorld(true);
+
     const boneLen = (childName: string): number => {
       const node = humanoid.getNormalizedBoneNode(childName as any);
       return node ? node.position.length() : 0;
     };
 
-    const lShoulderNode = humanoid.getNormalizedBoneNode('leftShoulder' as any)
-      ?? humanoid.getNormalizedBoneNode('leftUpperArm' as any);
-    const rShoulderNode = humanoid.getNormalizedBoneNode('rightShoulder' as any)
-      ?? humanoid.getNormalizedBoneNode('rightUpperArm' as any);
-    // Shoulder width = distance between left and right upperArm origins in world.
-    vrm.scene.updateMatrixWorld(true);
+    // Hip width = world distance between leftUpperLeg and rightUpperLeg origins.
+    const lHipNode = humanoid.getNormalizedBoneNode('leftUpperLeg'  as any);
+    const rHipNode = humanoid.getNormalizedBoneNode('rightUpperLeg' as any);
     const lPos = new THREE.Vector3(), rPos = new THREE.Vector3();
-    if (lShoulderNode && rShoulderNode) {
-      humanoid.getNormalizedBoneNode('leftUpperArm'  as any)?.getWorldPosition(lPos);
-      humanoid.getNormalizedBoneNode('rightUpperArm' as any)?.getWorldPosition(rPos);
-    }
-    this.avatarShoulderWidth = lPos.distanceTo(rPos);
+    lHipNode?.getWorldPosition(lPos);
+    rHipNode?.getWorldPosition(rPos);
+    this.avatarHipWidth = lPos.distanceTo(rPos);
 
-    this.avatarLeftUpperArm  = boneLen('leftLowerArm');   // upperArm length = distance to child (lowerArm)
-    this.avatarLeftLowerArm  = boneLen('leftHand');       // lowerArm length = distance to child (hand)
+    // Arm bone lengths (child bone's local position length = bone length).
+    this.avatarLeftUpperArm  = boneLen('leftLowerArm');
+    this.avatarLeftLowerArm  = boneLen('leftHand');
     this.avatarRightUpperArm = boneLen('rightLowerArm');
     this.avatarRightLowerArm = boneLen('rightHand');
   }
 
   get calibrated(): boolean { return this._calibrated; }
-  get sampleCount(): number { return this.samples.length; }
 
-  /** Reset accumulator — calibration will re-run on next high-visibility frames. */
+  /** Reset the running hip-width estimate; it'll refill on next good frame. */
   recalibrate(): void {
-    this.samples = [];
+    this.performerHipWidth = 0;
     this._calibrated = false;
-    this.performerShoulderWidth = 0;
-    this.performerLeftUpperArm  = 0;
-    this.performerLeftLowerArm  = 0;
-    this.performerRightUpperArm = 0;
-    this.performerRightLowerArm = 0;
-    this._emit();
-  }
-
-  /** Feed every mocap frame. Silently no-ops once calibrated. */
-  feed(frame: PoseFrame): void {
-    if (this._calibrated) return;
-
-    const lms = frame.worldLandmarks;
-    const ls = lms[LM.LEFT_SHOULDER], rs = lms[LM.RIGHT_SHOULDER];
-    const le = lms[LM.LEFT_ELBOW],    re = lms[LM.RIGHT_ELBOW];
-    const lw = lms[LM.LEFT_WRIST],    rw = lms[LM.RIGHT_WRIST];
-    if (!ls || !rs || !le || !re || !lw || !rw) return;
-
-    const v = (lm: Landmark3D): number => lm.visibility ?? 0;
-    if (v(ls) < VIS_GATE || v(rs) < VIS_GATE) return;
-    if (v(le) < VIS_GATE || v(re) < VIS_GATE) return;
-    if (v(lw) < VIS_GATE || v(rw) < VIS_GATE) return;
-
-    // Reject bent arms. A bent arm underestimates true arm length and inflates
-    // armScale. Measure straightness as directness = |s→w| / (|s→e|+|e→w|).
-    const leftUpper  = distance(ls, le);
-    const leftLower  = distance(le, lw);
-    const rightUpper = distance(rs, re);
-    const rightLower = distance(re, rw);
-    const leftSpan   = distance(ls, lw);
-    const rightSpan  = distance(rs, rw);
-    const leftStraight  = leftSpan  / Math.max(1e-6, leftUpper  + leftLower);
-    const rightStraight = rightSpan / Math.max(1e-6, rightUpper + rightLower);
-    if (leftStraight < STRAIGHT_GATE || rightStraight < STRAIGHT_GATE) return;
-
-    this.samples.push({
-      shoulderWidth: distance(ls, rs),
-      leftUpperArm:  leftUpper,
-      leftLowerArm:  leftLower,
-      rightUpperArm: rightUpper,
-      rightLowerArm: rightLower,
-    });
-
-    if (this.samples.length >= SAMPLE_TARGET) {
-      this._finalise();
-    } else {
-      this._emit();
-    }
-  }
-
-  private _finalise(): void {
-    this.performerShoulderWidth = median(this.samples.map(s => s.shoulderWidth));
-    this.performerLeftUpperArm  = median(this.samples.map(s => s.leftUpperArm));
-    this.performerLeftLowerArm  = median(this.samples.map(s => s.leftLowerArm));
-    this.performerRightUpperArm = median(this.samples.map(s => s.rightUpperArm));
-    this.performerRightLowerArm = median(this.samples.map(s => s.rightLowerArm));
-    this._calibrated = true;
     this._emit();
   }
 
   /**
-   * Per-side arm scale: avatar whole-arm length / performer whole-arm length,
-   * multiplied by the user-slider override (default 1). Returns 1 until
-   * calibration completes (effectively disabling IK scaling).
+   * Called every mocap frame. Updates the running EMA of the performer's hip
+   * width whenever both hip landmarks are sufficiently visible.
    */
-  armScale(side: 'left' | 'right'): number {
-    const override = side === 'left' ? this._overrideLeftArm : this._overrideRightArm;
-    if (!this._calibrated) return override;
-    const avatar = side === 'left'
-      ? this.avatarLeftUpperArm  + this.avatarLeftLowerArm
-      : this.avatarRightUpperArm + this.avatarRightLowerArm;
-    const performer = side === 'left'
-      ? this.performerLeftUpperArm  + this.performerLeftLowerArm
-      : this.performerRightUpperArm + this.performerRightLowerArm;
-    if (performer < 1e-4) return override;
-    return (avatar / performer) * override;
+  feed(frame: PoseFrame): void {
+    const lms = frame.worldLandmarks;
+    const lh = lms[LM.LEFT_HIP], rh = lms[LM.RIGHT_HIP];
+    if (!lh || !rh) return;
+    if ((lh.visibility ?? 0) < VIS_GATE) return;
+    if ((rh.visibility ?? 0) < VIS_GATE) return;
+
+    const raw = distance(lh, rh);
+    if (raw < 1e-3) return;   // degenerate, ignore
+
+    if (this.performerHipWidth <= 0) {
+      this.performerHipWidth = raw;   // seed
+      this._calibrated = true;
+    } else {
+      this.performerHipWidth = this.performerHipWidth * (1 - EMA_ALPHA) + raw * EMA_ALPHA;
+    }
+    this._emit();
   }
 
-  /** Avatar's upperArm length for the given side (metres). */
+  /** Core scale: avatar hips / performer hips. 1 if not calibrated. */
+  bodyScale(): number {
+    if (!this._calibrated || this.performerHipWidth < 1e-4) return 1;
+    return this.avatarHipWidth / this.performerHipWidth;
+  }
+
+  /** Per-side arm scale for IK target. Multiplies body scale by user override. */
+  armScale(side: 'left' | 'right'): number {
+    const override = side === 'left' ? this._overrideLeftArm : this._overrideRightArm;
+    return this.bodyScale() * override;
+  }
+
+  /** Cross-body (shoulder-axis) scale factor. Multiplies body scale by override. */
+  shoulderWidthRatio(): number {
+    return this.bodyScale() * this._overrideShoulder;
+  }
+
+  /** Avatar upperArm length for the given side (metres). Used by IK solver. */
   upperArmLength(side: 'left' | 'right'): number {
     return side === 'left' ? this.avatarLeftUpperArm : this.avatarRightUpperArm;
   }
-  /** Avatar's lowerArm length for the given side (metres). */
+  /** Avatar lowerArm length for the given side (metres). Used by IK solver. */
   lowerArmLength(side: 'left' | 'right'): number {
     return side === 'left' ? this.avatarLeftLowerArm : this.avatarRightLowerArm;
   }
 
-  /**
-   * Ratio avatar shoulder width / performer shoulder width. Used to scale
-   * the cross-body (shoulder-axis) component of landmark offsets so the
-   * avatar's hands meet at its midline when the performer's hands meet at
-   * theirs — even when the two have different shoulder widths. Returns 1
-   * until calibration completes.
-   */
-  shoulderWidthRatio(): number {
-    if (!this._calibrated || this.performerShoulderWidth < 1e-4) return this._overrideShoulder;
-    return (this.avatarShoulderWidth / this.performerShoulderWidth) * this._overrideShoulder;
-  }
-
-  /** User slider multipliers on top of auto-calibration. 1 = neutral. */
   setOverride(kind: 'shoulder' | 'leftArm' | 'rightArm', v: number): void {
     const clamped = Math.max(0.1, Math.min(3, v));
-    if (kind === 'shoulder')   this._overrideShoulder = clamped;
-    if (kind === 'leftArm')    this._overrideLeftArm  = clamped;
-    if (kind === 'rightArm')   this._overrideRightArm = clamped;
+    if (kind === 'shoulder') this._overrideShoulder = clamped;
+    if (kind === 'leftArm')  this._overrideLeftArm  = clamped;
+    if (kind === 'rightArm') this._overrideRightArm = clamped;
     this._emit();
   }
 
@@ -255,14 +172,11 @@ export class MocapCalibration {
 
   status(): CalibrationStatus {
     return {
-      calibrated: this._calibrated,
-      sampleCount: this.samples.length,
-      sampleTarget: SAMPLE_TARGET,
-      leftArmScale:  this.armScale('left'),
-      rightArmScale: this.armScale('right'),
-      shoulderWidthScale: this._calibrated && this.performerShoulderWidth > 1e-4
-        ? this.avatarShoulderWidth / this.performerShoulderWidth
-        : 1,
+      calibrated:        this._calibrated,
+      bodyScale:         this.bodyScale(),
+      leftArmScale:      this.armScale('left'),
+      rightArmScale:     this.armScale('right'),
+      shoulderWidthScale: this.shoulderWidthRatio(),
     };
   }
 
