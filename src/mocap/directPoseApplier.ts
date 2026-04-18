@@ -99,19 +99,39 @@ export class DirectPoseApplier {
   private nodeCache     = new Map<string, THREE.Object3D>();
   private restLocalAxis = new Map<string, THREE.Vector3>();
 
-  private _bodyLerp = 0.3;
-  private _handLerp = 0.4;
-  private _mirrorX  = true;   // mirror landmarks left↔right (selfie view)
+  private _bodyLerp   = 0.3;
+  private _handLerp   = 0.4;
+  private _mirrorX    = true;   // mirror landmarks left↔right (selfie view)
+  private _depthScale = 0.5;    // MediaPipe Z is noisy — reduce its influence
+
+  // Default hips world-rotation at load time. The VRM often ships with a
+  // non-identity hips orientation (e.g. 180° around Y) to face the camera.
+  // We preserve it as a baseline so that at T-pose our code produces the
+  // character's natural facing direction instead of forcibly re-facing to +Z.
+  private _hipsBaseWorld = new THREE.Quaternion();
 
   // Scratch allocations — reused each frame to avoid GC pressure
   private _v1 = new THREE.Vector3();
+  private _v2 = new THREE.Vector3();
+  private _v3 = new THREE.Vector3();
+  private _v4 = new THREE.Vector3();
   private _q1 = new THREE.Quaternion();
   private _q2 = new THREE.Quaternion();
+  private _m1 = new THREE.Matrix4();
 
   constructor(vrm: VRM) {
     this.vrm = vrm;
     this._buildCache();
     this._computeRestAxes();
+    this._captureHipsBaseline();
+  }
+
+  private _captureHipsBaseline(): void {
+    const hipsNode = this.nodeCache.get('hips');
+    if (!hipsNode) return;
+    // Make sure the whole VRM world matrix chain is fresh before reading
+    this.vrm.scene.updateMatrixWorld(true);
+    hipsNode.getWorldQuaternion(this._hipsBaseWorld);
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -126,7 +146,18 @@ export class DirectPoseApplier {
   setMirrorX(enabled: boolean): void { this._mirrorX = enabled; }
   get mirrorX(): boolean { return this._mirrorX; }
 
+  /** Scale MediaPipe Z (depth). 0 = planar (no depth), 1 = full 3D.
+   *  Lower values help when depth estimation is jittery and arms "pass through"
+   *  each other or the torso. Sweet spot is usually 0.3–0.6. */
+  setDepthScale(v: number): void {
+    this._depthScale = Math.max(0, Math.min(1, v));
+  }
+  get depthScale(): number { return this._depthScale; }
+
   apply(frame: PoseFrame): void {
+    // Torso first — its rotations propagate to limbs via parent world matrices.
+    this._applyHips(frame);
+    this._applySpine(frame);
     for (const bone of PROCESS_ORDER) {
       const [pIdx, cIdx] = LIMB_BONES[bone];
       this._applyLimb(bone, frame, pIdx, cIdx);
@@ -182,7 +213,120 @@ export class DirectPoseApplier {
    * So: flip Y and Z. _mirrorX toggles X-negation for selfie mirror view.
    */
   private _mpDeltaToVrm(dx: number, dy: number, dz: number, out: THREE.Vector3): void {
-    out.set(this._mirrorX ? -dx : dx, -dy, -dz);
+    out.set(this._mirrorX ? -dx : dx, -dy, -dz * this._depthScale);
+  }
+
+  /**
+   * Compute hips world orientation from the torso quadrilateral (shoulder + hip lines).
+   *   X (right→left in character frame) = direction across hips
+   *   Y (up along spine)                 = midHip → midShoulder
+   *   Z (forward from character)         = cross(X, Y)
+   *
+   * After mirror-swap: person's RIGHT hip maps to character's LEFT hip, so the
+   * character-space "right→left" direction = (personRightHip - personLeftHip)
+   * fed through _mpDeltaToVrm (which applies the mirror flip).
+   */
+  private _applyHips(frame: PoseFrame): void {
+    const hipsNode = this.nodeCache.get('hips');
+    if (!hipsNode || !hipsNode.parent) return;
+
+    const lms = frame.worldLandmarks;
+    const lh = lms[LM.LEFT_HIP], rh = lms[LM.RIGHT_HIP];
+    const ls = lms[LM.LEFT_SHOULDER], rs = lms[LM.RIGHT_SHOULDER];
+    if (!lh || !rh || !ls || !rs) return;
+
+    // Spine up direction (midHip → midShoulder)
+    const spineDir = this._v1;
+    this._mpDeltaToVrm(
+      (ls.x + rs.x) / 2 - (lh.x + rh.x) / 2,
+      (ls.y + rs.y) / 2 - (lh.y + rh.y) / 2,
+      (ls.z + rs.z) / 2 - (lh.z + rh.z) / 2,
+      spineDir,
+    );
+    if (spineDir.lengthSq() < 1e-6) return;
+    spineDir.normalize();
+
+    // Hip axis: person's right hip → left hip. Mirror-flip inside _mpDeltaToVrm
+    // turns this into "character's right → left" = VRM +X at rest.
+    const hipAxis = this._v2;
+    this._mpDeltaToVrm(rh.x - lh.x, rh.y - lh.y, rh.z - lh.z, hipAxis);
+    if (hipAxis.lengthSq() < 1e-6) return;
+    hipAxis.normalize();
+
+    // Build orthonormal basis: Z = X × Y, then re-orthogonalise X = Y × Z.
+    const zAxis = this._v3.crossVectors(hipAxis, spineDir);
+    if (zAxis.lengthSq() < 1e-6) return;
+    zAxis.normalize();
+    const xAxis = this._v4.crossVectors(spineDir, zAxis).normalize();
+
+    this._m1.makeBasis(xAxis, spineDir, zAxis);
+    this._q1.setFromRotationMatrix(this._m1);   // M = body pose delta from T-pose
+
+    // Compose with the VRM's default hips facing so the character preserves
+    // its natural orientation at T-pose (M=identity → result = baseline).
+    this._q1.premultiply(this._hipsBaseWorld);  // target world = baseline * M
+
+    // Convert to hips.parent local frame
+    hipsNode.parent.updateWorldMatrix(true, false);
+    hipsNode.parent.getWorldQuaternion(this._q2).invert();
+    this._q1.premultiply(this._q2);             // parentInv * worldTarget = local
+
+    if (this._bodyLerp >= 1) hipsNode.quaternion.copy(this._q1);
+    else                     hipsNode.quaternion.slerp(this._q1, this._bodyLerp);
+    hipsNode.updateWorldMatrix(false, true);
+  }
+
+  /**
+   * Spine / chest twist — the yaw between shoulder line and hip line,
+   * computed in HIPS LOCAL frame. Both axes are transformed via the
+   * current hips world-quaternion-inverse so the twist is independent
+   * of the VRM's default facing baseline (e.g. 180° around Y).
+   */
+  private _applySpine(frame: PoseFrame): void {
+    const spineNode = this.nodeCache.get('spine');
+    const chestNode = this.nodeCache.get('chest') ?? this.nodeCache.get('upperChest');
+    const hipsNode  = this.nodeCache.get('hips');
+    if (!hipsNode || (!spineNode && !chestNode)) return;
+
+    const lms = frame.worldLandmarks;
+    const lh = lms[LM.LEFT_HIP], rh = lms[LM.RIGHT_HIP];
+    const ls = lms[LM.LEFT_SHOULDER], rs = lms[LM.RIGHT_SHOULDER];
+    if (!lh || !rh || !ls || !rs) return;
+
+    // Both hip + shoulder lines in VRM world coords
+    const hipAxis      = this._v1;
+    const shoulderAxis = this._v2;
+    this._mpDeltaToVrm(rh.x - lh.x, rh.y - lh.y, rh.z - lh.z, hipAxis);
+    this._mpDeltaToVrm(rs.x - ls.x, rs.y - ls.y, rs.z - ls.z, shoulderAxis);
+    if (hipAxis.lengthSq() < 1e-6 || shoulderAxis.lengthSq() < 1e-6) return;
+
+    // Transform both into hips local frame
+    hipsNode.updateWorldMatrix(true, false);
+    hipsNode.getWorldQuaternion(this._q1).invert();
+    hipAxis.applyQuaternion(this._q1);
+    shoulderAxis.applyQuaternion(this._q1);
+
+    // Project onto hips-local horizontal plane (XZ) to isolate Y-axis twist
+    hipAxis.y = 0; shoulderAxis.y = 0;
+    if (hipAxis.lengthSq() < 1e-6 || shoulderAxis.lengthSq() < 1e-6) return;
+    hipAxis.normalize();
+    shoulderAxis.normalize();
+
+    // Twist = rotation from hipAxis (projected) to shoulderAxis (projected).
+    // At T-pose both project to the same direction → identity. No baseline bias.
+    const fullTwist = this._q1.setFromUnitVectors(hipAxis, shoulderAxis);
+
+    // Split evenly: halfTwist² = fullTwist for single-axis rotations.
+    const count = (spineNode ? 1 : 0) + (chestNode ? 1 : 0);
+    const halfTwist = this._q2.identity().slerp(fullTwist, 1 / count);
+
+    const applyTwist = (node: THREE.Object3D): void => {
+      if (this._bodyLerp >= 1) node.quaternion.copy(halfTwist);
+      else                     node.quaternion.slerp(halfTwist, this._bodyLerp);
+      node.updateWorldMatrix(false, true);
+    };
+    if (spineNode) applyTwist(spineNode);
+    if (chestNode) applyTwist(chestNode);
   }
 
   private _applyLimb(

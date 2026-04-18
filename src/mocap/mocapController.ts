@@ -63,6 +63,9 @@ export class MocapController {
   setFilterEnabled(v: boolean): void { this.detector.setFilterEnabled(v); }
   get filterEnabled(): boolean { return this.detector.filterEnabled; }
 
+  setDepthScale(v: number): void { this.applier.setDepthScale(v); }
+  get depthScale(): number { return this.applier.depthScale; }
+
   // ── State transitions ──────────────────────────────────────────────────────
 
   /** Start camera + live pose preview. */

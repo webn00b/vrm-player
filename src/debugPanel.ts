@@ -122,6 +122,14 @@ export function mountDebugPanel(
         <span class="dbg-label">🌊 1€ smoothing</span>
         <button class="dbg-toggle" id="mocap-filter-btn">ON</button>
       </div>
+      <div class="dbg-row">
+        <span class="dbg-label">📐 Depth</span>
+        <div style="display:flex;gap:3px">
+          <button class="dbg-toggle off" data-depth="0">2D</button>
+          <button class="dbg-toggle"     data-depth="0.5">mid</button>
+          <button class="dbg-toggle off" data-depth="1">3D</button>
+        </div>
+      </div>
       <div class="dbg-hint">Recorded BVH auto-replays on the model for comparison</div>
       <canvas id="mocap-canvas" style="display:none;width:100%;border-radius:6px;margin-top:6px;background:#000"></canvas>
     </div>
@@ -317,6 +325,20 @@ export function mountDebugPanel(
     mocap.setFilterEnabled(next);
     filterBtn.textContent = next ? 'ON' : 'OFF';
     filterBtn.classList.toggle('off', !next);
+  });
+
+  // ── Depth scale (2D / mid / 3D) ──────────────────────────────────────────────
+
+  root.querySelectorAll<HTMLButtonElement>('.dbg-toggle[data-depth]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mocap = getMocap();
+      if (!mocap) return;
+      const v = parseFloat(btn.dataset.depth!);
+      mocap.setDepthScale(v);
+      root.querySelectorAll<HTMLButtonElement>('.dbg-toggle[data-depth]').forEach((b) => {
+        b.classList.toggle('off', parseFloat(b.dataset.depth!) !== v);
+      });
+    });
   });
 
   // Wire state-change callback
