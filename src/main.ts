@@ -10,6 +10,7 @@ import { mountLibrary, mountQueue, setStatus } from './ui';
 import { mountDebugPanel } from './debugPanel';
 import { MocapController } from './mocap/mocapController';
 import { SkeletonVisualizer } from './skeletonVisualizer';
+import { BoneValidator } from './validation/boneValidator';
 
 const vrmModules = import.meta.glob('/models/*.vrm', {
   query: '?url',
@@ -58,6 +59,9 @@ async function main() {
   const micro    = new MicroAnimations();
   const idleLoop = new IdleLoop();
 
+  // ── Bone rotation validator (AAOS/ISB ROM) ─────────────────────────────────
+  const validator = new BoneValidator(vrm);
+
   // ── Skeleton visualizer ────────────────────────────────────────────────────
   const skelViz = new SkeletonVisualizer(vrm, ctx.scene);
 
@@ -68,8 +72,8 @@ async function main() {
   const entries = resolveAnimations();
   if (entries.length === 0) {
     setStatus('no .bvh files — idle mode active');
-    mountDebugPanel(micro, idleLoop, pa, () => null, () => mocap, skelViz);
-    startRenderLoop(ctx, null, vrm, pa, micro, idleLoop, skelViz);
+    mountDebugPanel(micro, idleLoop, pa, () => null, () => mocap, skelViz, validator);
+    startRenderLoop(ctx, null, vrm, pa, micro, idleLoop, skelViz, validator);
     return;
   }
 
@@ -85,7 +89,7 @@ async function main() {
   setStatus('drag animations from Library → Queue to play');
 
   // ── Debug panel ────────────────────────────────────────────────────────────
-  mountDebugPanel(micro, idleLoop, pa, () => controller, () => mocap, skelViz);
+  mountDebugPanel(micro, idleLoop, pa, () => controller, () => mocap, skelViz, validator);
 
   // ── Library (source) ───────────────────────────────────────────────────────
   const names = entries.map((e) => e.name);
@@ -136,7 +140,7 @@ async function main() {
     setStatus(`${queuePos + 1}/${controller.queueLength} · ${item.name} · ${item.duration.toFixed(1)}s`);
   });
 
-  startRenderLoop(ctx, controller, vrm, pa, micro, idleLoop, skelViz);
+  startRenderLoop(ctx, controller, vrm, pa, micro, idleLoop, skelViz, validator);
 }
 
 function startRenderLoop(
@@ -147,6 +151,7 @@ function startRenderLoop(
   micro: MicroAnimations,
   idleLoop: IdleLoop,
   skelViz: SkeletonVisualizer,
+  validator: BoneValidator,
 ): void {
   const tick = () => {
     const delta = ctx.clock.getDelta();
@@ -159,6 +164,9 @@ function startRenderLoop(
       idleLoop.update(vrm, pa);
       pa.applyAll();
     }
+
+    // 2b. Clamp all bone rotations to anatomical ROM
+    validator.clampAll();
 
     // 3. Micro-animations — always, delta-based
     micro.update(vrm);

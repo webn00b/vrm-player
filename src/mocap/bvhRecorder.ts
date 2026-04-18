@@ -121,6 +121,27 @@ export class BvhRecorder {
     this.frames.push({ time, bones });
   }
 
+  /**
+   * Append one frame at a synthetic time (frames.length * FRAME_TIME), bypassing
+   * the wall-clock rate limiter. Used for manual frame-by-frame capture: each
+   * call adds exactly one frame regardless of how fast the user clicks.
+   * Auto-starts the recording buffer if not already recording.
+   */
+  captureFrame(getQuaternion: (name: string) => [number, number, number, number] | null): void {
+    if (!this._recording) {
+      this.frames    = [];
+      this.startTime = performance.now();
+      this._lastFrameTime = -Infinity;
+      this._recording = true;
+    }
+    const time = this.frames.length * FRAME_TIME;
+    const bones: Record<string, [number, number, number, number]> = {};
+    for (const j of JOINTS) {
+      bones[j.name] = getQuaternion(j.name) ?? [0, 0, 0, 1];
+    }
+    this.frames.push({ time, bones });
+  }
+
   /** Stop and return the BVH text. */
   stop(): string {
     this._recording = false;
