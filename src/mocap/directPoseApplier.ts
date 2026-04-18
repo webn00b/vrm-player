@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import { Hand as KalidoHand } from 'kalidokit';
 import type { PoseFrame } from './poseDetector';
+import type { MocapCalibration } from './mocapCalibration';
+import { solveTwoBoneIK, type TwoBoneIKResult } from './twoBoneIK';
 
 // ── MediaPipe BlazePose landmark indices ──────────────────────────────────────
 
@@ -96,6 +98,7 @@ function kalidoHandBoneToVrm(kalidoName: string): string {
  */
 export class DirectPoseApplier {
   private vrm: VRM;
+  private calibration: MocapCalibration | null = null;
   private nodeCache     = new Map<string, THREE.Object3D>();
   private restLocalAxis = new Map<string, THREE.Vector3>();
 
@@ -116,16 +119,28 @@ export class DirectPoseApplier {
   private _v2 = new THREE.Vector3();
   private _v3 = new THREE.Vector3();
   private _v4 = new THREE.Vector3();
+  private _v5 = new THREE.Vector3();
+  private _v6 = new THREE.Vector3();
   private _q1 = new THREE.Quaternion();
   private _q2 = new THREE.Quaternion();
   private _m1 = new THREE.Matrix4();
+  private _ikResult: TwoBoneIKResult = {
+    upperDir: new THREE.Vector3(),
+    elbowPos: new THREE.Vector3(),
+    lowerDir: new THREE.Vector3(),
+    reachable: true,
+  };
 
-  constructor(vrm: VRM) {
+  constructor(vrm: VRM, calibration?: MocapCalibration) {
     this.vrm = vrm;
+    this.calibration = calibration ?? null;
     this._buildCache();
     this._computeRestAxes();
     this._captureHipsBaseline();
   }
+
+  /** Late-binding hook if calibration is constructed after the applier. */
+  setCalibration(c: MocapCalibration): void { this.calibration = c; }
 
   private _captureHipsBaseline(): void {
     const hipsNode = this.nodeCache.get('hips');
@@ -172,10 +187,23 @@ export class DirectPoseApplier {
     // Torso first — its rotations propagate to limbs via parent world matrices.
     this._applyHips(frame);
     this._applySpine(frame);
+
+    // Arms: IK (proportion-scaled hand target) once calibration is ready;
+    // otherwise fall back to angle-based so tracking is not blocked by an
+    // un-calibrated performer.
+    const ikReady = this.calibration?.calibrated === true;
     for (const bone of PROCESS_ORDER) {
+      const isArmUpper = bone === 'leftUpperArm' || bone === 'rightUpperArm';
+      const isArmLower = bone === 'leftLowerArm' || bone === 'rightLowerArm';
+      if (ikReady && isArmUpper) {
+        this._applyArmIK(frame, bone.startsWith('left') ? 'left' : 'right');
+        continue;
+      }
+      if (ikReady && isArmLower) continue; // handled by IK in the upper-arm pass
       const [pIdx, cIdx] = LIMB_BONES[bone];
       this._applyLimb(bone, frame, pIdx, cIdx);
     }
+
     for (const hand of frame.hands) {
       this._applyHand(hand.landmarks, hand.side);
     }
@@ -384,6 +412,96 @@ export class DirectPoseApplier {
 
     // 5. Refresh so the child bone sees the updated parent world rotation
     node.updateWorldMatrix(false, true);
+  }
+
+  /**
+   * IK variant of the shoulder+elbow chain. Consumes the performer's wrist
+   * landmark position (scaled by calibration armScale) as the hand target,
+   * then solves the upperArm+lowerArm rotations so the avatar's hand lands
+   * at the same proportion-adjusted spot. Hand/wrist rotation is left to
+   * the existing angle-based _applyHand pass — we only place the endpoint.
+   */
+  private _applyArmIK(frame: PoseFrame, side: 'left' | 'right'): void {
+    const calib = this.calibration;
+    if (!calib || !calib.calibrated) return;
+
+    const upperName = side + 'UpperArm';
+    const lowerName = side + 'LowerArm';
+    const upperNode = this.nodeCache.get(upperName);
+    const lowerNode = this.nodeCache.get(lowerName);
+    const upperRest = this.restLocalAxis.get(upperName);
+    const lowerRest = this.restLocalAxis.get(lowerName);
+    if (!upperNode || !lowerNode || !upperRest || !lowerRest || !upperNode.parent) return;
+
+    // Mirror: character's LEFT arm is driven by performer's RIGHT landmarks,
+    // and the opposite shoulder is needed to anchor the target to the mid-
+    // shoulder point (so wrist = midline performer → wrist = midline avatar,
+    // not crossing into the opposite side of the body).
+    const lms = frame.worldLandmarks;
+    const sIdx   = side === 'left' ? 12 : 11;  // same-side shoulder (mirrored)
+    const sIdxOp = side === 'left' ? 11 : 12;  // opposite-side shoulder
+    const eIdx   = side === 'left' ? 14 : 13;
+    const wIdx   = side === 'left' ? 16 : 15;
+    const ps = lms[sIdx], psOp = lms[sIdxOp], pe = lms[eIdx], pw = lms[wIdx];
+    if (!ps || !psOp || !pe || !pw) return;
+    if (!this._visible(ps) || !this._visible(psOp)) return;
+    if (!this._visible(pe) || !this._visible(pw)) return;
+
+    // Avatar mid-shoulder world pos = midpoint of left+right upperArm origins.
+    const leftUpper  = this.nodeCache.get('leftUpperArm');
+    const rightUpper = this.nodeCache.get('rightUpperArm');
+    if (!leftUpper || !rightUpper) return;
+    leftUpper.parent?.updateWorldMatrix(true, false);
+    rightUpper.parent?.updateWorldMatrix(true, false);
+    const leftShoulderWorld  = leftUpper.getWorldPosition(this._v5);
+    const rightShoulderWorld = rightUpper.getWorldPosition(this._v6);
+    const midShoulderWorld = this._v3
+      .copy(leftShoulderWorld).add(rightShoulderWorld).multiplyScalar(0.5);
+
+    // The actual shoulder we IK from stays the same-side upperArm.
+    upperNode.parent!.updateWorldMatrix(true, false);
+    upperNode.updateWorldMatrix(false, false);
+    const shoulderWorld = upperNode.getWorldPosition(this._v5);
+
+    // Performer's wrist offset from their mid-shoulder, in VRM frame.
+    const midPerfX = (ps.x + psOp.x) * 0.5;
+    const midPerfY = (ps.y + psOp.y) * 0.5;
+    const midPerfZ = (ps.z + psOp.z) * 0.5;
+    this._mpDeltaToVrm(pw.x - midPerfX, pw.y - midPerfY, pw.z - midPerfZ, this._v1);
+
+    // Per-axis scale: X (across shoulders) → shoulder-width ratio,
+    // Y (vertical) & Z (depth) → arm-length ratio.
+    const armScale = calib.armScale(side);
+    const widthScale = calib.shoulderWidthRatio();
+    this._v1.x *= widthScale;
+    this._v1.y *= armScale;
+    this._v1.z *= armScale;
+    const target = this._v4.copy(midShoulderWorld).add(this._v1);
+
+    // Pole vector: performer's shoulder→elbow direction, VRM frame.
+    this._mpDeltaToVrm(pe.x - ps.x, pe.y - ps.y, pe.z - ps.z, this._v2);
+    if (this._v2.lengthSq() < 1e-6) this._v2.set(0, -1, 0);
+
+    // Solve the chain in world space.
+    const upperLen = calib.upperArmLength(side);
+    const lowerLen = calib.lowerArmLength(side);
+    const ik = solveTwoBoneIK(shoulderWorld, target, this._v2, upperLen, lowerLen, this._ikResult);
+
+    // --- upper bone: world direction → upperArm parent-local rotation
+    upperNode.parent.getWorldQuaternion(this._q1).invert();
+    this._v3.copy(ik.upperDir).applyQuaternion(this._q1);   // into parent local
+    this._q2.setFromUnitVectors(upperRest, this._v3);
+    if (this._bodyLerp >= 1) upperNode.quaternion.copy(this._q2);
+    else                     upperNode.quaternion.slerp(this._q2, this._bodyLerp);
+    upperNode.updateWorldMatrix(false, true);
+
+    // --- lower bone: world direction → lowerArm parent-local (parent = upperArm)
+    upperNode.getWorldQuaternion(this._q1).invert();
+    this._v3.copy(ik.lowerDir).applyQuaternion(this._q1);
+    this._q2.setFromUnitVectors(lowerRest, this._v3);
+    if (this._bodyLerp >= 1) lowerNode.quaternion.copy(this._q2);
+    else                     lowerNode.quaternion.slerp(this._q2, this._bodyLerp);
+    lowerNode.updateWorldMatrix(false, true);
   }
 
   private _applyHand(landmarks: any[], side: 'Left' | 'Right'): void {

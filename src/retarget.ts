@@ -5,12 +5,23 @@ import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-v
 import type { ParsedBVH } from './bvhLoader';
 // @ts-ignore — copied JS module from pixiv/bvh2vrma
 import { convertBVHToVRMAnimation } from './bvh2vrma/convertBVHToVRMAnimation.js';
+import { validateClip, clampClip } from './validation/clipValidator';
+
+export interface RetargetOptions {
+  /** If true, keyframes outside anatomical ROM are clamped in-place. Default false (log only). */
+  clampOutOfRange?: boolean;
+}
 
 /**
  * Full pipeline: BVH → VRMA (via GLTFExporter) → VRMAnimation → AnimationClip
  * Uses the exact same logic as the reference project (pixiv/bvh2vrma).
  */
-export async function retargetBvhToVrm(vrm: VRM, bvh: ParsedBVH, name: string): Promise<THREE.AnimationClip> {
+export async function retargetBvhToVrm(
+  vrm: VRM,
+  bvh: ParsedBVH,
+  name: string,
+  opts: RetargetOptions = {},
+): Promise<THREE.AnimationClip> {
   // Step 1: convert BVH to VRMA ArrayBuffer
   const vrmaBuffer: ArrayBuffer = await convertBVHToVRMAnimation(bvh);
 
@@ -28,6 +39,18 @@ export async function retargetBvhToVrm(vrm: VRM, bvh: ParsedBVH, name: string): 
     clip.name = name;
   } finally {
     URL.revokeObjectURL(url);
+  }
+
+  // Step 3: validate (and optionally clamp) against anatomical ROM
+  const report = opts.clampOutOfRange ? clampClip(clip, vrm) : validateClip(clip, vrm);
+  if (report.violationCount > 0) {
+    const worst = report.worstBone
+      ? `worst ${report.worstBone} (+${(report.worstOverBy * 180 / Math.PI).toFixed(1)}°)`
+      : '';
+    const action = opts.clampOutOfRange ? 'clamped' : 'out-of-range';
+    console.warn(
+      `[validator] clip "${name}": ${report.violationCount} ${action} keyframes across ${report.trackedBones} bones; ${worst}`,
+    );
   }
 
   return clip;

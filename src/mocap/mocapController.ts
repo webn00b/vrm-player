@@ -2,6 +2,7 @@ import type { VRM } from '@pixiv/three-vrm';
 import { PoseDetector, type PoseModelQuality } from './poseDetector';
 import { DirectPoseApplier } from './directPoseApplier';
 import { BvhRecorder, downloadBvh } from './bvhRecorder';
+import { MocapCalibration, type CalibrationStatus } from './mocapCalibration';
 
 export type MocapState = 'off' | 'live' | 'recording';
 
@@ -16,21 +17,29 @@ export class MocapController {
   private detector: PoseDetector;
   private applier: DirectPoseApplier;
   private recorder: BvhRecorder;
+  private _calibration: MocapCalibration;
 
   private _state: MocapState = 'off';
   private _recordingIndex = 0;
 
-  onStateChange: ((state: MocapState) => void) | null = null;
-  onError:       ((err: Error)         => void) | null = null;
-  onBvhReady:    ((bvh: string, name: string) => void) | null = null;
+  onStateChange:          ((state: MocapState) => void) | null = null;
+  onError:                ((err: Error)         => void) | null = null;
+  onBvhReady:             ((bvh: string, name: string) => void) | null = null;
+  onCalibrationChange:    ((s: CalibrationStatus) => void) | null = null;
 
   constructor(vrm: VRM, videoEl: HTMLVideoElement) {
-    this.detector = new PoseDetector(videoEl);
-    this.applier  = new DirectPoseApplier(vrm);
-    this.recorder = new BvhRecorder();
+    this.detector     = new PoseDetector(videoEl);
+    this._calibration = new MocapCalibration(vrm);
+    this.applier      = new DirectPoseApplier(vrm, this._calibration);
+    this.recorder     = new BvhRecorder();
+
+    this._calibration.onStatusChange = (s) => this.onCalibrationChange?.(s);
 
     this.detector.onFrame = (frame) => {
-      // Apply pose to VRM
+      // Auto-calibration accumulates samples until it has enough, then freezes.
+      this._calibration.feed(frame);
+
+      // Apply pose to VRM (IK on arms once calibrated, angle-based fallback otherwise)
       this.applier.apply(frame);
 
       // Buffer for BVH if recording
@@ -49,6 +58,7 @@ export class MocapController {
   get frameCount():  number     { return this.recorder.frameCount; }
   get currentTime(): number     { return this.detector.currentTime; }
   get duration():    number     { return this.detector.duration; }
+  get isPaused():    boolean    { return this.detector.isPaused; }
 
   /** Attach / detach the preview canvas. Call after startLive(). */
   setCanvas(canvas: HTMLCanvasElement | null): void {
@@ -68,6 +78,43 @@ export class MocapController {
 
   setVisibilityThreshold(v: number): void { this.applier.setVisibilityThreshold(v); }
   get visibilityThreshold(): number { return this.applier.visibilityThreshold; }
+
+  // ── Calibration ────────────────────────────────────────────────────────────
+
+  get calibration(): MocapCalibration { return this._calibration; }
+  /** Clear calibration samples — next high-visibility frames re-calibrate. */
+  recalibrate(): void { this._calibration.recalibrate(); }
+
+  // ── Playback controls (useful mainly for file-source mocap) ────────────────
+
+  /** Pause both the video and the detection loop. */
+  pause(): void { this.detector.pause(); }
+  /** Resume from pause. */
+  resume(): void { this.detector.resume(); }
+  /** Seek the video by deltaSec and run detection on that single frame.
+   *  Only works while paused with a file source. */
+  stepFrame(deltaSec: number): Promise<void> { return this.detector.stepFrame(deltaSec); }
+
+  /**
+   * Append the current VRM pose to the BVH buffer as one frame at a synthetic
+   * rate-aligned timestamp. Use for manual frame-by-frame animation capture
+   * independent of the live "recording" auto-append.
+   */
+  grabFrame(): void {
+    this.recorder.captureFrame((name) => this.applier.getQuaternion(name));
+  }
+
+  /**
+   * Flush whatever frames are in the recorder to a .bvh download, then clear.
+   * Used to finalise a frame-by-frame session without needing state transitions.
+   */
+  flushGrabbed(): void {
+    if (this.recorder.frameCount === 0) return;
+    const bvhText = this.recorder.stop();
+    const name    = `mocap_${++this._recordingIndex}`;
+    downloadBvh(bvhText, `${name}.bvh`);
+    this.onBvhReady?.(bvhText, name);
+  }
 
   // ── State transitions ──────────────────────────────────────────────────────
 

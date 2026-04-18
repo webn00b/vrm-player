@@ -80,6 +80,7 @@ export class PoseDetector {
   readonly video: HTMLVideoElement;
 
   private _running  = false;
+  private _paused   = false;
   private _rafId    = 0;
   private _lastTs   = -1;
   private _fileUrl: string | null = null;
@@ -205,8 +206,45 @@ export class PoseDetector {
     this._tick();
   }
 
+  /** Pause detection + video playback. RAF keeps ticking but skips detect. */
+  pause(): void {
+    if (!this._running || this._paused) return;
+    this._paused = true;
+    if (!this.stream) this.video.pause();  // only file source supports video-level pause
+  }
+
+  /** Resume from pause. No-op if wasn't paused. */
+  resume(): void {
+    if (!this._running || !this._paused) return;
+    this._paused = false;
+    if (!this.stream) this.video.play().catch(() => {/* ignore */});
+  }
+
+  get isPaused(): boolean { return this._paused; }
+
+  /**
+   * Seek the video by the given delta in seconds (negative = rewind), run
+   * detection on the resulting single frame. Only works when a file is the
+   * source AND the detector is currently paused. Returns a promise that
+   * resolves once detection has processed the new frame.
+   */
+  async stepFrame(deltaSec: number): Promise<void> {
+    if (!this._running || !this._paused || !this._fileUrl) return;
+    const duration = this.video.duration || 0;
+    const next = Math.max(0, Math.min(duration, this.video.currentTime + deltaSec));
+    // Need a 'seeked' event to know the frame is ready before we detect.
+    await new Promise<void>((res) => {
+      const onSeeked = (): void => { this.video.removeEventListener('seeked', onSeeked); res(); };
+      this.video.addEventListener('seeked', onSeeked);
+      this.video.currentTime = next;
+    });
+    // Force a detection pass on this frame (bypass _paused guard for one call).
+    this._detectOnce();
+  }
+
   stop(): void {
     this._running = false;
+    this._paused  = false;
     cancelAnimationFrame(this._rafId);
     // Webcam
     this.stream?.getTracks().forEach((t) => t.stop());
@@ -230,12 +268,24 @@ export class PoseDetector {
     if (!this._running) return;
     this._rafId = requestAnimationFrame(this._tick);
 
+    if (this._paused) return;
     if (this.video.readyState < 2) return;
 
     const now = performance.now();
     if (now === this._lastTs) return;
     this._lastTs = now;
 
+    this._detectOnce();
+  };
+
+  /**
+   * Run one detect+emit cycle on the current video frame. Bypasses paused/
+   * lastTs guards — used both by the RAF tick and by stepFrame().
+   */
+  private _detectOnce(): void {
+    if (this.video.readyState < 2) return;
+
+    const now = performance.now();
     try {
       const poseResult: PoseLandmarkerResult =
         this.poseLandmarker!.detectForVideo(this.video, now);
@@ -249,8 +299,6 @@ export class PoseDetector {
       const rawBodyNorm  = poseResult.landmarks[0]      as Landmark3D[];
       const rawBodyWorld = poseResult.worldLandmarks[0] as Landmark3D[];
 
-      // Adaptive low-pass smoothing on raw landmarks before pose solving.
-      // Toggle off via setFilterEnabled(false) for debugging.
       const bodyNorm  = this._filterEnabled ? this._fBodyNorm.filter (rawBodyNorm,  tSec) : rawBodyNorm;
       const bodyWorld = this._filterEnabled ? this._fBodyWorld.filter(rawBodyWorld, tSec) : rawBodyWorld;
 
@@ -279,7 +327,7 @@ export class PoseDetector {
     } catch (e) {
       this.onError?.(e instanceof Error ? e : new Error(String(e)));
     }
-  };
+  }
 
   // ── Rendering ─────────────────────────────────────────────────────────────────
 

@@ -4,6 +4,7 @@ import type { PriorityAnimator } from './priorityAnimator';
 import type { AnimationController } from './animationController';
 import type { MocapController, MocapState } from './mocap/mocapController';
 import type { SkeletonVisualizer } from './skeletonVisualizer';
+import type { BoneValidator } from './validation/boneValidator';
 
 export function mountDebugPanel(
   micro: MicroAnimations,
@@ -12,11 +13,18 @@ export function mountDebugPanel(
   getController: () => AnimationController | null,
   getMocap: () => MocapController | null,
   skelViz: SkeletonVisualizer,
+  validator: BoneValidator,
 ): void {
   const root = document.getElementById('debug-panel');
   if (!root) return;
 
   root.innerHTML = `
+    <div class="dbg-tabs">
+      <button class="dbg-tab active" data-tab="main">Main</button>
+      <button class="dbg-tab"        data-tab="video">Video</button>
+    </div>
+
+    <div class="dbg-tab-panel active" data-panel="main">
     <h2>Layers</h2>
 
     <div class="dbg-section">
@@ -78,6 +86,22 @@ export function mountDebugPanel(
 
     <div class="dbg-divider"></div>
 
+    <h2>Validation (ROM)</h2>
+    <div class="dbg-section">
+      <div class="dbg-row">
+        <span class="dbg-label">🦴 Clamp bone rotations</span>
+        <button class="dbg-toggle" id="val-toggle">ON</button>
+      </div>
+      <div class="dbg-stat" id="val-stat">clamped/frame: 0</div>
+      <div class="dbg-stat" id="val-worst">worst: —</div>
+      <div class="dbg-row">
+        <span class="dbg-label" style="opacity:.6;font-size:11px">dump defaults to console</span>
+        <button class="dbg-toggle off" id="val-dump">Dump</button>
+      </div>
+    </div>
+
+    <div class="dbg-divider"></div>
+
     <h2>Skeleton</h2>
     <div class="dbg-section">
       <div class="dbg-row">
@@ -93,8 +117,9 @@ export function mountDebugPanel(
       </div>
     </div>
 
-    <div class="dbg-divider"></div>
+    </div>
 
+    <div class="dbg-tab-panel" data-panel="video">
     <h2>Mocap</h2>
     <div class="dbg-section">
       <div class="dbg-row">
@@ -104,6 +129,13 @@ export function mountDebugPanel(
       <div class="dbg-row" id="mocap-rec-row" style="display:none">
         <span class="dbg-label" id="mocap-frames">0 frames</span>
         <button class="dbg-toggle" id="mocap-rec-btn">⏺ Rec</button>
+      </div>
+      <div class="dbg-row" id="mocap-playback-row" style="display:none;gap:3px">
+        <button class="dbg-toggle" id="mocap-pause-btn">⏸</button>
+        <button class="dbg-toggle off" id="mocap-step-back-btn" title="Step -1 frame">⏮</button>
+        <button class="dbg-toggle off" id="mocap-step-fwd-btn"  title="Step +1 frame">⏭</button>
+        <button class="dbg-toggle off" id="mocap-grab-btn"      title="Grab current pose">💾</button>
+        <button class="dbg-toggle off" id="mocap-flush-btn"     title="Download captured BVH">⬇</button>
       </div>
       <div class="dbg-row">
         <span class="dbg-label">📁 From video</span>
@@ -130,10 +162,41 @@ export function mountDebugPanel(
           <button class="dbg-toggle off" data-depth="1">3D</button>
         </div>
       </div>
+      <div class="dbg-row">
+        <span class="dbg-label">📏 Calibration</span>
+        <button class="dbg-toggle off" id="mocap-recal-btn">Recalibrate</button>
+      </div>
+      <div class="dbg-stat" id="mocap-calib-stat">—</div>
+      <div class="dbg-row">
+        <span class="dbg-label">📐 Shoulder × <span id="cal-sh-val">1.00</span></span>
+        <input type="range" id="cal-sh-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px">
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">🦾 L arm × <span id="cal-la-val">1.00</span></span>
+        <input type="range" id="cal-la-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px">
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">🦾 R arm × <span id="cal-ra-val">1.00</span></span>
+        <input type="range" id="cal-ra-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px">
+      </div>
       <div class="dbg-hint">Recorded BVH auto-replays on the model for comparison</div>
       <canvas id="mocap-canvas" style="display:none;width:100%;border-radius:6px;margin-top:6px;background:#000"></canvas>
     </div>
+    </div>
   `;
+
+  // ── Tab switcher ─────────────────────────────────────────────────────────
+  root.querySelectorAll<HTMLButtonElement>('.dbg-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.tab!;
+      root.querySelectorAll<HTMLElement>('.dbg-tab').forEach((b) => {
+        b.classList.toggle('active', b.dataset.tab === name);
+      });
+      root.querySelectorAll<HTMLElement>('.dbg-tab-panel').forEach((p) => {
+        p.classList.toggle('active', p.dataset.panel === name);
+      });
+    });
+  });
 
   // ── Demo mode ─────────────────────────────────────────────────────────────
 
@@ -195,6 +258,12 @@ export function mountDebugPanel(
   const camBtn      = root.querySelector<HTMLButtonElement>('#mocap-cam-btn')!;
   const recBtn      = root.querySelector<HTMLButtonElement>('#mocap-rec-btn')!;
   const recRow      = root.querySelector<HTMLElement>('#mocap-rec-row')!;
+  const playRow     = root.querySelector<HTMLElement>('#mocap-playback-row')!;
+  const pauseBtn    = root.querySelector<HTMLButtonElement>('#mocap-pause-btn')!;
+  const stepBackBtn = root.querySelector<HTMLButtonElement>('#mocap-step-back-btn')!;
+  const stepFwdBtn  = root.querySelector<HTMLButtonElement>('#mocap-step-fwd-btn')!;
+  const grabBtn     = root.querySelector<HTMLButtonElement>('#mocap-grab-btn')!;
+  const flushBtn    = root.querySelector<HTMLButtonElement>('#mocap-flush-btn')!;
   const statusLbl   = root.querySelector<HTMLElement>('#mocap-status-label')!;
   const framesLbl   = root.querySelector<HTMLElement>('#mocap-frames')!;
   const previewCvs  = root.querySelector<HTMLCanvasElement>('#mocap-canvas')!;
@@ -217,6 +286,7 @@ export function mountDebugPanel(
       camBtn.disabled           = false;
       fileLabel.classList.add('off');
       recRow.style.display      = 'none';
+      playRow.style.display     = 'none';
       previewCvs.style.display  = 'none';
       mocap?.setCanvas(null);
     } else if (state === 'live') {
@@ -225,6 +295,7 @@ export function mountDebugPanel(
       camBtn.classList.remove('off');
       fileLabel.classList.add('off');
       recRow.style.display      = 'flex';
+      playRow.style.display     = 'flex';
       recBtn.textContent        = '⏺ Rec';
       recBtn.classList.remove('off');
       previewCvs.style.display  = 'block';
@@ -236,6 +307,7 @@ export function mountDebugPanel(
       recBtn.classList.add('off');
       camBtn.disabled           = isFile; // disable Stop during file processing
       fileLabel.classList.add('off');
+      playRow.style.display     = 'flex';
       previewCvs.style.display  = 'block';
       mocap?.setCanvas(previewCvs);
       framesTimer = window.setInterval(() => {
@@ -341,6 +413,76 @@ export function mountDebugPanel(
     });
   });
 
+  // ── Playback controls (pause / step / grab / flush) ──────────────────────
+
+  const syncPauseBtn = (): void => {
+    const m = getMocap();
+    const paused = m?.isPaused ?? false;
+    pauseBtn.textContent = paused ? '▶' : '⏸';
+    pauseBtn.classList.toggle('off', paused);
+  };
+
+  pauseBtn.addEventListener('click', () => {
+    const m = getMocap();
+    if (!m) return;
+    if (m.isPaused) m.resume(); else m.pause();
+    syncPauseBtn();
+  });
+
+  stepBackBtn.addEventListener('click', async () => {
+    const m = getMocap();
+    if (!m || !m.isPaused) return;
+    await m.stepFrame(-1 / 30);
+  });
+  stepFwdBtn.addEventListener('click', async () => {
+    const m = getMocap();
+    if (!m || !m.isPaused) return;
+    await m.stepFrame(1 / 30);
+  });
+
+  grabBtn.addEventListener('click', () => {
+    const m = getMocap();
+    if (!m) return;
+    m.grabFrame();
+    framesLbl.textContent = `${m.frameCount} frames`;
+  });
+
+  flushBtn.addEventListener('click', () => {
+    const m = getMocap();
+    if (!m) return;
+    m.flushGrabbed();
+  });
+
+  // ── Recalibrate button ────────────────────────────────────────────────────
+
+  const recalBtn  = root.querySelector<HTMLButtonElement>('#mocap-recal-btn')!;
+  const calibStat = root.querySelector<HTMLElement>('#mocap-calib-stat')!;
+  recalBtn.addEventListener('click', () => {
+    const m = getMocap();
+    if (!m) return;
+    m.recalibrate();
+  });
+
+  // ── Calibration override sliders ─────────────────────────────────────────
+
+  const wireSlider = (
+    sliderId: string,
+    valueId: string,
+    kind: 'shoulder' | 'leftArm' | 'rightArm',
+  ): void => {
+    const slider = root.querySelector<HTMLInputElement>(sliderId)!;
+    const valEl  = root.querySelector<HTMLElement>(valueId)!;
+    slider.addEventListener('input', () => {
+      const v = parseFloat(slider.value);
+      valEl.textContent = v.toFixed(2);
+      const m = getMocap();
+      m?.calibration.setOverride(kind, v);
+    });
+  };
+  wireSlider('#cal-sh-slider', '#cal-sh-val', 'shoulder');
+  wireSlider('#cal-la-slider', '#cal-la-val', 'leftArm');
+  wireSlider('#cal-ra-slider', '#cal-ra-val', 'rightArm');
+
   // Wire state-change callback
   const originalMocap = getMocap();
   if (originalMocap) {
@@ -348,7 +490,45 @@ export function mountDebugPanel(
     originalMocap.onError = (err) => {
       statusLbl.textContent = `❌ ${err.message.slice(0, 30)}`;
     };
+    originalMocap.onCalibrationChange = (s) => {
+      if (s.calibrated) {
+        const l = (s.leftArmScale * 100).toFixed(0);
+        const r = (s.rightArmScale * 100).toFixed(0);
+        calibStat.textContent = `✓ arms L ${l}%  R ${r}%`;
+      } else {
+        calibStat.textContent = `collecting ${s.sampleCount}/${s.sampleTarget}`;
+      }
+    };
   }
+
+  // ── Validation (ROM) ──────────────────────────────────────────────────────
+
+  const valToggle = root.querySelector<HTMLButtonElement>('#val-toggle')!;
+  const valStat   = root.querySelector<HTMLElement>('#val-stat')!;
+  const valWorst  = root.querySelector<HTMLElement>('#val-worst')!;
+  const valDump   = root.querySelector<HTMLButtonElement>('#val-dump')!;
+
+  valToggle.addEventListener('click', () => {
+    const on = !validator.enabled;
+    validator.setEnabled(on);
+    valToggle.textContent = on ? 'ON' : 'OFF';
+    valToggle.classList.toggle('off', !on);
+  });
+
+  valDump.addEventListener('click', () => {
+    console.log('[validator] default bone constraints:', validator.getConstraints());
+  });
+
+  setInterval(() => {
+    const s = validator.getStats();
+    valStat.textContent = `clamped/frame: ${s.clampedThisFrame}`;
+    if (s.worstBone) {
+      const deg = (s.worstDelta * 180 / Math.PI).toFixed(1);
+      valWorst.textContent = `worst: ${s.worstBone} +${deg}°`;
+    } else {
+      valWorst.textContent = 'worst: —';
+    }
+  }, 200);
 
   // ── Skeleton toggles ──────────────────────────────────────────────────────
 
