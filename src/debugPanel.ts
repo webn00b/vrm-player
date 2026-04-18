@@ -364,7 +364,8 @@ export function mountDebugPanel(
     try {
       await mocap.startFromFile(file);
     } catch (e) {
-      statusLbl.textContent = `❌ ${(e as Error).message.slice(0, 28)}`;
+      const msg = (e instanceof Error ? e.message : String(e)) || 'unknown error';
+      statusLbl.textContent = `❌ ${msg.slice(0, 28)}`;
     }
   });
 
