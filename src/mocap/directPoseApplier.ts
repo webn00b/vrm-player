@@ -131,6 +131,24 @@ export class DirectPoseApplier {
     reachable: true,
   };
 
+  // Smoothed pole vectors per limb (world-frame). MediaPipe sometimes flips
+  // the mid-joint (elbow/knee) when the limb is near-straight — smoothing
+  // keeps the pole direction stable so the IK solver doesn't flip the joint.
+  private _polesArm: Record<'left' | 'right', THREE.Vector3> = {
+    left:  new THREE.Vector3(),
+    right: new THREE.Vector3(),
+  };
+  private _polesLeg: Record<'left' | 'right', THREE.Vector3> = {
+    left:  new THREE.Vector3(),
+    right: new THREE.Vector3(),
+  };
+  // Depth (Z) is MediaPipe's least reliable axis. For narrow joints like
+  // elbows this jitter is visible — we attenuate it further inside arm IK.
+  // Legs' Z is less problematic (big, well-separated joints) so we leave it.
+  private _armZAttenuation = 0.33;
+  // EMA alpha on pole smoothing. 1 = no smoothing (use current frame).
+  private _poleAlpha = 0.35;
+
   constructor(vrm: VRM, calibration?: MocapCalibration) {
     this.vrm = vrm;
     this.calibration = calibration ?? null;
@@ -188,18 +206,24 @@ export class DirectPoseApplier {
     this._applyHips(frame);
     this._applySpine(frame);
 
-    // Arms: IK (proportion-scaled hand target) once calibration is ready;
-    // otherwise fall back to angle-based so tracking is not blocked by an
-    // un-calibrated performer.
+    // Arms + legs: two-bone IK (hand/ankle target scaled to avatar space)
+    // once calibration is ready; otherwise fall back to angle-based so
+    // tracking is not blocked by an un-calibrated performer.
     const ikReady = this.calibration?.calibrated === true;
     for (const bone of PROCESS_ORDER) {
       const isArmUpper = bone === 'leftUpperArm' || bone === 'rightUpperArm';
       const isArmLower = bone === 'leftLowerArm' || bone === 'rightLowerArm';
+      const isLegUpper = bone === 'leftUpperLeg' || bone === 'rightUpperLeg';
+      const isLegLower = bone === 'leftLowerLeg' || bone === 'rightLowerLeg';
       if (ikReady && isArmUpper) {
         this._applyArmIK(frame, bone.startsWith('left') ? 'left' : 'right');
         continue;
       }
-      if (ikReady && isArmLower) continue; // handled by IK in the upper-arm pass
+      if (ikReady && isLegUpper) {
+        this._applyLegIK(frame, bone.startsWith('left') ? 'left' : 'right');
+        continue;
+      }
+      if (ikReady && (isArmLower || isLegLower)) continue; // handled in the upper pass
       const [pIdx, cIdx] = LIMB_BONES[bone];
       this._applyLimb(bone, frame, pIdx, cIdx);
     }
@@ -470,22 +494,30 @@ export class DirectPoseApplier {
     this._mpDeltaToVrm(pw.x - midPerfX, pw.y - midPerfY, pw.z - midPerfZ, this._v1);
 
     // Per-axis scale: X (across shoulders) → shoulder-width ratio,
-    // Y (vertical) & Z (depth) → arm-length ratio.
+    // Y (vertical) & Z (depth) → arm-length ratio. Z is additionally
+    // attenuated (MediaPipe depth is noisy at elbow-scale).
     const armScale = calib.armScale(side);
     const widthScale = calib.shoulderWidthRatio();
     this._v1.x *= widthScale;
     this._v1.y *= armScale;
-    this._v1.z *= armScale;
+    this._v1.z *= armScale * this._armZAttenuation;
     const target = this._v4.copy(midShoulderWorld).add(this._v1);
 
-    // Pole vector: performer's shoulder→elbow direction, VRM frame.
+    // Pole vector: performer's shoulder→elbow direction, VRM frame, with the
+    // same Z attenuation so a noisy elbow depth doesn't flip the pole. Then
+    // EMA-smooth in world space across frames to ride through brief MP
+    // mis-detections of the elbow side.
     this._mpDeltaToVrm(pe.x - ps.x, pe.y - ps.y, pe.z - ps.z, this._v2);
+    this._v2.z *= this._armZAttenuation;
     if (this._v2.lengthSq() < 1e-6) this._v2.set(0, -1, 0);
+    const smoothed = this._polesArm[side];
+    if (smoothed.lengthSq() < 1e-6) smoothed.copy(this._v2);
+    else smoothed.lerp(this._v2, this._poleAlpha);
 
     // Solve the chain in world space.
     const upperLen = calib.upperArmLength(side);
     const lowerLen = calib.lowerArmLength(side);
-    const ik = solveTwoBoneIK(shoulderWorld, target, this._v2, upperLen, lowerLen, this._ikResult);
+    const ik = solveTwoBoneIK(shoulderWorld, target, smoothed, upperLen, lowerLen, this._ikResult);
 
     // --- upper bone: world direction → upperArm parent-local rotation
     upperNode.parent.getWorldQuaternion(this._q1).invert();
@@ -496,6 +528,89 @@ export class DirectPoseApplier {
     upperNode.updateWorldMatrix(false, true);
 
     // --- lower bone: world direction → lowerArm parent-local (parent = upperArm)
+    upperNode.getWorldQuaternion(this._q1).invert();
+    this._v3.copy(ik.lowerDir).applyQuaternion(this._q1);
+    this._q2.setFromUnitVectors(lowerRest, this._v3);
+    if (this._bodyLerp >= 1) lowerNode.quaternion.copy(this._q2);
+    else                     lowerNode.quaternion.slerp(this._q2, this._bodyLerp);
+    lowerNode.updateWorldMatrix(false, true);
+  }
+
+  /**
+   * IK variant of the hip+knee chain. Targets the performer's ankle landmark
+   * scaled to avatar space via the hip-width body scale. Pole = hip→knee
+   * direction (smoothed). Foot rotation is not addressed here — the foot
+   * bone stays at rest orientation (angle-driven foot-IK is out of scope).
+   */
+  private _applyLegIK(frame: PoseFrame, side: 'left' | 'right'): void {
+    const calib = this.calibration;
+    if (!calib || !calib.calibrated) return;
+
+    const upperName = side + 'UpperLeg';
+    const lowerName = side + 'LowerLeg';
+    const upperNode = this.nodeCache.get(upperName);
+    const lowerNode = this.nodeCache.get(lowerName);
+    const upperRest = this.restLocalAxis.get(upperName);
+    const lowerRest = this.restLocalAxis.get(lowerName);
+    if (!upperNode || !lowerNode || !upperRest || !lowerRest || !upperNode.parent) return;
+
+    // Mirror: character's LEFT leg ← performer's right hip/knee/ankle.
+    const lms = frame.worldLandmarks;
+    const hIdx   = side === 'left' ? 24 : 23;  // same-side hip (mirrored)
+    const hIdxOp = side === 'left' ? 23 : 24;  // opposite hip
+    const kIdx   = side === 'left' ? 26 : 25;
+    const aIdx   = side === 'left' ? 28 : 27;
+    const ph = lms[hIdx], phOp = lms[hIdxOp], pk = lms[kIdx], pa = lms[aIdx];
+    if (!ph || !phOp || !pk || !pa) return;
+    if (!this._visible(ph) || !this._visible(phOp)) return;
+    if (!this._visible(pk) || !this._visible(pa)) return;
+
+    // Avatar mid-hip world pos = midpoint of left+right upperLeg origins.
+    const leftUp  = this.nodeCache.get('leftUpperLeg');
+    const rightUp = this.nodeCache.get('rightUpperLeg');
+    if (!leftUp || !rightUp) return;
+    leftUp.parent?.updateWorldMatrix(true, false);
+    rightUp.parent?.updateWorldMatrix(true, false);
+    const leftHipWorld  = leftUp.getWorldPosition(this._v5);
+    const rightHipWorld = rightUp.getWorldPosition(this._v6);
+    const midHipWorld = this._v3.copy(leftHipWorld).add(rightHipWorld).multiplyScalar(0.5);
+
+    // Same-side hip world = upperLeg world pos.
+    upperNode.parent!.updateWorldMatrix(true, false);
+    upperNode.updateWorldMatrix(false, false);
+    const hipWorld = upperNode.getWorldPosition(this._v5);
+
+    // Performer ankle offset from their mid-hip, in VRM frame.
+    const midPerfX = (ph.x + phOp.x) * 0.5;
+    const midPerfY = (ph.y + phOp.y) * 0.5;
+    const midPerfZ = (ph.z + phOp.z) * 0.5;
+    this._mpDeltaToVrm(pa.x - midPerfX, pa.y - midPerfY, pa.z - midPerfZ, this._v1);
+
+    // Uniform body scale for legs (no separate leg slider override).
+    this._v1.multiplyScalar(calib.bodyScale());
+    const target = this._v4.copy(midHipWorld).add(this._v1);
+
+    // Pole: hip→knee direction, VRM frame, smoothed.
+    this._mpDeltaToVrm(pk.x - ph.x, pk.y - ph.y, pk.z - ph.z, this._v2);
+    if (this._v2.lengthSq() < 1e-6) this._v2.set(0, -1, 0);
+    const smoothed = this._polesLeg[side];
+    if (smoothed.lengthSq() < 1e-6) smoothed.copy(this._v2);
+    else smoothed.lerp(this._v2, this._poleAlpha);
+
+    // Solve the chain.
+    const upperLen = calib.upperLegLength(side);
+    const lowerLen = calib.lowerLegLength(side);
+    const ik = solveTwoBoneIK(hipWorld, target, smoothed, upperLen, lowerLen, this._ikResult);
+
+    // --- upperLeg: world dir → parent-local
+    upperNode.parent.getWorldQuaternion(this._q1).invert();
+    this._v3.copy(ik.upperDir).applyQuaternion(this._q1);
+    this._q2.setFromUnitVectors(upperRest, this._v3);
+    if (this._bodyLerp >= 1) upperNode.quaternion.copy(this._q2);
+    else                     upperNode.quaternion.slerp(this._q2, this._bodyLerp);
+    upperNode.updateWorldMatrix(false, true);
+
+    // --- lowerLeg: world dir → parent-local (parent = upperLeg)
     upperNode.getWorldQuaternion(this._q1).invert();
     this._v3.copy(ik.lowerDir).applyQuaternion(this._q1);
     this._q2.setFromUnitVectors(lowerRest, this._v3);

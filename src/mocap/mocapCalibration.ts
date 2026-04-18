@@ -60,6 +60,10 @@ export class MocapCalibration {
   readonly avatarLeftLowerArm:  number;
   readonly avatarRightUpperArm: number;
   readonly avatarRightLowerArm: number;
+  readonly avatarLeftUpperLeg:  number;
+  readonly avatarLeftLowerLeg:  number;
+  readonly avatarRightUpperLeg: number;
+  readonly avatarRightLowerLeg: number;
 
   /** Live EMA of performer hip width in metres. 0 until first valid frame. */
   private performerHipWidth = 0;
@@ -94,6 +98,12 @@ export class MocapCalibration {
     this.avatarLeftLowerArm  = boneLen('leftHand');
     this.avatarRightUpperArm = boneLen('rightLowerArm');
     this.avatarRightLowerArm = boneLen('rightHand');
+
+    // Leg bone lengths (upperLeg = distance to lowerLeg, lowerLeg = to foot).
+    this.avatarLeftUpperLeg  = boneLen('leftLowerLeg');
+    this.avatarLeftLowerLeg  = boneLen('leftFoot');
+    this.avatarRightUpperLeg = boneLen('rightLowerLeg');
+    this.avatarRightLowerLeg = boneLen('rightFoot');
   }
 
   get calibrated(): boolean { return this._calibrated; }
@@ -152,6 +162,15 @@ export class MocapCalibration {
   /** Avatar lowerArm length for the given side (metres). Used by IK solver. */
   lowerArmLength(side: 'left' | 'right'): number {
     return side === 'left' ? this.avatarLeftLowerArm : this.avatarRightLowerArm;
+  }
+
+  /** Avatar upperLeg length for the given side (metres). Used by leg IK. */
+  upperLegLength(side: 'left' | 'right'): number {
+    return side === 'left' ? this.avatarLeftUpperLeg : this.avatarRightUpperLeg;
+  }
+  /** Avatar lowerLeg length for the given side (metres). Used by leg IK. */
+  lowerLegLength(side: 'left' | 'right'): number {
+    return side === 'left' ? this.avatarLeftLowerLeg : this.avatarRightLowerLeg;
   }
 
   setOverride(kind: 'shoulder' | 'leftArm' | 'rightArm', v: number): void {
