@@ -66,6 +66,9 @@ export class MocapController {
   setDepthScale(v: number): void { this.applier.setDepthScale(v); }
   get depthScale(): number { return this.applier.depthScale; }
 
+  setVisibilityThreshold(v: number): void { this.applier.setVisibilityThreshold(v); }
+  get visibilityThreshold(): number { return this.applier.visibilityThreshold; }
+
   // ── State transitions ──────────────────────────────────────────────────────
 
   /** Start camera + live pose preview. */

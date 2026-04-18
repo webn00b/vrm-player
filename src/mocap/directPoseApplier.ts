@@ -99,10 +99,11 @@ export class DirectPoseApplier {
   private nodeCache     = new Map<string, THREE.Object3D>();
   private restLocalAxis = new Map<string, THREE.Vector3>();
 
-  private _bodyLerp   = 0.3;
-  private _handLerp   = 0.4;
-  private _mirrorX    = true;   // mirror landmarks left↔right (selfie view)
-  private _depthScale = 0.5;    // MediaPipe Z is noisy — reduce its influence
+  private _bodyLerp     = 0.3;
+  private _handLerp     = 0.4;
+  private _mirrorX      = true;  // mirror landmarks left↔right (selfie view)
+  private _depthScale   = 0.5;   // MediaPipe Z is noisy — reduce its influence
+  private _visThreshold = 0.5;   // MediaPipe visibility score below this = skip bone
 
   // Default hips world-rotation at load time. The VRM often ships with a
   // non-identity hips orientation (e.g. 180° around Y) to face the camera.
@@ -153,6 +154,19 @@ export class DirectPoseApplier {
     this._depthScale = Math.max(0, Math.min(1, v));
   }
   get depthScale(): number { return this._depthScale; }
+
+  /** Landmarks whose visibility score is below this threshold are considered
+   *  untracked — their bones are left at their previous value, preserving
+   *  idle / animation output on body parts that aren't in the video frame. */
+  setVisibilityThreshold(v: number): void {
+    this._visThreshold = Math.max(0, Math.min(1, v));
+  }
+  get visibilityThreshold(): number { return this._visThreshold; }
+
+  private _visible(lm?: { visibility?: number }): boolean {
+    // Missing visibility (e.g. HandLandmarker outputs) treated as visible.
+    return (lm?.visibility ?? 1) >= this._visThreshold;
+  }
 
   apply(frame: PoseFrame): void {
     // Torso first — its rotations propagate to limbs via parent world matrices.
@@ -234,6 +248,9 @@ export class DirectPoseApplier {
     const lh = lms[LM.LEFT_HIP], rh = lms[LM.RIGHT_HIP];
     const ls = lms[LM.LEFT_SHOULDER], rs = lms[LM.RIGHT_SHOULDER];
     if (!lh || !rh || !ls || !rs) return;
+    // Need all four torso landmarks to be visible for a reliable basis
+    if (!this._visible(lh) || !this._visible(rh) ||
+        !this._visible(ls) || !this._visible(rs)) return;
 
     // Spine up direction (midHip → midShoulder)
     const spineDir = this._v1;
@@ -292,6 +309,8 @@ export class DirectPoseApplier {
     const lh = lms[LM.LEFT_HIP], rh = lms[LM.RIGHT_HIP];
     const ls = lms[LM.LEFT_SHOULDER], rs = lms[LM.RIGHT_SHOULDER];
     if (!lh || !rh || !ls || !rs) return;
+    if (!this._visible(lh) || !this._visible(rh) ||
+        !this._visible(ls) || !this._visible(rs)) return;
 
     // Both hip + shoulder lines in VRM world coords
     const hipAxis      = this._v1;
@@ -342,6 +361,9 @@ export class DirectPoseApplier {
     const p = frame.worldLandmarks[parentIdx];
     const c = frame.worldLandmarks[childIdx];
     if (!p || !c) return;
+    // Skip this limb if either endpoint is poorly tracked — leave the bone
+    // at its previous rotation so idle / animation layers can retain control.
+    if (!this._visible(p) || !this._visible(c)) return;
 
     // 1. Target world direction in VRM coords
     this._mpDeltaToVrm(c.x - p.x, c.y - p.y, c.z - p.z, this._v1);
