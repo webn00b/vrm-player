@@ -164,8 +164,12 @@ export function mountDebugPanel(
       </div>
       <div class="dbg-row">
         <span class="dbg-label">📏 Calibration</span>
-        <button class="dbg-toggle off" id="mocap-recal-btn">Recalibrate</button>
+        <div style="display:flex;gap:3px">
+          <button class="dbg-toggle off" id="mocap-recal-btn">Recal</button>
+          <button class="dbg-toggle off" id="cal-reset-btn" title="Reset sliders to 1.00">Reset</button>
+        </div>
       </div>
+      <div class="dbg-hint">Hold T-pose while calibrating (arms out, straight)</div>
       <div class="dbg-stat" id="mocap-calib-stat">—</div>
       <div class="dbg-row">
         <span class="dbg-label">📐 Shoulder × <span id="cal-sh-val">1.00</span></span>
@@ -482,6 +486,22 @@ export function mountDebugPanel(
   wireSlider('#cal-sh-slider', '#cal-sh-val', 'shoulder');
   wireSlider('#cal-la-slider', '#cal-la-val', 'leftArm');
   wireSlider('#cal-ra-slider', '#cal-ra-val', 'rightArm');
+
+  const resetSliders = root.querySelector<HTMLButtonElement>('#cal-reset-btn')!;
+  resetSliders.addEventListener('click', () => {
+    const trios: [string, string, 'shoulder'|'leftArm'|'rightArm'][] = [
+      ['#cal-sh-slider', '#cal-sh-val', 'shoulder'],
+      ['#cal-la-slider', '#cal-la-val', 'leftArm'],
+      ['#cal-ra-slider', '#cal-ra-val', 'rightArm'],
+    ];
+    for (const [sId, vId, kind] of trios) {
+      const s = root.querySelector<HTMLInputElement>(sId)!;
+      const v = root.querySelector<HTMLElement>(vId)!;
+      s.value = '1';
+      v.textContent = '1.00';
+      getMocap()?.calibration.setOverride(kind, 1);
+    }
+  });
 
   // Wire state-change callback
   const originalMocap = getMocap();

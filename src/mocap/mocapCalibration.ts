@@ -33,6 +33,13 @@ const LM = {
 
 const SAMPLE_TARGET = 30;
 const VIS_GATE = 0.9;
+// Samples are only accepted when both arms are substantially straight — a bent
+// arm's shoulder→wrist distance in MediaPipe world-landmarks is noisy along Z,
+// and a bent-arm segment sum underestimates the real anatomy, inflating
+// armScale and pushing the IK target out of reach. dist(s,w) ≥ STRAIGHT_GATE ×
+// (dist(s,e)+dist(e,w)) ≈ 0.9 accepts near-T-pose frames where the length
+// measurement actually matches the performer's arm.
+const STRAIGHT_GATE = 0.88;
 
 export interface CalibrationStatus {
   calibrated: boolean;
@@ -153,12 +160,24 @@ export class MocapCalibration {
     if (v(le) < VIS_GATE || v(re) < VIS_GATE) return;
     if (v(lw) < VIS_GATE || v(rw) < VIS_GATE) return;
 
+    // Reject bent arms. A bent arm underestimates true arm length and inflates
+    // armScale. Measure straightness as directness = |s→w| / (|s→e|+|e→w|).
+    const leftUpper  = distance(ls, le);
+    const leftLower  = distance(le, lw);
+    const rightUpper = distance(rs, re);
+    const rightLower = distance(re, rw);
+    const leftSpan   = distance(ls, lw);
+    const rightSpan  = distance(rs, rw);
+    const leftStraight  = leftSpan  / Math.max(1e-6, leftUpper  + leftLower);
+    const rightStraight = rightSpan / Math.max(1e-6, rightUpper + rightLower);
+    if (leftStraight < STRAIGHT_GATE || rightStraight < STRAIGHT_GATE) return;
+
     this.samples.push({
       shoulderWidth: distance(ls, rs),
-      leftUpperArm:  distance(ls, le),
-      leftLowerArm:  distance(le, lw),
-      rightUpperArm: distance(rs, re),
-      rightLowerArm: distance(re, rw),
+      leftUpperArm:  leftUpper,
+      leftLowerArm:  leftLower,
+      rightUpperArm: rightUpper,
+      rightLowerArm: rightLower,
     });
 
     if (this.samples.length >= SAMPLE_TARGET) {
