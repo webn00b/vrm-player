@@ -5,6 +5,9 @@ import type { AnimationController } from './animationController';
 import type { MocapController, MocapState } from './mocap/mocapController';
 import type { SkeletonVisualizer } from './skeletonVisualizer';
 import type { BoneValidator } from './validation/boneValidator';
+import type { MocapDebugViz } from './mocap/mocapDebugViz';
+import { STAT_LANDMARKS } from './mocap/mocapDebugViz';
+import type { MocapDebugRecorder } from './mocap/mocapDebugRecorder';
 
 export function mountDebugPanel(
   micro: MicroAnimations,
@@ -14,6 +17,9 @@ export function mountDebugPanel(
   getMocap: () => MocapController | null,
   skelViz: SkeletonVisualizer,
   validator: BoneValidator,
+  mocapDebugViz: MocapDebugViz,
+  dbgRecorder: MocapDebugRecorder,
+  setModelVisible: (v: boolean) => void,
 ): void {
   const root = document.getElementById('debug-panel');
   if (!root) return;
@@ -105,10 +111,14 @@ export function mountDebugPanel(
     <h2>Skeleton</h2>
     <div class="dbg-section">
       <div class="dbg-row">
-        <span class="dbg-label">🦴 Show skeleton</span>
-        <button class="dbg-toggle off" id="skel-toggle">OFF</button>
+        <span class="dbg-label">👤 Show model</span>
+        <button class="dbg-toggle off" id="model-toggle">OFF</button>
       </div>
-      <div class="dbg-row" id="skel-options" style="display:none">
+      <div class="dbg-row">
+        <span class="dbg-label">🦴 Show skeleton</span>
+        <button class="dbg-toggle" id="skel-toggle">ON</button>
+      </div>
+      <div class="dbg-row" id="skel-options" style="display:flex">
         <span class="dbg-label" style="opacity:.6;font-size:11px">🩵 Body &nbsp;&nbsp; 💛 Fingers</span>
         <div style="display:flex;gap:4px">
           <button class="dbg-toggle" id="skel-body">ON</button>
@@ -151,9 +161,34 @@ export function mountDebugPanel(
         </div>
       </div>
       <div class="dbg-row">
+        <span class="dbg-label">🪞 Mirror mode</span>
+        <button class="dbg-toggle" id="mocap-mirror-btn">ON</button>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">😶 Face tracking</span>
+        <button class="dbg-toggle" id="mocap-face-btn">ON</button>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">🚶 Hip position</span>
+        <button class="dbg-toggle" id="mocap-hip-btn">ON</button>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">↔ Shoulder spread <span id="mocap-spread-val">0°</span></span>
+        <input type="range" id="mocap-spread-slider" min="-20" max="20" step="1" value="0" style="flex:1;margin-left:8px">
+      </div>
+      <div class="dbg-row">
         <span class="dbg-label">🌊 1€ smoothing</span>
         <button class="dbg-toggle" id="mocap-filter-btn">ON</button>
       </div>
+      <div class="dbg-row">
+        <span class="dbg-label">🟢 Performer skeleton</span>
+        <button class="dbg-toggle off" id="mocap-dbgskel-btn">OFF</button>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">📊 Debug record <span id="dbgrec-frames" style="opacity:.5"></span></span>
+        <button class="dbg-toggle off" id="dbgrec-btn">⏺ Rec</button>
+      </div>
+      <div id="mocap-vis-stats" style="display:none;margin-top:4px"></div>
       <div class="dbg-row">
         <span class="dbg-label">📐 Depth</span>
         <div style="display:flex;gap:3px">
@@ -183,8 +218,23 @@ export function mountDebugPanel(
         <span class="dbg-label">🦾 R arm × <span id="cal-ra-val">1.00</span></span>
         <input type="range" id="cal-ra-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px">
       </div>
+      <div class="dbg-row">
+        <span class="dbg-label">🌀 Spine smooth <span id="mocap-spine-val">0.25</span></span>
+        <input type="range" id="mocap-spine-slider" min="0.01" max="1" step="0.01" value="0.25" style="flex:1;margin-left:8px">
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">🫨 Limb smooth <span id="mocap-smooth-val">0.70</span></span>
+        <input type="range" id="mocap-smooth-slider" min="0.01" max="1" step="0.01" value="0.7" style="flex:1;margin-left:8px">
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">🫙 Arm Z depth <span id="mocap-armz-val">0.33</span></span>
+        <input type="range" id="mocap-armz-slider" min="0" max="1" step="0.01" value="0.33" style="flex:1;margin-left:8px">
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-label">🧲 Pole smooth <span id="mocap-pole-val">0.60</span></span>
+        <input type="range" id="mocap-pole-slider" min="0.01" max="1" step="0.01" value="0.6" style="flex:1;margin-left:8px">
+      </div>
       <div class="dbg-hint">Recorded BVH auto-replays on the model for comparison</div>
-      <canvas id="mocap-canvas" style="display:none;width:100%;border-radius:6px;margin-top:6px;background:#000"></canvas>
     </div>
     </div>
   `;
@@ -270,13 +320,14 @@ export function mountDebugPanel(
   const flushBtn    = root.querySelector<HTMLButtonElement>('#mocap-flush-btn')!;
   const statusLbl   = root.querySelector<HTMLElement>('#mocap-status-label')!;
   const framesLbl   = root.querySelector<HTMLElement>('#mocap-frames')!;
-  const previewCvs  = root.querySelector<HTMLCanvasElement>('#mocap-canvas')!;
-  const fileInput   = root.querySelector<HTMLInputElement>('#mocap-file-input')!;
-  const fileLabel   = root.querySelector<HTMLElement>('#mocap-file-label')!;
+  const previewPanel = document.getElementById('mocap-preview-panel')!;
+  const previewCvs   = document.getElementById('mocap-canvas') as HTMLCanvasElement;
+  const fileInput    = root.querySelector<HTMLInputElement>('#mocap-file-input')!;
+  const fileLabel    = root.querySelector<HTMLElement>('#mocap-file-label')!;
 
   // Set canvas intrinsic resolution (4:3 at 2× panel width for sharpness)
-  previewCvs.width  = 400;
-  previewCvs.height = 300;
+  previewCvs.width  = 440;
+  previewCvs.height = 330;
 
   let framesTimer = 0;
 
@@ -291,8 +342,10 @@ export function mountDebugPanel(
       fileLabel.classList.add('off');
       recRow.style.display      = 'none';
       playRow.style.display     = 'none';
-      previewCvs.style.display  = 'none';
+      previewPanel.style.display  = 'none';
       mocap?.setCanvas(null);
+      // Auto-stop debug recorder when file processing completes
+      if (dbgRecorder.active) dbgRecorder.stop();
     } else if (state === 'live') {
       statusLbl.textContent     = '📷 Live';
       camBtn.textContent        = 'Stop';
@@ -302,7 +355,7 @@ export function mountDebugPanel(
       playRow.style.display     = 'flex';
       recBtn.textContent        = '⏺ Rec';
       recBtn.classList.remove('off');
-      previewCvs.style.display  = 'block';
+      previewPanel.style.display  = 'block';
       mocap?.setCanvas(previewCvs);
     } else if (state === 'recording') {
       const isFile = (mocap?.duration ?? 0) > 0;
@@ -312,7 +365,7 @@ export function mountDebugPanel(
       camBtn.disabled           = isFile; // disable Stop during file processing
       fileLabel.classList.add('off');
       playRow.style.display     = 'flex';
-      previewCvs.style.display  = 'block';
+      previewPanel.style.display  = 'block';
       mocap?.setCanvas(previewCvs);
       framesTimer = window.setInterval(() => {
         const m = getMocap();
@@ -361,9 +414,12 @@ export function mountDebugPanel(
     if (!file) return;
     const mocap = getMocap();
     if (!mocap || mocap.state !== 'off') return;
+    // Auto-start debug recorder for full file capture (no frame cap)
+    dbgRecorder.start(Infinity);
     try {
       await mocap.startFromFile(file);
     } catch (e) {
+      dbgRecorder.stop(); // cleanup if file failed to load
       const msg = (e instanceof Error ? e.message : String(e)) || 'unknown error';
       statusLbl.textContent = `❌ ${msg.slice(0, 28)}`;
     }
@@ -391,6 +447,95 @@ export function mountDebugPanel(
       });
     });
   });
+
+  // ── Mirror toggle ────────────────────────────────────────────────────────────
+
+  const mirrorBtn = root.querySelector<HTMLButtonElement>('#mocap-mirror-btn')!;
+  mirrorBtn.addEventListener('click', () => {
+    const mocap = getMocap();
+    if (!mocap) return;
+    const next = !mocap.mirrorX;
+    mocap.setMirrorX(next);
+    mirrorBtn.textContent = next ? 'ON' : 'OFF';
+    mirrorBtn.classList.toggle('off', !next);
+  });
+
+  // ── Face tracking toggle ─────────────────────────────────────────────────────
+
+  const faceBtn = root.querySelector<HTMLButtonElement>('#mocap-face-btn')!;
+  faceBtn.addEventListener('click', () => {
+    const mocap = getMocap();
+    if (!mocap) return;
+    const next = !mocap.faceTrackingEnabled;
+    mocap.setFaceTrackingEnabled(next);
+    faceBtn.textContent = next ? 'ON' : 'OFF';
+    faceBtn.classList.toggle('off', !next);
+  });
+
+  // ── Hip position toggle ──────────────────────────────────────────────────────
+
+  const hipBtn = root.querySelector<HTMLButtonElement>('#mocap-hip-btn')!;
+  hipBtn.addEventListener('click', () => {
+    const mocap = getMocap();
+    if (!mocap) return;
+    const next = !mocap.hipPositionEnabled;
+    mocap.setHipPositionEnabled(next);
+    hipBtn.textContent = next ? 'ON' : 'OFF';
+    hipBtn.classList.toggle('off', !next);
+  });
+
+  // ── Shoulder spread slider ───────────────────────────────────────────────────
+
+  const spreadSlider = root.querySelector<HTMLInputElement>('#mocap-spread-slider')!;
+  const spreadVal    = root.querySelector<HTMLElement>('#mocap-spread-val')!;
+  spreadSlider.addEventListener('input', () => {
+    const v = parseFloat(spreadSlider.value);
+    spreadVal.textContent = `${v}°`;
+    getMocap()?.setShoulderSpread(v);
+  });
+
+  // ── Debug skeleton + visibility stats ───────────────────────────────────────
+
+  const dbgSkelBtn  = root.querySelector<HTMLButtonElement>('#mocap-dbgskel-btn')!;
+  const visStatsEl  = root.querySelector<HTMLElement>('#mocap-vis-stats')!;
+
+  // Build a grid of per-landmark visibility badges
+  visStatsEl.style.cssText =
+    'display:none;font-size:10px;font-family:ui-monospace,monospace;' +
+    'display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;margin-top:4px';
+  const visBadges = new Map<number, HTMLElement>();
+  for (const { idx, label } of STAT_LANDMARKS) {
+    const el = document.createElement('div');
+    el.style.cssText = 'display:flex;justify-content:space-between;gap:4px';
+    el.innerHTML = `<span style="opacity:.45">${label}</span><span id="vis-${idx}">—</span>`;
+    visStatsEl.appendChild(el);
+    visBadges.set(idx, el.querySelector(`#vis-${idx}`)!);
+  }
+
+  let dbgSkelOn = false;
+  dbgSkelBtn.addEventListener('click', () => {
+    dbgSkelOn = !dbgSkelOn;
+    mocapDebugViz.setVisible(dbgSkelOn);
+    dbgSkelBtn.textContent = dbgSkelOn ? 'ON' : 'OFF';
+    dbgSkelBtn.classList.toggle('off', !dbgSkelOn);
+    visStatsEl.style.display = dbgSkelOn ? 'grid' : 'none';
+  });
+
+  // Update visibility stats every 200ms when debug skeleton is on
+  setInterval(() => {
+    if (!dbgSkelOn) return;
+    const frame = getMocap()?.latestFrame;
+    if (!frame) return;
+    for (const { idx } of STAT_LANDMARKS) {
+      const lm  = frame.landmarks[idx];
+      const vis = lm?.visibility ?? null;
+      const el  = visBadges.get(idx)!;
+      if (vis === null) { el.textContent = '—'; el.style.color = ''; continue; }
+      const pct = Math.round(vis * 100);
+      el.textContent = `${pct}%`;
+      el.style.color = vis >= 0.6 ? '#4ade80' : vis >= 0.3 ? '#fbbf24' : '#f87171';
+    }
+  }, 200);
 
   // ── OneEuroFilter toggle ─────────────────────────────────────────────────────
 
@@ -488,6 +633,26 @@ export function mountDebugPanel(
   wireSlider('#cal-la-slider', '#cal-la-val', 'leftArm');
   wireSlider('#cal-ra-slider', '#cal-ra-val', 'rightArm');
 
+  const wirePlainSlider = (
+    sliderId: string,
+    valueId: string,
+    decimals: number,
+    setter: (m: NonNullable<ReturnType<typeof getMocap>>, v: number) => void,
+  ): void => {
+    const slider = root.querySelector<HTMLInputElement>(sliderId)!;
+    const valEl  = root.querySelector<HTMLElement>(valueId)!;
+    slider.addEventListener('input', () => {
+      const v = parseFloat(slider.value);
+      valEl.textContent = v.toFixed(decimals);
+      const m = getMocap();
+      if (m) setter(m, v);
+    });
+  };
+  wirePlainSlider('#mocap-spine-slider',  '#mocap-spine-val',  2, (m, v) => m.setSpineSmoothing(v));
+  wirePlainSlider('#mocap-smooth-slider', '#mocap-smooth-val', 2, (m, v) => m.setBodySmoothing(v));
+  wirePlainSlider('#mocap-armz-slider',   '#mocap-armz-val',   2, (m, v) => m.setArmZAttenuation(v));
+  wirePlainSlider('#mocap-pole-slider',   '#mocap-pole-val',   2, (m, v) => m.setPoleSmoothing(v));
+
   const resetSliders = root.querySelector<HTMLButtonElement>('#cal-reset-btn')!;
   resetSliders.addEventListener('click', () => {
     const trios: [string, string, 'shoulder'|'leftArm'|'rightArm'][] = [
@@ -554,10 +719,21 @@ export function mountDebugPanel(
 
   // ── Skeleton toggles ──────────────────────────────────────────────────────
 
+  const modelToggle = root.querySelector<HTMLButtonElement>('#model-toggle')!;
   const skelToggle  = root.querySelector<HTMLButtonElement>('#skel-toggle')!;
   const skelBody    = root.querySelector<HTMLButtonElement>('#skel-body')!;
   const skelFingers = root.querySelector<HTMLButtonElement>('#skel-fingers')!;
   const skelOptions = root.querySelector<HTMLElement>('#skel-options')!;
+
+  // Skeleton ON by default
+  skelViz.setVisible(true);
+
+  modelToggle.addEventListener('click', () => {
+    const on = modelToggle.textContent === 'OFF';
+    setModelVisible(on);
+    modelToggle.textContent = on ? 'ON' : 'OFF';
+    modelToggle.classList.toggle('off', !on);
+  });
 
   skelToggle.addEventListener('click', () => {
     const on = !skelViz.visible;
@@ -580,4 +756,32 @@ export function mountDebugPanel(
     skelFingers.textContent = on ? 'ON' : 'OFF';
     skelFingers.classList.toggle('off', !on);
   });
+
+  // ── Debug recorder ────────────────────────────────────────────────────────
+
+  const dbgRecBtn    = root.querySelector<HTMLButtonElement>('#dbgrec-btn')!;
+  const dbgRecFrames = root.querySelector<HTMLElement>('#dbgrec-frames')!;
+
+  dbgRecBtn.addEventListener('click', () => {
+    if (dbgRecorder.active) {
+      dbgRecorder.stop();
+      dbgRecBtn.textContent = '⏺ Rec';
+      dbgRecBtn.classList.add('off');
+    } else {
+      dbgRecorder.start();
+      dbgRecBtn.textContent = '⏹ Stop';
+      dbgRecBtn.classList.remove('off');
+    }
+  });
+
+  // Update frame counter while recording
+  setInterval(() => {
+    if (dbgRecorder.active) {
+      dbgRecFrames.textContent = `${dbgRecorder.frameCount}fr`;
+    } else {
+      dbgRecFrames.textContent = dbgRecorder.frameCount > 0
+        ? `${dbgRecorder.frameCount}fr saved`
+        : '';
+    }
+  }, 200);
 }

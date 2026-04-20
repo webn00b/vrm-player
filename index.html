@@ -190,6 +190,18 @@
       .dbg-tab-panel { display: none; }
       .dbg-tab-panel.active { display: block; }
 
+      /* ── Bone pose panel (right of right-col) ── */
+      #bone-panel {
+        position: absolute;
+        top: 12px;
+        right: 254px;          /* 12 + 230 + 12 */
+        width: 210px;
+        max-height: calc(100vh - 24px);
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,.12) transparent;
+      }
+
       /* ── Status bar ── */
       #status {
         position: absolute;
@@ -204,6 +216,18 @@
 
     <!-- Left: layers / debug -->
     <div id="debug-panel" class="panel"><!-- populated by debugPanel.ts --></div>
+
+    <!-- Video preview: appears to the right of debug-panel when mocap is active -->
+    <div id="mocap-preview-panel" class="panel" style="
+      display: none;
+      position: absolute;
+      top: 12px;
+      left: 244px;
+      width: 220px;
+      padding: 8px;
+    ">
+      <canvas id="mocap-canvas" style="display:block;width:100%;border-radius:4px;background:#000"></canvas>
+    </div>
 
     <!-- Right column -->
     <div id="right-col">
@@ -229,6 +253,9 @@
       </div>
 
     </div>
+
+    <!-- Bone pose panel (right side) -->
+    <div id="bone-panel" class="panel"><!-- populated by bonePosePanel.ts --></div>
 
     <!-- Hidden video element for mocap webcam feed -->
     <video id="mocap-video" playsinline style="display:none"></video>

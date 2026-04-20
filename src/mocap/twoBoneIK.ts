@@ -97,9 +97,13 @@ export function solveTwoBoneIK(
   const dot = _pole.dot(_abDir);
   _up.copy(_pole).addScaledVector(_abDir, -dot);
   if (_up.lengthSq() < 1e-6) {
-    // Pole aligned with chain — pick any perpendicular.
-    _up.set(1, 0, 0).addScaledVector(_abDir, -_abDir.x);
-    if (_up.lengthSq() < 1e-6) _up.set(0, 1, 0).addScaledVector(_abDir, -_abDir.y);
+    // Pole aligned with chain — default to gravity (elbow hangs down).
+    // Perpendicular component of (0,-1,0) w.r.t. _abDir = (0,-1,0) + _abDir.y * _abDir.
+    _up.set(0, -1, 0).addScaledVector(_abDir, _abDir.y);
+    if (_up.lengthSq() < 1e-6) {
+      // Arm is vertical — use forward as secondary fallback.
+      _up.set(0, 0, 1).addScaledVector(_abDir, -_abDir.z);
+    }
   }
   _up.normalize();
 

@@ -1,6 +1,7 @@
 import type { VRM } from '@pixiv/three-vrm';
-import { PoseDetector, type PoseModelQuality } from './poseDetector';
+import { PoseDetector, type PoseModelQuality, type PoseFrame } from './poseDetector';
 import { DirectPoseApplier } from './directPoseApplier';
+import { FaceApplier } from './faceApplier';
 import { BvhRecorder, downloadBvh } from './bvhRecorder';
 import { MocapCalibration, type CalibrationStatus } from './mocapCalibration';
 
@@ -16,11 +17,19 @@ export type MocapState = 'off' | 'live' | 'recording';
 export class MocapController {
   private detector: PoseDetector;
   private applier: DirectPoseApplier;
+  private faceApplier: FaceApplier;
   private recorder: BvhRecorder;
   private _calibration: MocapCalibration;
 
   private _state: MocapState = 'off';
   private _recordingIndex = 0;
+
+  // Latest detected frame — applied each render tick via applyLatestFrame()
+  // so mocap overlays on top of the BVH mixer output rather than fighting it.
+  private _latestFrame: PoseFrame | null = null;
+  // Set to false each time a new frame arrives; set to true after we record it.
+  // Prevents double-recording if the render loop runs faster than detection.
+  private _frameRecorded = false;
 
   onStateChange:          ((state: MocapState) => void) | null = null;
   onError:                ((err: Error)         => void) | null = null;
@@ -31,21 +40,19 @@ export class MocapController {
     this.detector     = new PoseDetector(videoEl);
     this._calibration = new MocapCalibration(vrm);
     this.applier      = new DirectPoseApplier(vrm, this._calibration);
+    this.faceApplier  = new FaceApplier(vrm);
     this.recorder     = new BvhRecorder();
 
     this._calibration.onStatusChange = (s) => this.onCalibrationChange?.(s);
 
     this.detector.onFrame = (frame) => {
-      // Auto-calibration accumulates samples until it has enough, then freezes.
+      // Accumulate calibration data every frame.
       this._calibration.feed(frame);
 
-      // Apply pose to VRM (IK on arms once calibrated, angle-based fallback otherwise)
-      this.applier.apply(frame);
-
-      // Buffer for BVH if recording
-      if (this._state === 'recording') {
-        this.recorder.addFrame((name) => this.applier.getQuaternion(name));
-      }
+      // Store for overlay — actual VRM application happens in the render loop
+      // via applyLatestFrame() so mocap writes AFTER the BVH mixer.
+      this._latestFrame  = frame;
+      this._frameRecorded = false;
     };
 
     this.detector.onError = (err) => {
@@ -54,11 +61,12 @@ export class MocapController {
     };
   }
 
-  get state():       MocapState { return this._state; }
-  get frameCount():  number     { return this.recorder.frameCount; }
-  get currentTime(): number     { return this.detector.currentTime; }
-  get duration():    number     { return this.detector.duration; }
-  get isPaused():    boolean    { return this.detector.isPaused; }
+  get state():       MocapState        { return this._state; }
+  get frameCount():  number            { return this.recorder.frameCount; }
+  get currentTime(): number            { return this.detector.currentTime; }
+  get duration():    number            { return this.detector.duration; }
+  get isPaused():    boolean           { return this.detector.isPaused; }
+  get latestFrame(): PoseFrame | null  { return this._latestFrame; }
 
   /** Attach / detach the preview canvas. Call after startLive(). */
   setCanvas(canvas: HTMLCanvasElement | null): void {
@@ -79,11 +87,59 @@ export class MocapController {
   setVisibilityThreshold(v: number): void { this.applier.setVisibilityThreshold(v); }
   get visibilityThreshold(): number { return this.applier.visibilityThreshold; }
 
+  setShoulderSpread(deg: number): void { this.applier.setShoulderSpread(deg); }
+  get shoulderSpread(): number { return this.applier.shoulderSpread; }
+
+  setMirrorX(v: boolean): void { this.applier.setMirrorX(v); }
+  get mirrorX(): boolean { return this.applier.mirrorX; }
+
+  setBodySmoothing(v: number): void { this.applier.setBodySmoothing(v); }
+  get bodySmoothing(): number { return this.applier.bodySmoothing; }
+
+  setSpineSmoothing(v: number): void { this.applier.setSpineSmoothing(v); }
+  get spineSmoothing(): number { return this.applier.spineSmoothing; }
+
+  setArmZAttenuation(v: number): void { this.applier.setArmZAttenuation(v); }
+  get armZAttenuation(): number { return this.applier.armZAttenuation; }
+
+  setPoleSmoothing(v: number): void { this.applier.setPoleSmoothing(v); }
+  get poleSmoothing(): number { return this.applier.poleSmoothing; }
+
+  setHipPositionEnabled(v: boolean): void { this.applier.setHipPositionEnabled(v); }
+  get hipPositionEnabled(): boolean { return this.applier.hipPositionEnabled; }
+
+  setFaceTrackingEnabled(v: boolean): void { this.faceApplier.setEnabled(v); }
+  get faceTrackingEnabled(): boolean { return this.faceApplier.enabled; }
+
+  // ── Overlay application ───────────────────────────────────────────────────
+
+  /**
+   * Apply the latest detected pose frame to the VRM.
+   * Call this from the main render loop AFTER the BVH mixer update so that
+   * mocap overlays on top of the animation rather than being overwritten by it.
+   */
+  applyLatestFrame(): void {
+    if (!this._latestFrame || this._state === 'off') return;
+    this.applier.apply(this._latestFrame);
+    this.faceApplier.apply(this._latestFrame.faceLandmarks);
+
+    // Record AFTER apply so getQuaternion reads the freshly computed rotations.
+    if (this._state === 'recording' && !this._frameRecorded) {
+      this.recorder.addFrame((name) => this.applier.getQuaternion(name));
+      this._frameRecorded = true;
+    }
+  }
+
   // ── Calibration ────────────────────────────────────────────────────────────
 
   get calibration(): MocapCalibration { return this._calibration; }
+  get hipsBaseWorld() { return this.applier.hipsBaseWorld; }
+  get debugTargets() { return this.applier.debugTargets; }
   /** Clear calibration samples — next high-visibility frames re-calibrate. */
-  recalibrate(): void { this._calibration.recalibrate(); }
+  recalibrate(): void {
+    this._calibration.recalibrate();
+    this.applier.resetHipBaseline();
+  }
 
   // ── Playback controls (useful mainly for file-source mocap) ────────────────
 
@@ -174,6 +230,9 @@ export class MocapController {
   stop(): void {
     if (this._state === 'recording') this.recorder.stop(); // discard
     this.detector.stop();
+    this._latestFrame = null;
+    this.applier.resetHipBaseline();
+    this.faceApplier.reset();
     this._setState('off');
   }
 

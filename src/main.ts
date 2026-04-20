@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { createScene } from './scene';
 import { loadVRM } from './vrmLoader';
 import { loadBVH, parseBVH } from './bvhLoader';
@@ -8,7 +9,10 @@ import { MicroAnimations } from './microAnimations';
 import { IdleLoop } from './idleLoop';
 import { mountLibrary, mountQueue, setStatus } from './ui';
 import { mountDebugPanel } from './debugPanel';
+import { BonePosePanel } from './bonePosePanel';
 import { MocapController } from './mocap/mocapController';
+import { MocapDebugViz } from './mocap/mocapDebugViz';
+import { MocapDebugRecorder } from './mocap/mocapDebugRecorder';
 import { SkeletonVisualizer } from './skeletonVisualizer';
 import { BoneValidator } from './validation/boneValidator';
 
@@ -65,6 +69,24 @@ async function main() {
   // ── Skeleton visualizer ────────────────────────────────────────────────────
   const skelViz = new SkeletonVisualizer(vrm, ctx.scene);
 
+  // ── Mocap debug skeleton ───────────────────────────────────────────────────
+  const mocapDebugViz = new MocapDebugViz(ctx.scene);
+
+  // ── Mocap debug recorder ───────────────────────────────────────────────────
+  const dbgRecorder = new MocapDebugRecorder(vrm, 600); // max 600 frames (~10s)
+  dbgRecorder.onStop = (frames) => {
+    console.log('[MocapDebugRecorder] recording done —', frames.length, 'frames');
+    dbgRecorder.logSummary();
+    dbgRecorder.download('mocap_debug.json');
+  };
+  // Expose globally so it can be controlled from the browser console too
+  (window as any).__mocapDbg = dbgRecorder;
+
+  // ── Bone pose panel ────────────────────────────────────────────────────────
+  const bonePanel = new BonePosePanel(vrm);
+  const bonePanelEl = document.getElementById('bone-panel');
+  if (bonePanelEl) bonePanel.mount(bonePanelEl);
+
   // ── Mocap ──────────────────────────────────────────────────────────────────
   const videoEl = document.getElementById('mocap-video') as HTMLVideoElement;
   const mocap   = new MocapController(vrm, videoEl);
@@ -72,8 +94,9 @@ async function main() {
   const entries = resolveAnimations();
   if (entries.length === 0) {
     setStatus('no .bvh files — idle mode active');
-    mountDebugPanel(micro, idleLoop, pa, () => null, () => mocap, skelViz, validator);
-    startRenderLoop(ctx, null, vrm, pa, micro, idleLoop, skelViz, validator);
+    vrm.scene.visible = false;
+    mountDebugPanel(micro, idleLoop, pa, () => null, () => mocap, skelViz, validator, mocapDebugViz, dbgRecorder, (v) => { vrm.scene.visible = v; });
+    startRenderLoop(ctx, null, vrm, pa, micro, idleLoop, skelViz, validator, mocap, bonePanel, mocapDebugViz, dbgRecorder);
     return;
   }
 
@@ -89,7 +112,8 @@ async function main() {
   setStatus('drag animations from Library → Queue to play');
 
   // ── Debug panel ────────────────────────────────────────────────────────────
-  mountDebugPanel(micro, idleLoop, pa, () => controller, () => mocap, skelViz, validator);
+  vrm.scene.visible = false;
+  mountDebugPanel(micro, idleLoop, pa, () => controller, () => mocap, skelViz, validator, mocapDebugViz, dbgRecorder, (v) => { vrm.scene.visible = v; });
 
   // ── Library (source) ───────────────────────────────────────────────────────
   const names = entries.map((e) => e.name);
@@ -140,7 +164,7 @@ async function main() {
     setStatus(`${queuePos + 1}/${controller.queueLength} · ${item.name} · ${item.duration.toFixed(1)}s`);
   });
 
-  startRenderLoop(ctx, controller, vrm, pa, micro, idleLoop, skelViz, validator);
+  startRenderLoop(ctx, controller, vrm, pa, micro, idleLoop, skelViz, validator, mocap, bonePanel, mocapDebugViz, dbgRecorder);
 }
 
 function startRenderLoop(
@@ -152,6 +176,10 @@ function startRenderLoop(
   idleLoop: IdleLoop,
   skelViz: SkeletonVisualizer,
   validator: BoneValidator,
+  mocap: MocapController,
+  bonePanel: BonePosePanel,
+  mocapDebugViz: MocapDebugViz,
+  dbgRecorder: MocapDebugRecorder,
 ): void {
   const tick = () => {
     const delta = ctx.clock.getDelta();
@@ -168,13 +196,55 @@ function startRenderLoop(
     // 2b. Clamp all bone rotations to anatomical ROM
     validator.clampAll();
 
-    // 3. Micro-animations — always, delta-based
+    // 3. Mocap overlay — runs AFTER BVH mixer so it overwrites animation bones.
+    //    Face expressions also applied here (blendshapes don't conflict with BVH).
+    mocap.applyLatestFrame();
+
+    // 3b. Debug recorder — snapshot landmarks + IK targets + bone quaternions.
+    if (dbgRecorder.active) {
+      const frame = mocap.latestFrame;
+      if (frame) dbgRecorder.capture(frame, mocap.debugTargets, mocap.calibration);
+    }
+
+    // 3c. Manual bone pose offsets (post-multiplied on top of mocap/animation).
+    bonePanel.apply();
+
+    // 3d. Debug skeleton — show performer landmarks mapped to avatar world space.
+    if (mocapDebugViz.visible) {
+      const frame = mocap.latestFrame;
+      if (frame) {
+        const hipsNode = vrm.humanoid.getNormalizedBoneNode('hips' as any);
+        const hipWorld = new THREE.Vector3();
+        hipsNode?.getWorldPosition(hipWorld);
+
+        // Actual avatar bone endpoints for comparison with IK targets
+        const lhNode = vrm.humanoid.getNormalizedBoneNode('leftHand'  as any);
+        const rhNode = vrm.humanoid.getNormalizedBoneNode('rightHand' as any);
+        const lfNode = vrm.humanoid.getNormalizedBoneNode('leftFoot'  as any);
+        const rfNode = vrm.humanoid.getNormalizedBoneNode('rightFoot' as any);
+        const actualBones = {
+          leftHand:  new THREE.Vector3(), rightHand: new THREE.Vector3(),
+          leftFoot:  new THREE.Vector3(), rightFoot: new THREE.Vector3(),
+        };
+        lhNode?.getWorldPosition(actualBones.leftHand);
+        rhNode?.getWorldPosition(actualBones.rightHand);
+        lfNode?.getWorldPosition(actualBones.leftFoot);
+        rfNode?.getWorldPosition(actualBones.rightFoot);
+
+        mocapDebugViz.update(
+          frame, hipWorld, mocap.calibration.bodyScale(), mocap.hipsBaseWorld,
+          mocap.debugTargets, actualBones,
+        );
+      }
+    }
+
+    // 4. Micro-animations — always, delta-based
     micro.update(vrm);
 
-    // 4. VRM systems
+    // 5. VRM systems
     vrm.update(delta);
 
-    // 5. Skeleton overlay (after vrm.update so world matrices are fresh)
+    // 6. Skeleton overlay (after vrm.update so world matrices are fresh)
     skelViz.update();
 
     ctx.controls.update();

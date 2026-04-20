@@ -1,9 +1,7 @@
 import {
   FilesetResolver,
-  PoseLandmarker,
-  HandLandmarker,
-  type PoseLandmarkerResult,
-  type HandLandmarkerResult,
+  HolisticLandmarker,
+  type HolisticLandmarkerResult,
 } from '@mediapipe/tasks-vision';
 import { LandmarkFilter } from './oneEuroFilter';
 
@@ -20,62 +18,53 @@ export type HandFrame = {
 export type PoseFrame = {
   landmarks:      Landmark3D[];   // 33 body points, normalised
   worldLandmarks: Landmark3D[];   // 33 body points, metres
+  faceLandmarks:  Landmark3D[];   // 478 face points, normalised (empty if no face)
   hands:          HandFrame[];    // 0-2 detected hands
 };
 
-// ── Model URLs ────────────────────────────────────────────────────────────────
+// ── Model URL ─────────────────────────────────────────────────────────────────
 
-const WASM_URL =
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm';
+const WASM_URL = '/mediapipe/wasm';
 
+// HolisticLandmarker replaces the separate Pose + Hand detectors, matching
+// sysAnimOnline's use of HolisticLandmarker for body+face+hands in one call.
+const HOLISTIC_MODEL_URL = '/mediapipe/holistic_landmarker.task';
+
+// Quality alias kept for API compatibility — affects internal pose model choice.
 export type PoseModelQuality = 'lite' | 'full' | 'heavy';
 
-const POSE_MODEL_URLS: Record<PoseModelQuality, string> = {
-  lite:  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
-  full:  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
-  heavy: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task',
-};
-
-const HAND_MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
-
-// ── Skeleton connections ──────────────────────────────────────────────────────
+// ── Skeleton connections (for canvas preview) ─────────────────────────────────
 
 const POSE_CONNECTIONS: [number, number][] = [
-  // Face outline
   [0, 1], [1, 2], [2, 3], [3, 7],
   [0, 4], [4, 5], [5, 6], [6, 8],
-  // Torso
   [11, 12], [11, 23], [12, 24], [23, 24],
-  // Left arm
   [11, 13], [13, 15], [15, 17], [15, 19], [15, 21], [17, 19],
-  // Right arm
   [12, 14], [14, 16], [16, 18], [16, 20], [16, 22], [18, 20],
-  // Left leg
   [23, 25], [25, 27], [27, 29], [29, 31], [27, 31],
-  // Right leg
   [24, 26], [26, 28], [28, 30], [30, 32], [28, 32],
 ];
 
 const HAND_CONNECTIONS: [number, number][] = [
-  [0, 1], [1, 2], [2, 3], [3, 4],          // thumb
-  [0, 5], [5, 6], [6, 7], [7, 8],          // index
-  [0, 9], [9, 10], [10, 11], [11, 12],     // middle
-  [0, 13], [13, 14], [14, 15], [15, 16],   // ring
-  [0, 17], [17, 18], [18, 19], [19, 20],   // pinky
-  [5, 9], [9, 13], [13, 17],               // palm knuckles
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [0, 9], [9, 10], [10, 11], [11, 12],
+  [0, 13], [13, 14], [14, 15], [15, 16],
+  [0, 17], [17, 18], [18, 19], [19, 20],
+  [5, 9], [9, 13], [13, 17],
 ];
 
 // ── PoseDetector ──────────────────────────────────────────────────────────────
 
 /**
- * Runs MediaPipe Pose Landmarker + Hand Landmarker on the same video frame.
- * Emits a unified PoseFrame each RAF tick.
- * Optionally renders the annotated feed onto a provided canvas.
+ * Runs MediaPipe HolisticLandmarker on each video frame.
+ * Outputs a unified PoseFrame with body, face, and hand landmarks.
+ *
+ * Matches sysAnimOnline's use of HolisticLandmarker for a single-model
+ * body+face+hands pipeline.
  */
 export class PoseDetector {
-  private poseLandmarker: PoseLandmarker | null = null;
-  private handLandmarker: HandLandmarker | null = null;
+  private holistic: HolisticLandmarker | null = null;
   private stream: MediaStream | null = null;
   readonly video: HTMLVideoElement;
 
@@ -85,25 +74,29 @@ export class PoseDetector {
   private _lastTs   = -1;
   private _fileUrl: string | null = null;
 
-  // Configuration — change via setters before calling start/startFromFile
   private _poseQuality: PoseModelQuality = 'full';
   private _filterEnabled = true;
 
   private _canvas: HTMLCanvasElement | null = null;
   private _ctx:    CanvasRenderingContext2D | null = null;
 
-  // Adaptive low-pass filters per stream. Separate instances so state doesn't
-  // leak between normalised / world / left-hand / right-hand landmark sets.
-  private _fBodyNorm  = new LandmarkFilter(33, 1.5, 0.01);
-  private _fBodyWorld = new LandmarkFilter(33, 1.5, 0.01);
-  // Hands: keyed by side so MediaPipe re-ordering between frames doesn't scramble state
+  // World landmarks (metres): high beta so fast arm/leg motion isn't lagged.
+  // sysAnimOnline uses beta=1 for body pose — the 1€ filter becomes responsive
+  // at speed and still smooths jitter at rest. Our previous beta=0.01 made it
+  // basically a fixed low-pass at 1.5 Hz (no speed adaptation → visible lag).
+  private _fBodyNorm  = new LandmarkFilter(33, 1.5, 0.1);
+  private _fBodyWorld = new LandmarkFilter(33, 1.0, 0.8);
+  // Face landmarks: slow-moving micro-expressions, keep heavily smoothed.
+  private _fFace      = new LandmarkFilter(478, 1.0, 0.005);
+  // Hand landmarks: sysAnimOnline uses beta≈0.001 (very stable) — hands need
+  // extreme filtering to hide wrist-level detection noise.
   private _fHandNorm:  Record<'Left' | 'Right', LandmarkFilter> = {
-    Left:  new LandmarkFilter(21, 2.0, 0.02),
-    Right: new LandmarkFilter(21, 2.0, 0.02),
+    Left:  new LandmarkFilter(21, 1.5, 0.003),
+    Right: new LandmarkFilter(21, 1.5, 0.003),
   };
   private _fHandWorld: Record<'Left' | 'Right', LandmarkFilter> = {
-    Left:  new LandmarkFilter(21, 2.0, 0.02),
-    Right: new LandmarkFilter(21, 2.0, 0.02),
+    Left:  new LandmarkFilter(21, 1.5, 0.003),
+    Right: new LandmarkFilter(21, 1.5, 0.003),
   };
 
   onFrame: ((frame: PoseFrame) => void) | null = null;
@@ -117,49 +110,34 @@ export class PoseDetector {
     this.video = video;
   }
 
-  /** Attach / detach the preview canvas. */
   setCanvas(canvas: HTMLCanvasElement | null): void {
     this._canvas = canvas;
     this._ctx    = canvas ? canvas.getContext('2d') : null;
   }
 
-  /** Choose pose-detection model. Must be called before start/startFromFile.
-   *  If the model is already loaded and quality differs, reloads the pose model. */
   async setPoseQuality(q: PoseModelQuality): Promise<void> {
-    if (this._poseQuality === q && this.poseLandmarker) return;
+    if (this._poseQuality === q && this.holistic) return;
     this._poseQuality = q;
-    if (this.poseLandmarker) {
-      this.poseLandmarker.close();
-      this.poseLandmarker = null;
+    if (this.holistic) {
+      this.holistic.close();
+      this.holistic = null;
       await this.init();
     }
   }
 
-  /** Enable/disable OneEuroFilter smoothing on input landmarks. */
   setFilterEnabled(v: boolean): void { this._filterEnabled = v; }
   get filterEnabled(): boolean { return this._filterEnabled; }
   get poseQuality(): PoseModelQuality { return this._poseQuality; }
 
   async init(): Promise<void> {
-    if (this.poseLandmarker && this.handLandmarker) return;
-
+    if (this.holistic) return;
     const vision = await FilesetResolver.forVisionTasks(WASM_URL);
-
-    const [pose, hand] = await Promise.all([
-      PoseLandmarker.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: POSE_MODEL_URLS[this._poseQuality], delegate: 'GPU' },
-        runningMode: 'VIDEO',
-        numPoses: 1,
-      }),
-      HandLandmarker.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: 'GPU' },
-        runningMode: 'VIDEO',
-        numHands: 2,
-      }),
-    ]);
-
-    this.poseLandmarker = pose;
-    this.handLandmarker = hand;
+    this.holistic = await HolisticLandmarker.createFromOptions(vision, {
+      baseOptions: { modelAssetPath: HOLISTIC_MODEL_URL, delegate: 'GPU' },
+      runningMode: 'VIDEO',
+      minPoseDetectionConfidence: 0.5,
+      minPosePresenceConfidence: 0.5,
+    });
   }
 
   async start(): Promise<void> {
@@ -180,7 +158,6 @@ export class PoseDetector {
     this._tick();
   }
 
-  /** Start processing a video file. Records automatically; fires onEnd when done. */
   async startFromFile(file: File): Promise<void> {
     if (this._running) return;
     await this.init();
@@ -206,14 +183,12 @@ export class PoseDetector {
     this._tick();
   }
 
-  /** Pause detection + video playback. RAF keeps ticking but skips detect. */
   pause(): void {
     if (!this._running || this._paused) return;
     this._paused = true;
-    if (!this.stream) this.video.pause();  // only file source supports video-level pause
+    if (!this.stream) this.video.pause();
   }
 
-  /** Resume from pause. No-op if wasn't paused. */
   resume(): void {
     if (!this._running || !this._paused) return;
     this._paused = false;
@@ -222,23 +197,15 @@ export class PoseDetector {
 
   get isPaused(): boolean { return this._paused; }
 
-  /**
-   * Seek the video by the given delta in seconds (negative = rewind), run
-   * detection on the resulting single frame. Only works when a file is the
-   * source AND the detector is currently paused. Returns a promise that
-   * resolves once detection has processed the new frame.
-   */
   async stepFrame(deltaSec: number): Promise<void> {
     if (!this._running || !this._paused || !this._fileUrl) return;
     const duration = this.video.duration || 0;
     const next = Math.max(0, Math.min(duration, this.video.currentTime + deltaSec));
-    // Need a 'seeked' event to know the frame is ready before we detect.
     await new Promise<void>((res) => {
       const onSeeked = (): void => { this.video.removeEventListener('seeked', onSeeked); res(); };
       this.video.addEventListener('seeked', onSeeked);
       this.video.currentTime = next;
     });
-    // Force a detection pass on this frame (bypass _paused guard for one call).
     this._detectOnce();
   }
 
@@ -246,11 +213,9 @@ export class PoseDetector {
     this._running = false;
     this._paused  = false;
     cancelAnimationFrame(this._rafId);
-    // Webcam
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     this.video.srcObject = null;
-    // File
     this.video.onended = null;
     if (this._fileUrl) {
       this.video.pause();
@@ -258,8 +223,8 @@ export class PoseDetector {
       URL.revokeObjectURL(this._fileUrl);
       this._fileUrl = null;
     }
-    // Reset filters so next session starts clean
     this._fBodyNorm.reset();  this._fBodyWorld.reset();
+    this._fFace.reset();
     this._fHandNorm.Left.reset();  this._fHandNorm.Right.reset();
     this._fHandWorld.Left.reset(); this._fHandWorld.Right.reset();
   }
@@ -267,61 +232,79 @@ export class PoseDetector {
   private _tick = (): void => {
     if (!this._running) return;
     this._rafId = requestAnimationFrame(this._tick);
-
     if (this._paused) return;
     if (this.video.readyState < 2) return;
-
     const now = performance.now();
     if (now === this._lastTs) return;
     this._lastTs = now;
-
     this._detectOnce();
   };
 
-  /**
-   * Run one detect+emit cycle on the current video frame. Bypasses paused/
-   * lastTs guards — used both by the RAF tick and by stepFrame().
-   */
   private _detectOnce(): void {
     if (this.video.readyState < 2) return;
-
     const now = performance.now();
     try {
-      const poseResult: PoseLandmarkerResult =
-        this.poseLandmarker!.detectForVideo(this.video, now);
+      const result: HolisticLandmarkerResult =
+        this.holistic!.detectForVideo(this.video, now);
 
-      const handResult: HandLandmarkerResult =
-        this.handLandmarker!.detectForVideo(this.video, now);
-
-      if (poseResult.landmarks.length === 0 || !this.onFrame) return;
+      if (!result.poseLandmarks.length || !this.onFrame) return;
 
       const tSec = now / 1000;
-      const rawBodyNorm  = poseResult.landmarks[0]      as Landmark3D[];
-      const rawBodyWorld = poseResult.worldLandmarks[0] as Landmark3D[];
+
+      const rawBodyNorm  = result.poseLandmarks[0]      as Landmark3D[];
+      const rawBodyWorld = result.poseWorldLandmarks[0] as Landmark3D[];
+
+      // World landmarks have no visibility field in HolisticLandmarker — copy from
+      // normalized landmarks so downstream visibility gates work correctly.
+      for (let i = 0; i < rawBodyWorld.length; i++) {
+        if (rawBodyWorld[i] && rawBodyNorm[i]?.visibility !== undefined) {
+          (rawBodyWorld[i] as Landmark3D).visibility = rawBodyNorm[i].visibility;
+        }
+      }
 
       const bodyNorm  = this._filterEnabled ? this._fBodyNorm.filter (rawBodyNorm,  tSec) : rawBodyNorm;
       const bodyWorld = this._filterEnabled ? this._fBodyWorld.filter(rawBodyWorld, tSec) : rawBodyWorld;
 
-      const hands: HandFrame[] = handResult.landmarks.map((lm, i) => {
-        const side  = (handResult.handedness[i]?.[0]?.categoryName ?? 'Left') as 'Left' | 'Right';
-        const rawN  = lm                                   as Landmark3D[];
-        const rawW  = (handResult.worldLandmarks[i] ?? lm) as Landmark3D[];
-        return {
-          side,
-          landmarks:      this._filterEnabled ? this._fHandNorm [side].filter(rawN, tSec) : rawN,
-          worldLandmarks: this._filterEnabled ? this._fHandWorld[side].filter(rawW, tSec) : rawW,
-        };
-      });
+      const rawFace = (result.faceLandmarks[0] ?? []) as Landmark3D[];
+      const faceLandmarks = (rawFace.length && this._filterEnabled)
+        ? this._fFace.filter(rawFace, tSec)
+        : rawFace;
 
-      const frame: PoseFrame = {
-        landmarks:      bodyNorm,
-        worldLandmarks: bodyWorld,
-        hands,
+      // HolisticLandmarker returns separate left/right hand arrays (from the
+      // perspective of the person, not the camera — matching sysAnimOnline).
+      const hands: HandFrame[] = [];
+
+      const addHand = (
+        norm: Landmark3D[],
+        world: Landmark3D[],
+        side: 'Left' | 'Right',
+      ): void => {
+        if (!norm.length) return;
+        hands.push({
+          side,
+          landmarks:      this._filterEnabled ? this._fHandNorm [side].filter(norm,  tSec) : norm,
+          worldLandmarks: this._filterEnabled ? this._fHandWorld[side].filter(world, tSec) : world,
+        });
       };
 
-      if (this._canvas && this._ctx) {
-        this._draw(frame, handResult);
-      }
+      // Self-view (selfie) mirror: person's LEFT hand appears on the RIGHT side
+      // of the screen → drives avatar's RIGHT arm, and vice versa.
+      // Flip labels to match body tracking, which also mirrors L↔R via LIMB_BONES.
+      // Matches sysAnimOnline's explicit LR flip for holistic hand landmarks.
+      addHand(
+        (result.leftHandLandmarks[0]      ?? []) as Landmark3D[],
+        (result.leftHandWorldLandmarks[0] ?? []) as Landmark3D[],
+        'Right',  // person's left → avatar's right
+      );
+      addHand(
+        (result.rightHandLandmarks[0]      ?? []) as Landmark3D[],
+        (result.rightHandWorldLandmarks[0] ?? []) as Landmark3D[],
+        'Left',   // person's right → avatar's left
+      );
+
+      const frame: PoseFrame = { landmarks: bodyNorm, worldLandmarks: bodyWorld, faceLandmarks, hands };
+
+      if (this._canvas && this._ctx) this._draw(frame, result);
 
       this.onFrame(frame);
     } catch (e) {
@@ -329,15 +312,12 @@ export class PoseDetector {
     }
   }
 
-  // ── Rendering ─────────────────────────────────────────────────────────────────
-
-  private _draw(frame: PoseFrame, handResult: HandLandmarkerResult): void {
+  private _draw(frame: PoseFrame, result: HolisticLandmarkerResult): void {
     const canvas = this._canvas!;
     const ctx    = this._ctx!;
     const w = canvas.width;
     const h = canvas.height;
 
-    // Mirror video (selfie view)
     ctx.save();
     ctx.scale(-1, 1);
     ctx.drawImage(this.video, -w, 0, w, h);
@@ -346,15 +326,31 @@ export class PoseDetector {
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.fillRect(0, 0, w, h);
 
-    // Pose skeleton — x mirrored for display to match flipped video
+    // Body skeleton
     this._drawConnections(ctx, frame.landmarks, POSE_CONNECTIONS, w, h, '#00e5ff', 1.5);
     this._drawDots(ctx, frame.landmarks, w, h, '#00e5ff', 2.5);
 
+    // Face mesh (sparse — just dots)
+    if (frame.faceLandmarks.length > 0) {
+      ctx.fillStyle = 'rgba(255,200,100,0.5)';
+      for (const lm of frame.faceLandmarks) {
+        ctx.beginPath();
+        ctx.arc((1 - lm.x) * w, lm.y * h, 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     // Hands
-    for (let i = 0; i < frame.hands.length; i++) {
-      const color = handResult.handedness[i]?.[0]?.categoryName === 'Right' ? '#ffee00' : '#ff6ec7';
-      this._drawConnections(ctx, frame.hands[i].landmarks, HAND_CONNECTIONS, w, h, color, 1.2);
-      this._drawDots(ctx, frame.hands[i].landmarks, w, h, color, 2);
+    const handColors = ['#ffee00', '#ff6ec7'];
+    const allHands = [
+      result.leftHandLandmarks[0],
+      result.rightHandLandmarks[0],
+    ].filter(Boolean);
+
+    for (let i = 0; i < allHands.length; i++) {
+      const lms = allHands[i] as Landmark3D[];
+      this._drawConnections(ctx, lms, HAND_CONNECTIONS, w, h, handColors[i % 2], 1.2);
+      this._drawDots(ctx, lms, w, h, handColors[i % 2], 2);
     }
   }
 
@@ -374,7 +370,6 @@ export class PoseDetector {
       const la = lms[a]; const lb = lms[b];
       if (!la || !lb) continue;
       if ((la.visibility ?? 1) < 0.3 || (lb.visibility ?? 1) < 0.3) continue;
-      // mirror x to match flipped video
       ctx.moveTo((1 - la.x) * w, la.y * h);
       ctx.lineTo((1 - lb.x) * w, lb.y * h);
     }

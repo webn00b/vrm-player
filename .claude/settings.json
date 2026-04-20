@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({**d.get\\('dependencies',{}\\), **d.get\\('devDependencies',{}\\)}, indent=2\\)\\)\")",
+      "Bash(node -e \"const tv = require\\('/Users/fedor/projects/personal/vrm-player/node_modules/@mediapipe/tasks-vision'\\); console.log\\(Object.keys\\(tv\\).filter\\(k => k.includes\\('Holistic'\\) || k.includes\\('Face'\\) || k.includes\\('Landmarker'\\)\\)\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(npm list *)",
+      "Bash(python3 -)",
+      "Bash(python3 /tmp/analyze_mocap.py)"
+    ],
+    "additionalDirectories": [
+      "/Users/fedor/projects/personal/vrm-player/node_modules/@mediapipe/tasks-vision/wasm"
+    ]
+  }
+}
