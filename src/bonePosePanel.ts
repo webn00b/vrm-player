@@ -134,21 +134,25 @@ export class BonePosePanel {
   mount(container: HTMLElement): void {
     container.innerHTML = '';
 
-    const header = document.createElement('div');
-    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px';
+    const header = document.createElement('p');
+    header.className = 'panel-title';
     header.innerHTML = `
-      <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;opacity:.4">Bones</span>
-      <div style="display:flex;gap:4px">
-        <button id="bone-toggle" style="${BTN_STYLE}background:#166534">ON</button>
-        <button id="bone-reset"  style="${BTN_STYLE}background:#7f1d1d">Reset</button>
-      </div>`;
+      <span>Bones</span>
+      <span style="display:flex;gap:6px;margin-left:auto">
+        <button id="bone-toggle" class="dbg-toggle">ON</button>
+        <button id="bone-reset"  class="dbg-toggle off">Reset</button>
+      </span>`;
+    // Prevent the button clicks from also triggering panel collapse.
+    header.querySelectorAll('button').forEach((b) =>
+      b.addEventListener('click', (ev) => ev.stopPropagation())
+    );
     container.appendChild(header);
 
     const toggleBtn = header.querySelector<HTMLButtonElement>('#bone-toggle')!;
     toggleBtn.addEventListener('click', () => {
       this._enabled = !this._enabled;
       toggleBtn.textContent = this._enabled ? 'ON' : 'OFF';
-      toggleBtn.style.background = this._enabled ? '#166534' : '#7f1d1d';
+      toggleBtn.classList.toggle('off', !this._enabled);
       if (!this._enabled) this.resetAll();
     });
 

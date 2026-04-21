@@ -9,7 +9,9 @@ npm install
 npm run dev
 ```
 
-Откроется `http://127.0.0.1:5173`.
+Откроется `http://127.0.0.1:5333`.
+
+По умолчанию включён skeleton overlay, а модель скрыта до нажатия `Show model` в панели слева.
 
 ## Ассеты
 
@@ -51,7 +53,7 @@ animations/
 - `src/bvhLoader.ts` — парсинг BVH.
 - `src/skeletonMap.ts` — **структурное авто-определение** humanoid-костей BVH-скелета (по иерархии и длинам, адаптировано из [pixiv/bvh2vrma](https://github.com/pixiv/bvh2vrma)). Работает с любым биped-скелетом независимо от имён (Mixamo, MMD, кастомные).
 - `src/retarget.ts` — использует `skeletonMap` и переписывает треки BVH-клипа в имена нормализованного VRM humanoid; auto-scale + anchor hips к rest-позе.
-- `src/animationController.ts` — `AnimationMixer` + последовательное воспроизведение с `crossFadeTo` (0.4 сек).
+- `src/animationController.ts` — `AnimationMixer` + последовательное воспроизведение с `crossFadeTo` (0.5 сек).
 - `src/ui.ts` — панель со списком, подсветка активного.
 - `src/main.ts` — `import.meta.glob('/models/*.vrm')`, `import.meta.glob('/animations/*.bvh')`, склейка всего.
 

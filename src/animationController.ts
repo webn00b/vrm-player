@@ -99,16 +99,24 @@ export class AnimationController {
     if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
     if (fromIndex >= this.queue.length || toIndex > this.queue.length) return;
 
-    const activeItemIndex = this.queuePos >= 0 ? this.queue[this.queuePos] : -1;
+    const activeQueuePos = this.queuePos;
 
     const [item] = this.queue.splice(fromIndex, 1);
     const insertAt = toIndex > fromIndex ? toIndex - 1 : toIndex;
     this.queue.splice(insertAt, 0, item);
 
-    // Keep queuePos following the active item
-    if (activeItemIndex >= 0) {
-      const newPos = this.queue.lastIndexOf(activeItemIndex, insertAt);
-      this.queuePos = newPos >= 0 ? newPos : this.queue.indexOf(activeItemIndex);
+    // Track the active queue entry by position, not by itemIndex:
+    // the queue can contain duplicate clips pointing at the same library item.
+    if (activeQueuePos >= 0) {
+      if (activeQueuePos === fromIndex) {
+        this.queuePos = insertAt;
+        return;
+      }
+
+      let nextActivePos = activeQueuePos;
+      if (fromIndex < nextActivePos) nextActivePos--;
+      if (insertAt <= nextActivePos) nextActivePos++;
+      this.queuePos = nextActivePos;
     }
   }
 
@@ -134,6 +142,45 @@ export class AnimationController {
   }
   get muted(): boolean { return this._muted; }
   get hasBvhActive(): boolean { return this.queuePos >= 0; }
+
+  // ── Transport (play/pause/seek/skip) ───────────────────────────────────────
+
+  get paused(): boolean { return this.mixer.timeScale === 0; }
+  setPaused(v: boolean): void { this.mixer.timeScale = v ? 0 : 1; }
+  togglePaused(): void { this.setPaused(!this.paused); }
+
+  /** Current playback time in the active clip (seconds). 0 when queue empty. */
+  get currentTime(): number { return this.timeInCurrent; }
+  /** Duration of the active clip (seconds). 0 when queue empty. */
+  get currentDuration(): number {
+    if (this.queuePos < 0) return 0;
+    return this.items[this.queue[this.queuePos]]?.duration ?? 0;
+  }
+  /** Name of the active clip. '' when queue empty. */
+  get currentName(): string {
+    if (this.queuePos < 0) return '';
+    return this.items[this.queue[this.queuePos]]?.name ?? '';
+  }
+
+  /** Seek the active clip to an absolute time in seconds (clamped to duration). */
+  seek(seconds: number): void {
+    if (this.queuePos < 0) return;
+    const item = this.items[this.queue[this.queuePos]];
+    if (!item) return;
+    const t = Math.max(0, Math.min(seconds, Math.max(item.duration - 1e-3, 0)));
+    item.action.time = t;
+    this.timeInCurrent = t;
+  }
+
+  next(): void {
+    if (this.queue.length === 0) return;
+    this.activateQueuePos((this.queuePos + 1) % this.queue.length);
+  }
+  prev(): void {
+    if (this.queue.length === 0) return;
+    const n = this.queue.length;
+    this.activateQueuePos(((this.queuePos - 1) % n + n) % n);
+  }
 
   // ── Listener ───────────────────────────────────────────────────────────────
 

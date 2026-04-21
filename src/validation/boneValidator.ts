@@ -88,7 +88,7 @@ export class BoneValidator {
   }
 
   /** Apply clampQuaternion to every known bone. Called once per frame. */
-  clampAll(): ValidationStats {
+  clampAll(excludedBones?: ReadonlySet<VRMHumanBoneName>): ValidationStats {
     if (!this.enabled) {
       this.stats.clampedThisFrame = 0;
       this.stats.worstBone = null;
@@ -101,6 +101,7 @@ export class BoneValidator {
     let worstDelta = 0;
 
     for (const [bone, node] of this.nodeCache) {
+      if (excludedBones?.has(bone)) continue;
       const overshoot = this.clampQuaternion(bone, node.quaternion);
       if (overshoot > 0) {
         clamped++;

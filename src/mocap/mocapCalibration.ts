@@ -28,6 +28,7 @@ import type { VRM } from '@pixiv/three-vrm';
 import type { PoseFrame, Landmark3D } from './poseDetector';
 
 const LM = {
+  LEFT_EAR:       7,  RIGHT_EAR:      8,
   LEFT_SHOULDER:  11, RIGHT_SHOULDER: 12,
   LEFT_WRIST:     15, RIGHT_WRIST:    16,
   LEFT_HIP:       23, RIGHT_HIP:      24,
@@ -37,7 +38,10 @@ const LM = {
 // Relaxed gate for wrist landmarks (often partially occluded)
 const WRIST_VIS_GATE = 0.4;
 
-const VIS_GATE = 0.7;
+// Hip visibility gate — raised to 0.7 would reject videos where hips are
+// partly cropped or occluded (50-60% is typical in half-body shots and still
+// gives usable measurements). Configurable via setHipVisGate().
+const DEFAULT_VIS_GATE = 0.4;
 const EMA_ALPHA = 0.15;  // smoothing of hip-width measurement — enough to kill
                          // jitter, light enough to follow if the performer
                          // steps toward/away from the camera.
@@ -56,10 +60,23 @@ function distance(a: Landmark3D, b: Landmark3D): number {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+
 export class MocapCalibration {
   /** Avatar hip width (distance between leftUpperLeg and rightUpperLeg world
    *  positions in rest pose), read once at construction. */
   readonly avatarHipWidth: number;
+
+  /** Avatar shoulder width (leftUpperArm ↔ rightUpperArm world distance at
+   *  rest). Used as a fallback body-scale reference when hips aren't reliably
+   *  visible (upper-body-only videos). */
+  readonly avatarShoulderWidth: number;
+
+  /** Avatar head-bone world size (rough ear-to-ear analogue). Estimated from
+   *  the distance between head-bone world position and its parent (neck), ×
+   *  0.7 — empirically close to ear-to-ear width for standard VRM heads.
+   *  Used as a super-stable body-scale reference (face landmarks don't move
+   *  with breathing, shrugs, or torso rotation). */
+  readonly avatarHeadWidth: number;
 
   /** Avatar limb bone lengths — still needed by the IK solver. */
   readonly avatarLeftUpperArm:  number;
@@ -73,6 +90,12 @@ export class MocapCalibration {
 
   /** Live EMA of performer hip width in metres. 0 until first valid frame. */
   private performerHipWidth = 0;
+  /** Live EMA of performer shoulder width in metres. Used for body-scale
+   *  fallback when hip visibility is too low to trust. */
+  private performerShoulderWidth = 0;
+  /** Live EMA of performer ear-to-ear width in metres. Most stable ref —
+   *  face landmarks don't move with body movements. */
+  private performerHeadWidth = 0;
   /** Live EMA of performer hip-to-ankle length (max of both sides). 0 until first valid frame. */
   private performerLegLen = 0;
   /**
@@ -98,6 +121,26 @@ export class MocapCalibration {
   private _overrideLeftArm  = 1;
   private _overrideRightArm = 1;
 
+  // When true, both arms share the max of left/right performer arm length.
+  // Helps when the performer never fully extends both arms symmetrically
+  // in-view — the better-observed arm drives the scale for both.
+  private _unifyArmMax = false;
+
+  // Minimum MediaPipe visibility required to trust hip / ankle landmarks for
+  // calibration. Lower = more permissive (works with cropped / occluded shots),
+  // higher = stricter (rejects noise). User-configurable at runtime.
+  private _hipVisGate = DEFAULT_VIS_GATE;
+
+  // Which reference to use for bodyScale.
+  //   'auto'      — prefer hips > shoulders > head (legacy).
+  //   'shoulders' — force shoulder-width ratio.
+  //   'hips'      — force hip-width ratio.
+  //   'head'      — force head-width (ear-to-ear) ratio — most stable,
+  //                 great for talking-head / upper-body footage.
+  //   'median'    — robust median of all available references. Recommended
+  //                 default; one bad landmark source doesn't skew the result.
+  private _scaleRef: 'auto' | 'shoulders' | 'hips' | 'head' | 'median' = 'auto';
+
   onStatusChange: ((s: CalibrationStatus) => void) | null = null;
 
   constructor(vrm: VRM) {
@@ -117,6 +160,37 @@ export class MocapCalibration {
     rHipNode?.getWorldPosition(rPos);
     this.avatarHipWidth = lPos.distanceTo(rPos);
 
+    // Shoulder width = world distance between leftUpperArm and rightUpperArm.
+    const lShoulder = humanoid.getNormalizedBoneNode('leftUpperArm'  as any);
+    const rShoulder = humanoid.getNormalizedBoneNode('rightUpperArm' as any);
+    if (lShoulder && rShoulder) {
+      const lsPos = new THREE.Vector3(), rsPos = new THREE.Vector3();
+      lShoulder.getWorldPosition(lsPos);
+      rShoulder.getWorldPosition(rsPos);
+      this.avatarShoulderWidth = lsPos.distanceTo(rsPos);
+    } else {
+      this.avatarShoulderWidth = 0;
+    }
+
+    // Head (ear-to-ear) width — prefer leftEye↔rightEye × 1.8 if VRM has
+    // eye bones (they correlate much better than head-bone length with actual
+    // face width). Fallback: head.position.length() × 1.5 as a rough proxy.
+    // If nothing usable, set to 0 and head-based scaling is disabled.
+    const lEye = humanoid.getNormalizedBoneNode('leftEye'  as any);
+    const rEye = humanoid.getNormalizedBoneNode('rightEye' as any);
+    if (lEye && rEye) {
+      const lePos = new THREE.Vector3(), rePos = new THREE.Vector3();
+      lEye.getWorldPosition(lePos);
+      rEye.getWorldPosition(rePos);
+      // Ear-to-ear ≈ 1.8 × inter-pupillary; cartoon VRMs with wide-set eyes
+      // still land in the same ballpark once MediaPipe's ear-width ratio is
+      // applied.
+      this.avatarHeadWidth = lePos.distanceTo(rePos) * 1.8;
+    } else {
+      const head = humanoid.getNormalizedBoneNode('head' as any);
+      this.avatarHeadWidth = head ? head.position.length() * 1.5 : 0;
+    }
+
     // Arm bone lengths (child bone's local position length = bone length).
     this.avatarLeftUpperArm  = boneLen('leftLowerArm');
     this.avatarLeftLowerArm  = boneLen('leftHand');
@@ -134,10 +208,12 @@ export class MocapCalibration {
 
   /** Reset the running measurements; they'll refill on next good frames. */
   recalibrate(): void {
-    this.performerHipWidth    = 0;
-    this.performerLegLen      = 0;
-    this.performerRightArmMax = 0;
-    this.performerLeftArmMax  = 0;
+    this.performerHipWidth      = 0;
+    this.performerShoulderWidth = 0;
+    this.performerHeadWidth     = 0;
+    this.performerLegLen        = 0;
+    this.performerRightArmMax   = 0;
+    this.performerLeftArmMax    = 0;
     this._calibrated = false;
     this._emit();
   }
@@ -150,34 +226,44 @@ export class MocapCalibration {
     const lms = frame.worldLandmarks;
     const lh = lms[LM.LEFT_HIP],  rh = lms[LM.RIGHT_HIP];
     const la = lms[LM.LEFT_ANKLE], ra = lms[LM.RIGHT_ANKLE];
-    if (!lh || !rh) return;
-    if ((lh.visibility ?? 1) < VIS_GATE) return;
-    if ((rh.visibility ?? 1) < VIS_GATE) return;
+    const ls = lms[LM.LEFT_SHOULDER], rs = lms[LM.RIGHT_SHOULDER];
+    const lE = lms[LM.LEFT_EAR],      rE = lms[LM.RIGHT_EAR];
 
-    const rawHip = distance(lh, rh);
-    if (rawHip < 1e-3) return;
-
-    if (this.performerHipWidth <= 0) {
-      this.performerHipWidth = rawHip;
-      this._calibrated = true;
-    } else {
-      this.performerHipWidth = this.performerHipWidth * (1 - EMA_ALPHA) + rawHip * EMA_ALPHA;
+    // Head (ear-to-ear) width — face landmarks usually 95-100% visibility,
+    // not affected by body posture.
+    if (lE && rE && (lE.visibility ?? 1) >= WRIST_VIS_GATE
+                 && (rE.visibility ?? 1) >= WRIST_VIS_GATE) {
+      const rawHead = distance(lE, rE);
+      if (rawHead > 1e-3) {
+        if (this.performerHeadWidth <= 0) {
+          this.performerHeadWidth = rawHead;
+          this._calibrated = true;
+        } else {
+          this.performerHeadWidth =
+            this.performerHeadWidth * (1 - EMA_ALPHA) + rawHead * EMA_ALPHA;
+        }
+      }
     }
 
-    // Track performer leg length (hip-to-ankle) for leg IK scaling.
-    let rawLeg = 0;
-    if (la && (la.visibility ?? 1) >= VIS_GATE) rawLeg = Math.max(rawLeg, distance(lh, la));
-    if (ra && (ra.visibility ?? 1) >= VIS_GATE) rawLeg = Math.max(rawLeg, distance(rh, ra));
-    if (rawLeg > 1e-3) {
-      if (this.performerLegLen <= 0) this.performerLegLen = rawLeg;
-      else this.performerLegLen = this.performerLegLen * (1 - EMA_ALPHA) + rawLeg * EMA_ALPHA;
+    // Shoulder width — always updated if shoulders are visible. Serves as the
+    // fallback body-scale reference for upper-body-only footage.
+    if (ls && rs && (ls.visibility ?? 1) >= WRIST_VIS_GATE
+                 && (rs.visibility ?? 1) >= WRIST_VIS_GATE) {
+      const rawShoulder = distance(ls, rs);
+      if (rawShoulder > 1e-3) {
+        if (this.performerShoulderWidth <= 0) {
+          this.performerShoulderWidth = rawShoulder;
+          this._calibrated = true; // can be based on shoulders alone
+        } else {
+          this.performerShoulderWidth =
+            this.performerShoulderWidth * (1 - EMA_ALPHA) + rawShoulder * EMA_ALPHA;
+        }
+      }
     }
 
-    // Track performer arm lengths (shoulder-to-wrist) for arm IK scaling.
-    // Mirror mapping: character LEFT arm ← performer RIGHT (12→16); RIGHT ← LEFT (11→15).
-    const lms2 = frame.worldLandmarks;
-    const ls = lms2[LM.LEFT_SHOULDER], rs = lms2[LM.RIGHT_SHOULDER];
-    const lw = lms2[LM.LEFT_WRIST],   rw = lms2[LM.RIGHT_WRIST];
+    // Arm lengths (shoulder-to-wrist) — must run regardless of hip visibility.
+    // Mirror: character LEFT arm ← performer RIGHT (11/15 vs 12/16 indices).
+    const lw = lms[LM.LEFT_WRIST], rw = lms[LM.RIGHT_WRIST];
     const ARM_MAX_DECAY = 0.9999;
     if (rs && rw && (rs.visibility ?? 1) >= WRIST_VIS_GATE && (rw.visibility ?? 1) >= WRIST_VIS_GATE) {
       const raw = distance(rs, rw);
@@ -192,13 +278,102 @@ export class MocapCalibration {
       }
     }
 
+    if (!lh || !rh) return;
+    if ((lh.visibility ?? 1) < this._hipVisGate) return;
+    if ((rh.visibility ?? 1) < this._hipVisGate) return;
+
+    const rawHip = distance(lh, rh);
+    if (rawHip < 1e-3) return;
+
+    if (this.performerHipWidth <= 0) {
+      this.performerHipWidth = rawHip;
+      this._calibrated = true;
+    } else {
+      this.performerHipWidth = this.performerHipWidth * (1 - EMA_ALPHA) + rawHip * EMA_ALPHA;
+    }
+
+    // Track performer leg length (hip-to-ankle) for leg IK scaling.
+    let rawLeg = 0;
+    if (la && (la.visibility ?? 1) >= this._hipVisGate) rawLeg = Math.max(rawLeg, distance(lh, la));
+    if (ra && (ra.visibility ?? 1) >= this._hipVisGate) rawLeg = Math.max(rawLeg, distance(rh, ra));
+    if (rawLeg > 1e-3) {
+      if (this.performerLegLen <= 0) this.performerLegLen = rawLeg;
+      else this.performerLegLen = this.performerLegLen * (1 - EMA_ALPHA) + rawLeg * EMA_ALPHA;
+    }
+
     this._emit();
   }
 
-  /** Core scale: avatar hips / performer hips. 1 if not calibrated. */
+  /** Core scale. Reference choice follows `_scaleRef`:
+   *  auto      — hip > shoulder > head (fallback).
+   *  shoulders — shoulder-width ratio.
+   *  hips      — hip-width ratio.
+   *  head      — ear-to-ear ratio (most stable, best for talking-head).
+   *  median    — median of all available refs; one bad source doesn't skew. */
   bodyScale(): number {
-    if (!this._calibrated || this.performerHipWidth < 1e-4) return 1;
-    return this.avatarHipWidth / this.performerHipWidth;
+    if (!this._calibrated) return 1;
+    const hipRatio   = (this.performerHipWidth      >= 1e-4 && this.avatarHipWidth      > 1e-4)
+      ? this.avatarHipWidth      / this.performerHipWidth      : 0;
+    const shRatio    = (this.performerShoulderWidth >= 1e-4 && this.avatarShoulderWidth > 1e-4)
+      ? this.avatarShoulderWidth / this.performerShoulderWidth : 0;
+    const headRatio  = (this.performerHeadWidth     >= 1e-4 && this.avatarHeadWidth     > 1e-4)
+      ? this.avatarHeadWidth     / this.performerHeadWidth     : 0;
+
+    switch (this._scaleRef) {
+      case 'shoulders': return shRatio   || hipRatio || headRatio || 1;
+      case 'hips':      return hipRatio  || shRatio  || headRatio || 1;
+      case 'head':      return headRatio || shRatio  || hipRatio  || 1;
+      case 'median': {
+        const vals = [hipRatio, shRatio, headRatio].filter((v) => v > 0).sort((a, b) => a - b);
+        if (vals.length === 0) return 1;
+        if (vals.length === 1) return vals[0];
+        if (vals.length === 2) return (vals[0] + vals[1]) / 2;
+        return vals[1]; // median of 3
+      }
+      case 'auto':
+      default:
+        if (hipRatio)   return hipRatio;
+        if (shRatio)    return shRatio;
+        if (headRatio)  return headRatio;
+        return 1;
+    }
+  }
+
+  setScaleRef(r: 'auto' | 'shoulders' | 'hips' | 'head' | 'median'): void {
+    this._scaleRef = r;
+    this._emit();
+  }
+  get scaleRef(): 'auto' | 'shoulders' | 'hips' | 'head' | 'median' { return this._scaleRef; }
+
+  /** Raw performer measurements in metres. Zero = not yet observed. */
+  performerMeasurements(): {
+    hipWidth:      number;
+    shoulderWidth: number;
+    headWidth:     number;
+    leftArmMax:    number;   // performer left shoulder→wrist (drives avatar RIGHT arm)
+    rightArmMax:   number;   // performer right shoulder→wrist (drives avatar LEFT arm)
+    legLen:        number;
+  } {
+    return {
+      hipWidth:      this.performerHipWidth,
+      shoulderWidth: this.performerShoulderWidth,
+      headWidth:     this.performerHeadWidth,
+      leftArmMax:    this.performerLeftArmMax,
+      rightArmMax:   this.performerRightArmMax,
+      legLen:        this.performerLegLen,
+    };
+  }
+
+  /** Raw reference ratios for UI display. Undefined entries = unobserved. */
+  refRatios(): { hip?: number; shoulder?: number; head?: number } {
+    return {
+      hip:      this.performerHipWidth      >= 1e-4 && this.avatarHipWidth      > 1e-4
+        ? this.avatarHipWidth / this.performerHipWidth : undefined,
+      shoulder: this.performerShoulderWidth >= 1e-4 && this.avatarShoulderWidth > 1e-4
+        ? this.avatarShoulderWidth / this.performerShoulderWidth : undefined,
+      head:     this.performerHeadWidth     >= 1e-4 && this.avatarHeadWidth     > 1e-4
+        ? this.avatarHeadWidth / this.performerHeadWidth : undefined,
+    };
   }
 
   /**
@@ -222,16 +397,67 @@ export class MocapCalibration {
   armScale(side: 'left' | 'right'): number {
     const override = side === 'left' ? this._overrideLeftArm : this._overrideRightArm;
     if (side === 'left') {
-      const perfLen = this.performerRightArmMax;
+      const perfLen = this._unifyArmMax
+        ? Math.max(this.performerRightArmMax, this.performerLeftArmMax)
+        : this.performerRightArmMax;
       const avatarLen = this.avatarLeftUpperArm + this.avatarLeftLowerArm;
       if (perfLen < 1e-3) return this.bodyScale() * override;
       return (avatarLen / perfLen) * override;
     } else {
-      const perfLen = this.performerLeftArmMax;
+      const perfLen = this._unifyArmMax
+        ? Math.max(this.performerRightArmMax, this.performerLeftArmMax)
+        : this.performerLeftArmMax;
       const avatarLen = this.avatarRightUpperArm + this.avatarRightLowerArm;
       if (perfLen < 1e-3) return this.bodyScale() * override;
       return (avatarLen / perfLen) * override;
     }
+  }
+
+  /** If true, both arms share the max observed arm length (fixes asymmetric cal). */
+  setUnifyArmMax(v: boolean): void { this._unifyArmMax = v; this._emit(); }
+  get unifyArmMax(): boolean { return this._unifyArmMax; }
+
+  /** Min visibility to accept a hip/ankle landmark for calibration (0..1). */
+  setHipVisGate(v: number): void {
+    this._hipVisGate = Math.max(0, Math.min(1, v));
+    this._emit();
+  }
+  get hipVisGate(): number { return this._hipVisGate; }
+
+  /**
+   * Per-reference readiness for UI indicator. Each value is 0..1 progress.
+   *   shoulders — 1 after the first valid shoulders-visible frame.
+   *   hips      — 1 after the first valid hips-visible frame.
+   *   legs      — 1 after the first valid hip-to-ankle sample.
+   *   armL/armR — convergence of arm-max relative to expected reach
+   *               (2.3 × shoulder width, a rough human-anatomy ratio).
+   *               100% when the performer has extended the arm ~fully.
+   */
+  readiness(): {
+    shoulders: number;
+    hips:      number;
+    legs:      number;
+    armL:      number;
+    armR:      number;
+  } {
+    const shoulders = this.performerShoulderWidth > 0 ? 1 : 0;
+    const hips      = this.performerHipWidth      > 0 ? 1 : 0;
+    const legs      = this.performerLegLen        > 0 ? 1 : 0;
+
+    // Readiness based on armScale convergence: armScale ≤ 1 means target sits
+    // within avatar reach → 100% ready. Anything above 1 means performerArmMax
+    // is under-observed and target would overshoot — map linearly toward 0%
+    // at armScale = 2.5 (severely under-observed).
+    const scoreScale = (scale: number): number => {
+      if (!Number.isFinite(scale) || scale <= 0) return 0;
+      if (scale <= 1) return 1;
+      return Math.max(0, 1 - (scale - 1) / 1.5);
+    };
+    // armScale() has observation-absent guards; treat zero-observation as 0%.
+    const armL = this.performerRightArmMax > 1e-3 ? scoreScale(this.armScale('left'))  : 0;
+    const armR = this.performerLeftArmMax  > 1e-3 ? scoreScale(this.armScale('right')) : 0;
+
+    return { shoulders, hips, legs, armL, armR };
   }
 
   /** Cross-body (shoulder-axis) scale factor. Multiplies body scale by override. */

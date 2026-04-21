@@ -3,11 +3,47 @@
 export interface LibraryOptions {
   names: string[];
   onDragToQueue: (itemIndex: number) => void;
+  /** Called when user renames an item in the library (double-click). */
+  onRename?: (itemIndex: number, newDisplayName: string) => void;
+}
+
+const LIBRARY_ALIAS_KEY = 'vrm-player.library-aliases';
+
+/** Return a user-chosen alias for the raw name, or undefined. */
+export function readLibraryAlias(rawName: string): string | undefined {
+  try {
+    const raw = localStorage.getItem(LIBRARY_ALIAS_KEY);
+    if (!raw) return undefined;
+    return (JSON.parse(raw) as Record<string, string>)[rawName];
+  } catch { return undefined; }
+}
+
+function writeLibraryAlias(rawName: string, alias: string | null): void {
+  try {
+    const raw = localStorage.getItem(LIBRARY_ALIAS_KEY);
+    const obj = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    if (alias && alias.trim().length > 0) obj[rawName] = alias.trim();
+    else delete obj[rawName];
+    localStorage.setItem(LIBRARY_ALIAS_KEY, JSON.stringify(obj));
+  } catch { /* quota / private mode — silently ignore */ }
+}
+
+/**
+ * Render a friendly display name. If the user has set an alias, use it.
+ * Otherwise, hash-like raw names (hex ≥ 16 chars) get truncated: `abc12345…defg`.
+ */
+export function formatLibraryName(rawName: string): string {
+  const alias = readLibraryAlias(rawName);
+  if (alias) return alias;
+  if (/^[0-9a-f]{16,}$/i.test(rawName)) {
+    return `${rawName.slice(0, 8)}…${rawName.slice(-4)}`;
+  }
+  return rawName;
 }
 
 /**
  * Mounts the animation library (read-only source list).
- * Items are draggable into the Queue panel.
+ * Items are draggable into the Queue panel. Double-click to rename.
  */
 export function mountLibrary(opts: LibraryOptions): void {
   const root = document.getElementById('library-list');
@@ -18,8 +54,8 @@ export function mountLibrary(opts: LibraryOptions): void {
     const li = document.createElement('li');
     li.className = 'lib-item';
     li.setAttribute('draggable', 'true');
-    li.textContent = name;
-    li.title = 'Drag to Queue to play';
+    li.textContent = formatLibraryName(name);
+    li.title = `${name}\n(double-click to rename, drag to Queue to play)`;
 
     li.addEventListener('dragstart', (e) => {
       li.classList.add('dragging');
@@ -27,6 +63,39 @@ export function mountLibrary(opts: LibraryOptions): void {
       e.dataTransfer!.setData('text/plain', `library:${i}`);
     });
     li.addEventListener('dragend', () => li.classList.remove('dragging'));
+
+    // Double-click → inline rename
+    li.addEventListener('dblclick', () => {
+      const current = readLibraryAlias(name) ?? '';
+      const input = document.createElement('input');
+      input.type  = 'text';
+      input.value = current;
+      input.placeholder = name;
+      input.style.cssText =
+        'width:100%;font-family:inherit;font-size:12px;' +
+        'background:#111;color:#fff;border:1px solid #3b5bdb;' +
+        'border-radius:3px;padding:3px 6px;box-sizing:border-box';
+
+      const commit = (save: boolean): void => {
+        if (save) {
+          const v = input.value.trim();
+          writeLibraryAlias(name, v || null);
+          opts.onRename?.(i, v || name);
+        }
+        li.replaceChildren(document.createTextNode(formatLibraryName(name)));
+        li.setAttribute('draggable', 'true');
+      };
+
+      li.setAttribute('draggable', 'false');
+      li.replaceChildren(input);
+      input.focus();
+      input.select();
+      input.addEventListener('blur',    () => commit(true));
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter')  { ev.preventDefault(); commit(true);  input.blur(); }
+        if (ev.key === 'Escape') { ev.preventDefault(); commit(false); input.blur(); }
+      });
+    });
 
     root.appendChild(li);
   });
@@ -139,7 +208,8 @@ export function mountQueue(opts: QueueOptions): QueueHandle {
 
     const label = document.createElement('span');
     label.className = 'q-label';
-    label.textContent = name;
+    label.textContent = formatLibraryName(name);
+    label.title = name;
     li.appendChild(label);
 
     const removeBtn = document.createElement('button');

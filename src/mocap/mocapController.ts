@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import { PoseDetector, type PoseModelQuality, type PoseFrame } from './poseDetector';
 import { DirectPoseApplier } from './directPoseApplier';
@@ -36,7 +37,10 @@ export class MocapController {
   onBvhReady:             ((bvh: string, name: string) => void) | null = null;
   onCalibrationChange:    ((s: CalibrationStatus) => void) | null = null;
 
+  private _vrm: VRM;
+
   constructor(vrm: VRM, videoEl: HTMLVideoElement) {
+    this._vrm         = vrm;
     this.detector     = new PoseDetector(videoEl);
     this._calibration = new MocapCalibration(vrm);
     this.applier      = new DirectPoseApplier(vrm, this._calibration);
@@ -105,8 +109,17 @@ export class MocapController {
   setPoleSmoothing(v: number): void { this.applier.setPoleSmoothing(v); }
   get poleSmoothing(): number { return this.applier.poleSmoothing; }
 
+  setArmPoleZ(v: number): void { this.applier.setArmPoleZ(v); }
+  get armPoleZ(): number { return this.applier.armPoleZ; }
+
   setHipPositionEnabled(v: boolean): void { this.applier.setHipPositionEnabled(v); }
   get hipPositionEnabled(): boolean { return this.applier.hipPositionEnabled; }
+
+  setFootLockEnabled(v: boolean): void { this.applier.setFootLockEnabled(v); }
+  get footLockEnabled(): boolean { return this.applier.footLockEnabled; }
+
+  setLateralBendScale(v: number): void { this.applier.setLateralBendScale(v); }
+  get lateralBendScale(): number { return this.applier.lateralBendScale; }
 
   setFaceTrackingEnabled(v: boolean): void { this.faceApplier.setEnabled(v); }
   get faceTrackingEnabled(): boolean { return this.faceApplier.enabled; }
@@ -135,10 +148,231 @@ export class MocapController {
   get calibration(): MocapCalibration { return this._calibration; }
   get hipsBaseWorld() { return this.applier.hipsBaseWorld; }
   get debugTargets() { return this.applier.debugTargets; }
+
+  /**
+   * IK target reach as % of avatar limb length, per side.
+   *   < 90%  — comfortable reach, IK bends freely
+   *   ~100%  — near max (straight limb)
+   *   > 100% — unreachable (limb locks, hand/foot short of target)
+   */
+  getReachPercent(): { armL: number; armR: number; legL: number; legR: number } {
+    const h = this._vrm.humanoid;
+    const tmp = new THREE.Vector3();
+    const reach = (boneName: string, target: THREE.Vector3, limbLen: number): number => {
+      const n = h.getNormalizedBoneNode(boneName as any);
+      if (!n || limbLen <= 0) return 0;
+      n.getWorldPosition(tmp);
+      return (tmp.distanceTo(target) / limbLen) * 100;
+    };
+    const cal = this._calibration;
+    const dt  = this.applier.debugTargets;
+    return {
+      armL: dt.hasArm ? reach('leftUpperArm',  dt.leftWristTarget,  cal.avatarLeftUpperArm  + cal.avatarLeftLowerArm)   : 0,
+      armR: dt.hasArm ? reach('rightUpperArm', dt.rightWristTarget, cal.avatarRightUpperArm + cal.avatarRightLowerArm)  : 0,
+      legL: dt.hasLeg ? reach('leftUpperLeg',  dt.leftAnkleTarget,  cal.avatarLeftUpperLeg  + cal.avatarLeftLowerLeg)   : 0,
+      legR: dt.hasLeg ? reach('rightUpperLeg', dt.rightAnkleTarget, cal.avatarRightUpperLeg + cal.avatarRightLowerLeg)  : 0,
+    };
+  }
+
+  /**
+   * Dump a full side-by-side comparison of performer landmarks vs avatar
+   * skeleton to the console. Useful for debugging scale / calibration bugs
+   * (e.g. "performer skeleton shoulders look too wide").
+   */
+  dumpSkeleton(): void {
+    const frame = this._latestFrame;
+    const cal   = this._calibration;
+    const h     = this._vrm.humanoid;
+
+    console.group('%cSkeleton dump', 'color:#6186ff;font-weight:bold');
+
+    if (!frame) {
+      console.warn('No mocap frame available — start camera first.');
+      console.groupEnd();
+      return;
+    }
+
+    // ── Performer measurements (raw MediaPipe world meters) ────────────────
+    const lms = frame.worldLandmarks;
+    const dist = (a: any, b: any): number => {
+      if (!a || !b) return NaN;
+      const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+      return Math.sqrt(dx*dx + dy*dy + dz*dz);
+    };
+    const vis = (l: any): string => l?.visibility != null ? `${(l.visibility*100).toFixed(0)}%` : '?';
+
+    const ls = lms[11], rs = lms[12];           // shoulders
+    const lh = lms[23], rh = lms[24];           // hips
+    const lw = lms[15], rw = lms[16];           // wrists
+    const le = lms[13], re = lms[14];           // elbows
+    const lk = lms[25], rk = lms[26];           // knees
+    const la = lms[27], ra = lms[28];           // ankles
+
+    console.group('%cPerformer (raw MP meters)', 'color:#00ff88');
+    console.table({
+      'Shoulder width':  { value: dist(ls, rs).toFixed(3), vis: `${vis(ls)}/${vis(rs)}` },
+      'Hip width':       { value: dist(lh, rh).toFixed(3), vis: `${vis(lh)}/${vis(rh)}` },
+      'Left upper arm':  { value: dist(ls, le).toFixed(3), vis: `${vis(ls)}/${vis(le)}` },
+      'Left lower arm':  { value: dist(le, lw).toFixed(3), vis: `${vis(le)}/${vis(lw)}` },
+      'Right upper arm': { value: dist(rs, re).toFixed(3), vis: `${vis(rs)}/${vis(re)}` },
+      'Right lower arm': { value: dist(re, rw).toFixed(3), vis: `${vis(re)}/${vis(rw)}` },
+      'Left upper leg':  { value: dist(lh, lk).toFixed(3), vis: `${vis(lh)}/${vis(lk)}` },
+      'Left lower leg':  { value: dist(lk, la).toFixed(3), vis: `${vis(lk)}/${vis(la)}` },
+      'Right upper leg': { value: dist(rh, rk).toFixed(3), vis: `${vis(rh)}/${vis(rk)}` },
+      'Right lower leg': { value: dist(rk, ra).toFixed(3), vis: `${vis(rk)}/${vis(ra)}` },
+    });
+    console.log('Shoulder→Wrist L (max accum):', cal.unifyArmMax
+      ? Math.max((cal as any).performerLeftArmMax, (cal as any).performerRightArmMax).toFixed(3)
+      : (cal as any).performerRightArmMax?.toFixed?.(3));
+    console.log('Shoulder→Wrist R (max accum):', (cal as any).performerLeftArmMax?.toFixed?.(3));
+    console.groupEnd();
+
+    // ── Avatar measurements (rest-pose bone lengths) ───────────────────────
+    const boneWorld = (name: string): THREE.Vector3 => {
+      const n = h.getNormalizedBoneNode(name as any);
+      const v = new THREE.Vector3();
+      n?.getWorldPosition(v);
+      return v;
+    };
+
+    const avatarShoulderW = boneWorld('leftUpperArm').distanceTo(boneWorld('rightUpperArm'));
+    const avatarHipW      = boneWorld('leftUpperLeg').distanceTo(boneWorld('rightUpperLeg'));
+    console.group('%cAvatar (rest-pose world meters)', 'color:#fbbf24');
+    console.table({
+      'Shoulder width':  { value: avatarShoulderW.toFixed(3) },
+      'Hip width':       { value: avatarHipW.toFixed(3) },
+      'L upper arm':     { value: cal.avatarLeftUpperArm.toFixed(3)  },
+      'L lower arm':     { value: cal.avatarLeftLowerArm.toFixed(3)  },
+      'R upper arm':     { value: cal.avatarRightUpperArm.toFixed(3) },
+      'R lower arm':     { value: cal.avatarRightLowerArm.toFixed(3) },
+      'L upper leg':     { value: cal.avatarLeftUpperLeg.toFixed(3)  },
+      'L lower leg':     { value: cal.avatarLeftLowerLeg.toFixed(3)  },
+      'R upper leg':     { value: cal.avatarRightUpperLeg.toFixed(3) },
+      'R lower leg':     { value: cal.avatarRightLowerLeg.toFixed(3) },
+    });
+    console.groupEnd();
+
+    // ── Calibration state ──────────────────────────────────────────────────
+    const st = cal.status();
+    console.group('%cCalibration', 'color:#c084fc');
+    console.table({
+      'Calibrated':          { value: st.calibrated },
+      'Body scale':          { value: `${(st.bodyScale*100).toFixed(1)}%` },
+      'Shoulder scale':      { value: `${(st.shoulderWidthScale*100).toFixed(1)}%` },
+      'Arm L scale':         { value: `${(st.leftArmScale*100).toFixed(1)}%` },
+      'Arm R scale':         { value: `${(st.rightArmScale*100).toFixed(1)}%` },
+      'Leg scale':           { value: `${(cal.legScale()*100).toFixed(1)}%` },
+      'Unify arm max':       { value: cal.unifyArmMax },
+      'Hip vis gate':        { value: cal.hipVisGate.toFixed(2) },
+    });
+    console.log('Readiness:', cal.readiness());
+    console.groupEnd();
+
+    // ── Ratios: avatar / performer ─────────────────────────────────────────
+    const refs = cal.refRatios();
+    console.group('%cRatios avatar/performer (all references)', 'color:#f87171');
+    console.table({
+      'Shoulder ratio': { value: refs.shoulder?.toFixed(3) ?? 'n/a' },
+      'Hip ratio':      { value: refs.hip?.toFixed(3)      ?? 'n/a' },
+      'Head ratio':     { value: refs.head?.toFixed(3)     ?? 'n/a' },
+      'Active ref':     { value: cal.scaleRef },
+      'bodyScale used': { value: (cal.bodyScale() * 100).toFixed(1) + '%' },
+    });
+    console.groupEnd();
+
+    // ── IK target vs actual bone ───────────────────────────────────────────
+    const dt = this.applier.debugTargets;
+    const actual = this.getActualBonePositions();
+    const reach  = this.getReachPercent();
+    console.group('%cIK targets & reach', 'color:#93b4ff');
+    console.table({
+      'L wrist target':  { pos: dt.leftWristTarget.toArray().map((v) => v.toFixed(3)).join(', '), reach: `${reach.armL.toFixed(0)}%` },
+      'L hand actual':   { pos: actual.leftHand.toArray().map((v) => v.toFixed(3)).join(', '), reach: '' },
+      'R wrist target':  { pos: dt.rightWristTarget.toArray().map((v) => v.toFixed(3)).join(', '), reach: `${reach.armR.toFixed(0)}%` },
+      'R hand actual':   { pos: actual.rightHand.toArray().map((v) => v.toFixed(3)).join(', '), reach: '' },
+      'L ankle target':  { pos: dt.leftAnkleTarget.toArray().map((v) => v.toFixed(3)).join(', '), reach: `${reach.legL.toFixed(0)}%` },
+      'L foot actual':   { pos: actual.leftFoot.toArray().map((v) => v.toFixed(3)).join(', '), reach: '' },
+      'R ankle target':  { pos: dt.rightAnkleTarget.toArray().map((v) => v.toFixed(3)).join(', '), reach: `${reach.legR.toFixed(0)}%` },
+      'R foot actual':   { pos: actual.rightFoot.toArray().map((v) => v.toFixed(3)).join(', '), reach: '' },
+    });
+    console.groupEnd();
+
+    console.groupEnd();
+  }
+
+  /** World positions of the avatar's hand / foot bones — used to compare against
+   *  IK targets for fit statistics. */
+  getActualBonePositions(): {
+    leftHand: THREE.Vector3; rightHand: THREE.Vector3;
+    leftFoot: THREE.Vector3; rightFoot: THREE.Vector3;
+  } {
+    const h = this._vrm.humanoid;
+    const get = (name: string): THREE.Vector3 => {
+      const node = h.getNormalizedBoneNode(name as any);
+      const out  = new THREE.Vector3();
+      node?.getWorldPosition(out);
+      return out;
+    };
+    return {
+      leftHand:  get('leftHand'),
+      rightHand: get('rightHand'),
+      leftFoot:  get('leftFoot'),
+      rightFoot: get('rightFoot'),
+    };
+  }
+
+  /** World positions of key avatar joints for side-by-side pose diagnostics. */
+  getAvatarJointPositions(): {
+    hips: THREE.Vector3;
+    leftUpperArm: THREE.Vector3;  leftLowerArm: THREE.Vector3;  leftHand: THREE.Vector3;
+    rightUpperArm: THREE.Vector3; rightLowerArm: THREE.Vector3; rightHand: THREE.Vector3;
+    leftUpperLeg: THREE.Vector3;  leftLowerLeg: THREE.Vector3;  leftFoot: THREE.Vector3;
+    rightUpperLeg: THREE.Vector3; rightLowerLeg: THREE.Vector3; rightFoot: THREE.Vector3;
+  };
+  getAvatarJointPositions(kind: 'normalized' | 'raw'): {
+    hips: THREE.Vector3;
+    leftUpperArm: THREE.Vector3;  leftLowerArm: THREE.Vector3;  leftHand: THREE.Vector3;
+    rightUpperArm: THREE.Vector3; rightLowerArm: THREE.Vector3; rightHand: THREE.Vector3;
+    leftUpperLeg: THREE.Vector3;  leftLowerLeg: THREE.Vector3;  leftFoot: THREE.Vector3;
+    rightUpperLeg: THREE.Vector3; rightLowerLeg: THREE.Vector3; rightFoot: THREE.Vector3;
+  };
+  getAvatarJointPositions(kind: 'normalized' | 'raw' = 'normalized'): {
+    hips: THREE.Vector3;
+    leftUpperArm: THREE.Vector3;  leftLowerArm: THREE.Vector3;  leftHand: THREE.Vector3;
+    rightUpperArm: THREE.Vector3; rightLowerArm: THREE.Vector3; rightHand: THREE.Vector3;
+    leftUpperLeg: THREE.Vector3;  leftLowerLeg: THREE.Vector3;  leftFoot: THREE.Vector3;
+    rightUpperLeg: THREE.Vector3; rightLowerLeg: THREE.Vector3; rightFoot: THREE.Vector3;
+  } {
+    const h = this._vrm.humanoid;
+    const get = (name: string): THREE.Vector3 => {
+      const node = kind === 'raw'
+        ? h.getRawBoneNode(name as any) ?? h.getNormalizedBoneNode(name as any)
+        : h.getNormalizedBoneNode(name as any);
+      const out  = new THREE.Vector3();
+      node?.getWorldPosition(out);
+      return out;
+    };
+    return {
+      hips:          get('hips'),
+      leftUpperArm:  get('leftUpperArm'),
+      leftLowerArm:  get('leftLowerArm'),
+      leftHand:      get('leftHand'),
+      rightUpperArm: get('rightUpperArm'),
+      rightLowerArm: get('rightLowerArm'),
+      rightHand:     get('rightHand'),
+      leftUpperLeg:  get('leftUpperLeg'),
+      leftLowerLeg:  get('leftLowerLeg'),
+      leftFoot:      get('leftFoot'),
+      rightUpperLeg: get('rightUpperLeg'),
+      rightLowerLeg: get('rightLowerLeg'),
+      rightFoot:     get('rightFoot'),
+    };
+  }
   /** Clear calibration samples — next high-visibility frames re-calibrate. */
   recalibrate(): void {
     this._calibration.recalibrate();
     this.applier.resetHipBaseline();
+    this.applier.resetFootLock();
   }
 
   // ── Playback controls (useful mainly for file-source mocap) ────────────────
@@ -232,6 +466,7 @@ export class MocapController {
     this.detector.stop();
     this._latestFrame = null;
     this.applier.resetHipBaseline();
+    this.applier.resetFootLock();
     this.faceApplier.reset();
     this._setState('off');
   }

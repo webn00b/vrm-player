@@ -34,8 +34,10 @@ const LIMB_BONES: Record<string, [number, number]> = {
 
 // Which VRM bone is the "child" used to compute the rest axis of this bone.
 const BONE_CHILD: Record<string, string> = {
+  leftShoulder:  'leftUpperArm',
   leftUpperArm:  'leftLowerArm',
   leftLowerArm:  'leftHand',
+  rightShoulder: 'rightUpperArm',
   rightUpperArm: 'rightLowerArm',
   rightLowerArm: 'rightHand',
   leftUpperLeg:  'leftLowerLeg',
@@ -71,6 +73,8 @@ const FINGER_VRM_NAMES = (() => {
 function kalidoHandBoneToVrm(kalidoName: string): string {
   const side    = kalidoName.startsWith('Right') ? 'right' : 'left';
   const without = kalidoName.replace(/^(Left|Right)/, '');
+  // KalidoKit's "Wrist" is VRM's hand bone (the wrist/palm joint).
+  if (without === 'Wrist') return side + 'Hand';
   const suffix  = without === 'ThumbProximal'     ? 'ThumbMetacarpal'
                 : without === 'ThumbIntermediate' ? 'ThumbProximal'
                 : without;
@@ -110,7 +114,7 @@ export class DirectPoseApplier {
   private _bodyLerp     = 0.7;   // arms + legs IK
   private _handLerp     = 0.7;
   private _mirrorX      = true;  // mirror landmarks left↔right (selfie view)
-  private _depthScale   = 0.5;   // MediaPipe Z is noisy — reduce its influence
+  private _depthScale   = 1;     // Default to full 3D depth; the panel can still reduce it if Z gets noisy
   private _visThreshold = 0.3;   // MediaPipe visibility score below this = skip bone
 
   // Shoulder spread: Z-axis rotation applied to leftShoulder / rightShoulder every
@@ -122,6 +126,12 @@ export class DirectPoseApplier {
   // We preserve it as a baseline so that at T-pose our code produces the
   // character's natural facing direction instead of forcibly re-facing to +Z.
   private _hipsBaseWorld = new THREE.Quaternion();
+
+  // Avatar's shoulder-line direction in hips-local frame, projected to XZ.
+  // Used as the reference "zero-twist" vector in _applySpine when hips
+  // landmarks aren't visible enough to give a live hip axis (e.g. upper-body-
+  // only recordings where only shoulders/head are in frame).
+  private _avatarShoulderRestLocal = new THREE.Vector3(1, 0, 0);
 
   // Hip position tracking: performer hip centre delta → avatar hips.position.
   private _hipPositionEnabled   = true;
@@ -149,10 +159,18 @@ export class DirectPoseApplier {
   readonly debugTargets = {
     leftWristTarget:  new THREE.Vector3(),
     rightWristTarget: new THREE.Vector3(),
+    leftElbowTarget:  new THREE.Vector3(),
+    rightElbowTarget: new THREE.Vector3(),
+    leftArmPoleRaw:   new THREE.Vector3(),
+    rightArmPoleRaw:  new THREE.Vector3(),
+    leftArmPoleSmoothed:  new THREE.Vector3(),
+    rightArmPoleSmoothed: new THREE.Vector3(),
     leftAnkleTarget:  new THREE.Vector3(),
     rightAnkleTarget: new THREE.Vector3(),
-    hasArm:  false,
-    hasLeg:  false,
+    hasArm:         false,
+    hasLeg:         false,
+    leftFootLocked:  false,
+    rightFootLocked: false,
   };
 
   // Smoothed pole vectors per limb (world-frame). MediaPipe sometimes flips
@@ -169,9 +187,41 @@ export class DirectPoseApplier {
   // Depth (Z) is MediaPipe's least reliable axis. For narrow joints like
   // elbows this jitter is visible — we attenuate it further inside arm IK.
   // Legs' Z is less problematic (big, well-separated joints) so we leave it.
-  private _armZAttenuation = 0.33;
+  // Default to full arm depth. The debug panel can still dial this back if
+  // MediaPipe Z gets too noisy for a specific camera setup.
+  private _armZAttenuation = 1;
   // EMA alpha on pole smoothing. 1 = no smoothing (use current frame).
   private _poleAlpha = 0.6;
+  // Z-axis weight applied to the arm pole vector (shoulder→elbow direction).
+  // Separate from the target Z attenuation: the pole only hints at the bulge
+  // direction, so more damping here helps stability without shortening reach.
+  private _armPoleZ = 0.5;
+
+  // Fraction of shoulder lateral tilt applied to spine/chest as a side-lean.
+  // 0 = yaw-only (original behaviour), ~0.3–0.5 = natural-looking lateral bend.
+  private _lateralBendScale = 0.35;
+
+  // World Y of the avatar's ankle bones at rest pose (≈ floor level for ankles).
+  // Clamping IK targets to >= _groundY prevents feet from sinking into the floor.
+  private _groundY = 0;
+
+  // Foot locking: freezes the ankle IK target when the performer stands still,
+  // removing the foot-sliding artefact caused by MediaPipe landmark jitter.
+  private _footLockEnabled                                            = true;
+  private _footLocked:      Record<'left' | 'right', boolean>        = { left: false, right: false };
+  private _footLockedPos:   Record<'left' | 'right', THREE.Vector3>  = {
+    left: new THREE.Vector3(), right: new THREE.Vector3(),
+  };
+  private _prevAnkleTarget: Record<'left' | 'right', THREE.Vector3>  = {
+    left:  new THREE.Vector3(Infinity, Infinity, Infinity),
+    right: new THREE.Vector3(Infinity, Infinity, Infinity),
+  };
+  private _footVelocityLockThreshold   = 0.007;  // m/frame — below this = lock candidate
+  private _footVelocityUnlockThreshold = 0.018;  // m/frame — above this = force unlock
+  private _footLiftThreshold           = 0.05;   // m above groundY — foot is being lifted
+
+  // Extra scratch quaternion for spine lateral bend (keeps _q1/_q2 semantics unchanged).
+  private _q3 = new THREE.Quaternion();
 
   constructor(vrm: VRM, calibration?: MocapCalibration) {
     this.vrm = vrm;
@@ -179,6 +229,7 @@ export class DirectPoseApplier {
     this._buildCache();
     this._computeRestAxes();
     this._captureHipsBaseline();
+    this._captureGroundY();
   }
 
   /** Late-binding hook if calibration is constructed after the applier. */
@@ -190,6 +241,23 @@ export class DirectPoseApplier {
     // Make sure the whole VRM world matrix chain is fresh before reading
     this.vrm.scene.updateMatrixWorld(true);
     hipsNode.getWorldQuaternion(this._hipsBaseWorld);
+
+    // Capture the avatar's shoulder line in hips-local (XZ projected). Used
+    // as a twist reference when performer hips aren't visible.
+    const lShoulder = this.nodeCache.get('leftShoulder')
+                   ?? this.nodeCache.get('leftUpperArm');
+    const rShoulder = this.nodeCache.get('rightShoulder')
+                   ?? this.nodeCache.get('rightUpperArm');
+    if (lShoulder && rShoulder) {
+      const lPos = new THREE.Vector3();
+      const rPos = new THREE.Vector3();
+      lShoulder.getWorldPosition(lPos);
+      rShoulder.getWorldPosition(rPos);
+      const dir = new THREE.Vector3().subVectors(rPos, lPos);
+      dir.applyQuaternion(this._q1.copy(this._hipsBaseWorld).invert());
+      dir.y = 0;
+      if (dir.lengthSq() > 1e-6) this._avatarShoulderRestLocal.copy(dir.normalize());
+    }
   }
 
   /** The avatar's hips world quaternion at rest (before any mocap). */
@@ -217,12 +285,38 @@ export class DirectPoseApplier {
   setPoleSmoothing(v: number): void { this._poleAlpha = Math.max(0.01, Math.min(1, v)); }
   get poleSmoothing(): number { return this._poleAlpha; }
 
+  /** Weight of the Z component in the arm pole vector (0 = flat, 1 = full 3D). */
+  setArmPoleZ(v: number): void { this._armPoleZ = Math.max(0, Math.min(1, v)); }
+  get armPoleZ(): number { return this._armPoleZ; }
+
   /** Enable/disable hip world-position tracking (performer moves → avatar moves). */
   setHipPositionEnabled(v: boolean): void { this._hipPositionEnabled = v; }
   get hipPositionEnabled(): boolean { return this._hipPositionEnabled; }
 
   /** Reset hip position baseline — next frame re-anchors to current performer position. */
   resetHipBaseline(): void { this._hipPerfBaseline = null; }
+
+  /** Release any locked feet and reset velocity history. Call on recalibrate / stop. */
+  resetFootLock(): void {
+    this._footLocked.left  = false;
+    this._footLocked.right = false;
+    this._prevAnkleTarget.left.set(Infinity, Infinity, Infinity);
+    this._prevAnkleTarget.right.set(Infinity, Infinity, Infinity);
+  }
+
+  /** Enable/disable foot locking. Disabling also releases any active lock. */
+  setFootLockEnabled(v: boolean): void {
+    this._footLockEnabled = v;
+    if (!v) this.resetFootLock();
+  }
+  get footLockEnabled(): boolean { return this._footLockEnabled; }
+
+  /** Fraction of shoulder lateral tilt applied as spine side-lean (0–1). */
+  setLateralBendScale(v: number): void { this._lateralBendScale = Math.max(0, Math.min(1, v)); }
+  get lateralBendScale(): number { return this._lateralBendScale; }
+
+  /** Avatar's rest-pose ankle height above the scene floor (metres). Read-only debug info. */
+  get groundY(): number { return this._groundY; }
 
   /** HQ mode: snap to target (no slerp), full amplitude — for BVH recording. */
   setHighQualityMode(enabled: boolean): void {
@@ -260,7 +354,7 @@ export class DirectPoseApplier {
     // Torso first — its rotations propagate to limbs via parent world matrices.
     this._applyHips(frame);
     this._applySpine(frame);
-    this._applyShoulderSpread();
+    this._applyShoulders(frame);
 
     // Arms + legs: two-bone IK (hand/ankle target scaled to avatar space)
     // once calibration is ready; otherwise fall back to angle-based so
@@ -298,6 +392,17 @@ export class DirectPoseApplier {
   }
 
   // ── Private ─────────────────────────────────────────────────────────────────
+
+  private _captureGroundY(): void {
+    this.vrm.scene.updateMatrixWorld(true);
+    const pos = new THREE.Vector3();
+    let minY = Infinity;
+    for (const boneName of ['leftFoot', 'rightFoot'] as const) {
+      const node = this.nodeCache.get(boneName);
+      if (node) { node.getWorldPosition(pos); if (pos.y < minY) minY = pos.y; }
+    }
+    this._groundY = minY < Infinity ? minY : 0;
+  }
 
   private _buildCache(): void {
     const names = new Set<string>([
@@ -345,22 +450,62 @@ export class DirectPoseApplier {
     out.set(this._mirrorX ? -dx : dx, -dy, -dz);
   }
 
-  private _applyShoulderSpread(): void {
+  /**
+   * Same as `_mpDirToVrm` but with Z damped 3× — for torso basis vectors
+   * (hip axis, shoulder axis, spine up). MediaPipe's Z on these wide-body
+   * measurements is very noisy (small torso rotations toward the camera
+   * dominate), and without damping the torso tends to tilt forward/backward.
+   * Matches sysAnimOnline's `arm_diff[2] /= 3` trick for shoulder width.
+   */
+  private _mpDirToVrmTorso(dx: number, dy: number, dz: number, out: THREE.Vector3): void {
+    out.set(this._mirrorX ? -dx : dx, -dy, -dz / 3);
+  }
+
+  private _applyShoulders(frame: PoseFrame): void {
     const rad = this._shoulderSpreadDeg * (Math.PI / 180);
-    // leftShoulder: positive angle droops arm downward-outward (wider).
-    // rightShoulder: mirrored sign for symmetric spread.
-    const nodeL = this.nodeCache.get('leftShoulder');
-    const nodeR = this.nodeCache.get('rightShoulder');
-    if (nodeL) {
-      this._q1.setFromAxisAngle(this._v1.set(0, 0, 1), -rad);
-      nodeL.quaternion.copy(this._q1);
-      nodeL.updateWorldMatrix(false, true);
-    }
-    if (nodeR) {
-      this._q1.setFromAxisAngle(this._v1.set(0, 0, 1), rad);
-      nodeR.quaternion.copy(this._q1);
-      nodeR.updateWorldMatrix(false, true);
-    }
+    const ls = frame.worldLandmarks[LM.LEFT_SHOULDER];
+    const rs = frame.worldLandmarks[LM.RIGHT_SHOULDER];
+    const shouldersVisible = !!ls && !!rs && this._visible(ls) && this._visible(rs);
+
+    const applySide = (
+      nodeName: 'leftShoulder' | 'rightShoulder',
+      performerShoulder: { x: number; y: number; z: number } | undefined,
+      spreadSign: number,
+    ): void => {
+      const node = this.nodeCache.get(nodeName);
+      const restAxis = this.restLocalAxis.get(nodeName);
+      if (!node || !restAxis || !node.parent) return;
+
+      let hasAuto = false;
+      if (shouldersVisible && performerShoulder && ls && rs) {
+        const midX = (ls.x + rs.x) * 0.5;
+        const midY = (ls.y + rs.y) * 0.5;
+        const midZ = (ls.z + rs.z) * 0.5;
+        this._mpDirToVrmTorso(
+          performerShoulder.x - midX,
+          performerShoulder.y - midY,
+          performerShoulder.z - midZ,
+          this._v1,
+        );
+        if (this._v1.lengthSq() > 1e-6) {
+          this._v1.normalize();
+          node.parent.updateWorldMatrix(true, false);
+          node.parent.getWorldQuaternion(this._q1).invert();
+          this._v1.applyQuaternion(this._q1);
+          this._q2.setFromUnitVectors(restAxis, this._v1);
+          hasAuto = true;
+        }
+      }
+
+      this._q3.setFromAxisAngle(this._v2.set(0, 0, 1), spreadSign * rad);
+      if (hasAuto) node.quaternion.copy(this._q2).multiply(this._q3);
+      else         node.quaternion.copy(this._q3);
+      node.updateWorldMatrix(false, true);
+    };
+
+    // Mirror: avatar LEFT clavicle follows performer's RIGHT shoulder, and vice versa.
+    applySide('leftShoulder', rs, -1);
+    applySide('rightShoulder', ls, 1);
   }
 
   /**
@@ -385,10 +530,10 @@ export class DirectPoseApplier {
     if (!this._visible(lh) || !this._visible(rh) ||
         !this._visible(ls) || !this._visible(rs)) return;
 
-    // Spine up direction (midHip → midShoulder) — use full depth (no scale) so
-    // forward lean and sideways turn are captured at full amplitude.
+    // Spine up direction (midHip → midShoulder) — torso Z is MP's noisiest axis
+    // and easily tilts the character forward/backward; damp it 3×.
     const spineDir = this._v1;
-    this._mpDirToVrm(
+    this._mpDirToVrmTorso(
       (ls.x + rs.x) / 2 - (lh.x + rh.x) / 2,
       (ls.y + rs.y) / 2 - (lh.y + rh.y) / 2,
       (ls.z + rs.z) / 2 - (lh.z + rh.z) / 2,
@@ -397,9 +542,10 @@ export class DirectPoseApplier {
     if (spineDir.lengthSq() < 1e-6) return;
     spineDir.normalize();
 
-    // Hip axis — full depth so sideways turns aren't damped by _depthScale.
+    // Hip axis — damp Z 3× (same reason as spine). Sideways body turns still
+    // work because they're captured by X/Y changes of the hip vector.
     const hipAxis = this._v2;
-    this._mpDirToVrm(rh.x - lh.x, rh.y - lh.y, rh.z - lh.z, hipAxis);
+    this._mpDirToVrmTorso(rh.x - lh.x, rh.y - lh.y, rh.z - lh.z, hipAxis);
     if (hipAxis.lengthSq() < 1e-6) return;
     hipAxis.normalize();
 
@@ -436,7 +582,11 @@ export class DirectPoseApplier {
         hipsNode.getWorldPosition(this._hipAvatarBaseline);
       }
 
-      const scale = this.calibration?.bodyScale() ?? 1;
+      // Hip centre translation should follow whole-body/leg scale, not torso
+      // width scale. In full-body shots the avatar can have much shorter
+      // shoulders/hips but near-1:1 leg length; using bodyScale here makes the
+      // pelvis move too little and forces leg IK to over-stretch.
+      const scale = this.calibration?.legScale() ?? 1;
       this._mpDeltaToVrm(
         cx - this._hipPerfBaseline.x,
         cy - this._hipPerfBaseline.y,
@@ -472,34 +622,62 @@ export class DirectPoseApplier {
     const lms = frame.worldLandmarks;
     const lh = lms[LM.LEFT_HIP], rh = lms[LM.RIGHT_HIP];
     const ls = lms[LM.LEFT_SHOULDER], rs = lms[LM.RIGHT_SHOULDER];
-    if (!lh || !rh || !ls || !rs) return;
-    if (!this._visible(lh) || !this._visible(rh) ||
-        !this._visible(ls) || !this._visible(rs)) return;
+    if (!ls || !rs) return;
+    if (!this._visible(ls) || !this._visible(rs)) return;
 
-    // Both hip + shoulder lines in VRM world coords — full depth for correct twist angle.
-    const hipAxis      = this._v1;
+    const hipsVisible = !!lh && !!rh && this._visible(lh) && this._visible(rh);
+
+    // Shoulder line in VRM world — Z-damped (torso basis).
     const shoulderAxis = this._v2;
-    this._mpDirToVrm(rh.x - lh.x, rh.y - lh.y, rh.z - lh.z, hipAxis);
-    this._mpDirToVrm(rs.x - ls.x, rs.y - ls.y, rs.z - ls.z, shoulderAxis);
-    if (hipAxis.lengthSq() < 1e-6 || shoulderAxis.lengthSq() < 1e-6) return;
+    this._mpDirToVrmTorso(rs.x - ls.x, rs.y - ls.y, rs.z - ls.z, shoulderAxis);
+    if (shoulderAxis.lengthSq() < 1e-6) return;
 
-    // Transform both into hips local frame
+    // Hip line — either live from landmarks, or the avatar's rest reference
+    // (upper-body-only shots: hips not in frame). The reference vector is
+    // already in hips-local + XZ-projected, so we just skip the transform for it.
+    const hipAxis = this._v1;
+    if (hipsVisible) {
+      this._mpDirToVrmTorso(rh!.x - lh!.x, rh!.y - lh!.y, rh!.z - lh!.z, hipAxis);
+      if (hipAxis.lengthSq() < 1e-6) return;
+    }
+
+    // Transform shoulder axis into hips local frame
     hipsNode.updateWorldMatrix(true, false);
     hipsNode.getWorldQuaternion(this._q1).invert();
-    hipAxis.applyQuaternion(this._q1);
     shoulderAxis.applyQuaternion(this._q1);
 
-    // Project onto hips-local horizontal plane (XZ) to isolate Y-axis twist
-    hipAxis.y = 0; shoulderAxis.y = 0;
-    if (hipAxis.lengthSq() < 1e-6 || shoulderAxis.lengthSq() < 1e-6) return;
-    hipAxis.normalize();
+    // Capture lateral tilt BEFORE XZ projection.
+    // shoulderAxis.y / |shoulderAxis| ≈ sin(tilt angle): negative when the right
+    // shoulder is lower (character tilts right), positive when leaning left.
+    const axisLen = shoulderAxis.length();
+    const lateralTilt = axisLen > 1e-6 ? shoulderAxis.y / axisLen : 0;
+
+    shoulderAxis.y = 0;
+    if (shoulderAxis.lengthSq() < 1e-6) return;
     shoulderAxis.normalize();
 
-    // Twist = rotation from hipAxis (projected) to shoulderAxis (projected).
-    // At T-pose both project to the same direction → identity. No baseline bias.
+    if (hipsVisible) {
+      hipAxis.applyQuaternion(this._q1);
+      hipAxis.y = 0;
+      if (hipAxis.lengthSq() < 1e-6) return;
+      hipAxis.normalize();
+    } else {
+      hipAxis.copy(this._avatarShoulderRestLocal);
+    }
+
+    // Yaw twist: rotation from hip axis to shoulder axis in hips-local XZ.
+    // At T-pose both project to the same direction → identity (no baseline bias).
     const fullTwist = this._q1.setFromUnitVectors(hipAxis, shoulderAxis);
 
-    // Split evenly: halfTwist² = fullTwist for single-axis rotations.
+    // Lateral bend: apply a fraction of the shoulder tilt as a side-lean rotation
+    // around the spine's local +Z axis. Rotation around +Z by a negative angle
+    // tilts +Y toward +X (lean right), matching lateralTilt < 0 when right-low.
+    if (Math.abs(lateralTilt) > 1e-4 && this._lateralBendScale > 1e-4) {
+      this._q3.setFromAxisAngle(this._v3.set(0, 0, 1), lateralTilt * this._lateralBendScale);
+      fullTwist.multiply(this._q3);
+    }
+
+    // Split evenly across available spine nodes.
     const count = (spineNode ? 1 : 0) + (chestNode ? 1 : 0);
     const halfTwist = this._q2.identity().slerp(fullTwist, 1 / count);
 
@@ -553,12 +731,12 @@ export class DirectPoseApplier {
   /**
    * IK variant of the shoulder+elbow chain.
    *
-   * Anchor: same-side avatar shoulder (not mid-shoulder).
-   * Target = avatarShoulder + armScale * mp_to_vrm(performerWrist − performerShoulder)
+   * Anchor: avatar shoulder midpoint.
+   * Target = avatarMidShoulder + scaled(performerWrist − performerMidShoulder)
    *
-   * Using the same-side shoulder as anchor gives a direct 1-to-1 mapping:
-   * "wrist relative to own shoulder" in performer space → avatar space.
-   * This avoids needing separate X/Y scale factors and body-width assumptions.
+   * X uses shoulder-width scale, Y/Z use arm-length scale. This keeps folded /
+   * crossed-arm poses near the torso centerline even when the avatar has much
+   * narrower shoulders than the performer.
    */
   private _applyArmIK(frame: PoseFrame, side: 'left' | 'right'): void {
     const calib = this.calibration;
@@ -574,38 +752,138 @@ export class DirectPoseApplier {
 
     // Mirror: character's LEFT arm ← performer's RIGHT landmarks (12/14/16).
     const lms = frame.worldLandmarks;
-    const sIdx = side === 'left' ? 12 : 11;  // same-side performer shoulder
+    const perfLs = lms[11];
+    const perfRs = lms[12];
+    const sIdx = side === 'left' ? 12 : 11;
     const eIdx = side === 'left' ? 14 : 13;
     const wIdx = side === 'left' ? 16 : 15;
     const ps = lms[sIdx], pe = lms[eIdx], pw = lms[wIdx];
-    if (!ps || !pe || !pw) return;
-    if (!this._visible(ps) || !this._visible(pe) || !this._visible(pw)) return;
+    if (!perfLs || !perfRs || !ps || !pe || !pw) return;
+    if (!this._visible(perfLs) || !this._visible(perfRs) || !this._visible(ps) || !this._visible(pe) || !this._visible(pw)) return;
 
-    // Avatar same-side shoulder = IK root and target anchor.
+    // Avatar same-side shoulder = IK root. Target anchor is the midpoint of both shoulders.
     upperNode.parent!.updateWorldMatrix(true, false);
     upperNode.updateWorldMatrix(false, false);
     const shoulderWorld = upperNode.getWorldPosition(this._v5);
+    const otherUpperNode = this.nodeCache.get((side === 'left' ? 'right' : 'left') + 'UpperArm');
+    if (!otherUpperNode) return;
+    otherUpperNode.updateWorldMatrix(false, false);
+    const midAvatarShoulder = this._v6.copy(shoulderWorld).add(otherUpperNode.getWorldPosition(this._v4)).multiplyScalar(0.5);
 
-    // Performer wrist offset from same-side shoulder → VRM world, scaled uniformly.
-    this._mpDeltaToVrm(pw.x - ps.x, pw.y - ps.y, pw.z - ps.z, this._v1);
     const armScale = calib.armScale(side);
-    this._v1.x *= armScale;
-    this._v1.y *= armScale;
-    this._v1.z *= armScale * this._armZAttenuation;
-    const target = this._v4.copy(shoulderWorld).add(this._v1);
+    const shoulderScale = calib.shoulderWidthRatio();
+    // Same-side shoulder anchor is better when the wrist is still on its own
+    // side of the torso; midpoint anchoring is only needed once the arm folds
+    // inward toward / across the centerline. As the wrist approaches the
+    // centerline we also reduce reach scaling from armScale toward torso scale,
+    // otherwise long-armed avatars tend to fully extend when hands should fold
+    // together near the chest.
+    const perfMidX = (perfLs.x + perfRs.x) * 0.5;
+    const perfMidY = (perfLs.y + perfRs.y) * 0.5;
+    const perfMidZ = (perfLs.z + perfRs.z) * 0.5;
+    const shoulderCenterOffset = ps.x - perfMidX;
+    const wristCenterOffset = pw.x - perfMidX;
+    let midpointBlend = 0;
+    if (Math.abs(shoulderCenterOffset) > 1e-4) {
+      if (shoulderCenterOffset * wristCenterOffset <= 0) {
+        midpointBlend = 1;
+      } else {
+        const centerRatio = Math.abs(wristCenterOffset) / Math.abs(shoulderCenterOffset);
+        midpointBlend = THREE.MathUtils.clamp((0.35 - centerRatio) / 0.35, 0, 1);
+      }
+    }
+
+    const foldReachScale = THREE.MathUtils.lerp(armScale, shoulderScale, midpointBlend);
+
+    // Performer wrist offset from shoulder midpoint → VRM world.
+    this._mpDeltaToVrm(pw.x - perfMidX, pw.y - perfMidY, pw.z - perfMidZ, this._v1);
+    this._v1.x *= shoulderScale;
+    this._v1.y *= foldReachScale;
+    this._v1.z *= foldReachScale * this._armZAttenuation;
+    const midpointTarget = this._v4.copy(midAvatarShoulder).add(this._v1);
+
+    this._mpDeltaToVrm(pw.x - ps.x, pw.y - ps.y, pw.z - ps.z, this._v2);
+    this._v2.multiplyScalar(foldReachScale);
+    this._v2.z *= this._armZAttenuation;
+    const target = this._v3.copy(shoulderWorld).add(this._v2);
+    target.lerp(midpointTarget, midpointBlend);
+
+    // Symmetric folded-hands poses (prayer / palms together) often come in
+    // with slightly asymmetric wrist X values, so one arm gets recognized as
+    // "folded" while the other still aims close to full reach. If both wrists
+    // are already close to each other relative to shoulder width, pull both
+    // targets toward the shared wrist midpoint so the hands can meet.
+    const hasLeftHandDetected = frame.hands.some((hand) => hand.side === 'Left');
+    const hasRightHandDetected = frame.hands.some((hand) => hand.side === 'Right');
+    const hasBothHandsDetected = hasLeftHandDetected && hasRightHandDetected;
+    const otherWrist = lms[side === 'left' ? 15 : 16];
+    if (hasBothHandsDetected && otherWrist && this._visible(otherWrist)) {
+      const shoulderDx = perfRs.x - perfLs.x;
+      const shoulderDy = perfRs.y - perfLs.y;
+      const shoulderDz = perfRs.z - perfLs.z;
+      const shoulderSpan = Math.hypot(shoulderDx, shoulderDy, shoulderDz);
+
+      const wristDx = pw.x - otherWrist.x;
+      const wristDy = pw.y - otherWrist.y;
+      const wristDz = pw.z - otherWrist.z;
+      const wristGap = Math.hypot(wristDx, wristDy, wristDz);
+
+      if (shoulderSpan > 1e-4) {
+        const gapRatio = wristGap / shoulderSpan;
+        const wristLevelRatio = Math.abs(pw.y - otherWrist.y) / shoulderSpan;
+        const handsTogetherBlend = wristLevelRatio <= 0.25
+          ? THREE.MathUtils.clamp((0.55 - gapRatio) / 0.30, 0, 1)
+          : 0;
+        if (handsTogetherBlend > 1e-4) {
+          const wristMidX = (pw.x + otherWrist.x) * 0.5;
+          const wristMidY = (pw.y + otherWrist.y) * 0.5;
+          const wristMidZ = (pw.z + otherWrist.z) * 0.5;
+          const centerReachScale = THREE.MathUtils.lerp(foldReachScale, shoulderScale, handsTogetherBlend);
+          this._mpDeltaToVrm(wristMidX - perfMidX, wristMidY - perfMidY, wristMidZ - perfMidZ, this._v1);
+          this._v1.x *= shoulderScale;
+          this._v1.y *= centerReachScale;
+          this._v1.z *= centerReachScale * this._armZAttenuation;
+          this._v2.copy(midAvatarShoulder).add(this._v1);
+          target.lerp(this._v2, handsTogetherBlend);
+
+          // Do not collapse both wrists to the exact same point: palms can meet
+          // while the wrist joints stay slightly apart. Keep a small symmetric
+          // gap along the avatar shoulder axis to avoid self-intersection.
+          this._v4.copy(shoulderWorld).sub(midAvatarShoulder);
+          if (this._v4.lengthSq() > 1e-6) this._v4.normalize();
+          else this._v4.set(side === 'left' ? -1 : 1, 0, 0);
+          const desiredWristGap = THREE.MathUtils.clamp(
+            wristGap * centerReachScale,
+            calib.avatarShoulderWidth * 0.12,
+            calib.avatarShoulderWidth * 0.22,
+          );
+          target.addScaledVector(this._v4, desiredWristGap * 0.5 * handsTogetherBlend);
+        }
+      }
+    }
+
     this.debugTargets[side === 'left' ? 'leftWristTarget' : 'rightWristTarget'].copy(target);
     this.debugTargets.hasArm = true;
 
-    // Pole vector: performer's shoulder→elbow direction, VRM frame.
-    // Use _mpDirToVrm (skips depthScale) then attenuate Z moderately.
-    // Old code: _mpDeltaToVrm + *armZAttenuation = Z*0.165 (too little for hands-on-hips).
-    // New: Z*0.5 — preserves backward elbow direction while damping depth jitter.
+    // Pole vector: keep the wrist target midpoint-based, but drive the elbow
+    // bend from the performer's same-side shoulder→elbow direction. This is a
+    // much stabler bend hint than a midpoint-anchored elbow point when the hand
+    // is close to the chest and the wrist target lies almost on the shoulder→hand
+    // line.
+    this._mpDeltaToVrm(pe.x - ps.x, pe.y - ps.y, pe.z - ps.z, this._v2);
+    this._v2.multiplyScalar(foldReachScale);
+    this._v2.z *= this._armPoleZ;
+    const elbowTarget = this._v6.copy(shoulderWorld).add(this._v2);
+    this.debugTargets[side === 'left' ? 'leftElbowTarget' : 'rightElbowTarget'].copy(elbowTarget);
+
     this._mpDirToVrm(pe.x - ps.x, pe.y - ps.y, pe.z - ps.z, this._v2);
-    this._v2.z *= 0.5;
+    this._v2.z *= this._armPoleZ;
     if (this._v2.lengthSq() < 1e-6) this._v2.set(0, -1, 0);
+    this.debugTargets[side === 'left' ? 'leftArmPoleRaw' : 'rightArmPoleRaw'].copy(this._v2);
     const smoothed = this._polesArm[side];
     if (smoothed.lengthSq() < 1e-6) smoothed.copy(this._v2);
     else smoothed.lerp(this._v2, this._poleAlpha);
+    this.debugTargets[side === 'left' ? 'leftArmPoleSmoothed' : 'rightArmPoleSmoothed'].copy(smoothed);
 
     // Solve the chain in world space.
     const upperLen = calib.upperArmLength(side);
@@ -665,7 +943,41 @@ export class DirectPoseApplier {
     this._mpDeltaToVrm(pa.x - ph.x, pa.y - ph.y, pa.z - ph.z, this._v1);
     this._v1.multiplyScalar(calib.legScale());
     const target = this._v4.copy(hipWorld).add(this._v1);
-    this.debugTargets[side === 'left' ? 'leftAnkleTarget' : 'rightAnkleTarget'].copy(target);
+
+    // ── Ground constraint ─────────────────────────────────────────────────────
+    // Prevent the ankle target from going below the avatar's rest-pose ankle
+    // height. MediaPipe depth noise can push landmarks below the actual floor.
+    if (target.y < this._groundY) target.y = this._groundY;
+
+    // ── Foot locking ──────────────────────────────────────────────────────────
+    // When the performer stands still (velocity < lockThreshold and foot is near
+    // the ground), freeze the IK target so MediaPipe jitter doesn't slide the foot.
+    const prevTarget = this._prevAnkleTarget[side];
+    const velocity = prevTarget.distanceTo(target);
+    prevTarget.copy(target); // always track raw target for velocity, not locked pos
+
+    if (this._footLockEnabled) {
+      if (this._footLocked[side]) {
+        const shouldUnlock =
+          velocity > this._footVelocityUnlockThreshold ||
+          target.y > this._groundY + this._footLiftThreshold;
+        if (!shouldUnlock) {
+          target.copy(this._footLockedPos[side]); // hold locked position
+        } else {
+          this._footLocked[side] = false;
+        }
+      }
+      if (!this._footLocked[side]) {
+        const nearGround = target.y <= this._groundY + this._footLiftThreshold * 0.4;
+        if (velocity < this._footVelocityLockThreshold && nearGround) {
+          this._footLocked[side] = true;
+          this._footLockedPos[side].copy(target);
+        }
+      }
+    }
+
+    this.debugTargets[side === 'left' ? 'leftAnkleTarget'  : 'rightAnkleTarget'].copy(target);
+    this.debugTargets[side === 'left' ? 'leftFootLocked'   : 'rightFootLocked'] = this._footLocked[side];
     this.debugTargets.hasLeg = true;
 
     // Pole: same-side hip→knee direction, VRM frame, smoothed.
@@ -698,7 +1010,10 @@ export class DirectPoseApplier {
   }
 
   private _applyHand(landmarks: any[], side: 'Left' | 'Right'): void {
-    const rig = KalidoHand.solve(landmarks as any, side);
+    const solvedSide: 'Left' | 'Right' = this._mirrorX
+      ? (side === 'Left' ? 'Right' : 'Left')
+      : side;
+    const rig = KalidoHand.solve(landmarks as any, solvedSide);
     if (!rig) return;
     for (const [kalidoKey, rot] of Object.entries(rig)) {
       if (kalidoKey.endsWith('Wrist')) continue;

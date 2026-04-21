@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import { createScene } from './scene';
 import { loadVRM } from './vrmLoader';
 import { loadBVH, parseBVH } from './bvhLoader';
@@ -7,7 +8,7 @@ import { AnimationController } from './animationController';
 import { PriorityAnimator } from './priorityAnimator';
 import { MicroAnimations } from './microAnimations';
 import { IdleLoop } from './idleLoop';
-import { mountLibrary, mountQueue, setStatus } from './ui';
+import { mountLibrary, mountQueue, setStatus, formatLibraryName } from './ui';
 import { mountDebugPanel } from './debugPanel';
 import { BonePosePanel } from './bonePosePanel';
 import { MocapController } from './mocap/mocapController';
@@ -36,6 +37,46 @@ function resolveVrmUrl(): string {
 }
 
 interface AnimationEntry { name: string; url: string; }
+
+const LIVE_MOCAP_HAND_BONE_SUFFIXES = [
+  'ThumbMetacarpal',
+  'ThumbProximal',
+  'ThumbDistal',
+  'IndexProximal',
+  'IndexIntermediate',
+  'IndexDistal',
+  'MiddleProximal',
+  'MiddleIntermediate',
+  'MiddleDistal',
+  'RingProximal',
+  'RingIntermediate',
+  'RingDistal',
+  'LittleProximal',
+  'LittleIntermediate',
+  'LittleDistal',
+] as const;
+
+const LIVE_MOCAP_VALIDATION_EXCLUDED_BONES = new Set<VRMHumanBoneName>([
+  VRMHumanBoneName.LeftShoulder,
+  VRMHumanBoneName.LeftUpperArm,
+  VRMHumanBoneName.LeftLowerArm,
+  VRMHumanBoneName.LeftHand,
+  VRMHumanBoneName.LeftUpperLeg,
+  VRMHumanBoneName.LeftLowerLeg,
+  VRMHumanBoneName.LeftFoot,
+  VRMHumanBoneName.RightShoulder,
+  VRMHumanBoneName.RightUpperArm,
+  VRMHumanBoneName.RightLowerArm,
+  VRMHumanBoneName.RightHand,
+  VRMHumanBoneName.RightUpperLeg,
+  VRMHumanBoneName.RightLowerLeg,
+  VRMHumanBoneName.RightFoot,
+  ...(['Left', 'Right'] as const).flatMap((side) =>
+    LIVE_MOCAP_HAND_BONE_SUFFIXES.map(
+      (suffix) => VRMHumanBoneName[`${side}${suffix}` as keyof typeof VRMHumanBoneName],
+    ),
+  ),
+]);
 
 function resolveAnimations(): AnimationEntry[] {
   return Object.entries(bvhModules)
@@ -110,6 +151,9 @@ async function main() {
   }
 
   setStatus('drag animations from Library → Queue to play');
+
+  // ── Transport bar ─────────────────────────────────────────────────────────
+  mountTransport(controller);
 
   // ── Debug panel ────────────────────────────────────────────────────────────
   vrm.scene.visible = false;
@@ -193,47 +237,58 @@ function startRenderLoop(
       pa.applyAll();
     }
 
-    // 2b. Clamp all bone rotations to anatomical ROM
-    validator.clampAll();
-
     // 3. Mocap overlay — runs AFTER BVH mixer so it overwrites animation bones.
     //    Face expressions also applied here (blendshapes don't conflict with BVH).
     mocap.applyLatestFrame();
 
-    // 3b. Debug recorder — snapshot landmarks + IK targets + bone quaternions.
+    // 3b. Manual bone pose offsets (post-multiplied on top of mocap/animation).
+    bonePanel.apply();
+
+    // 3c. Clamp the final authored pose (BVH / idle / mocap / manual offsets)
+    // before debug capture and before micro-animations add their small deltas.
+    validator.clampAll(mocap.state === 'off' ? undefined : LIVE_MOCAP_VALIDATION_EXCLUDED_BONES);
+
+    // 3d. Debug recorder — snapshot landmarks + IK targets + final bone quaternions.
     if (dbgRecorder.active) {
       const frame = mocap.latestFrame;
       if (frame) dbgRecorder.capture(frame, mocap.debugTargets, mocap.calibration);
     }
 
-    // 3c. Manual bone pose offsets (post-multiplied on top of mocap/animation).
-    bonePanel.apply();
-
-    // 3d. Debug skeleton — show performer landmarks mapped to avatar world space.
+    // 3e. Debug skeleton — show performer landmarks mapped to avatar world space.
     if (mocapDebugViz.visible) {
       const frame = mocap.latestFrame;
       if (frame) {
-        const hipsNode = vrm.humanoid.getNormalizedBoneNode('hips' as any);
-        const hipWorld = new THREE.Vector3();
-        hipsNode?.getWorldPosition(hipWorld);
-
-        // Actual avatar bone endpoints for comparison with IK targets
-        const lhNode = vrm.humanoid.getNormalizedBoneNode('leftHand'  as any);
-        const rhNode = vrm.humanoid.getNormalizedBoneNode('rightHand' as any);
-        const lfNode = vrm.humanoid.getNormalizedBoneNode('leftFoot'  as any);
-        const rfNode = vrm.humanoid.getNormalizedBoneNode('rightFoot' as any);
-        const actualBones = {
-          leftHand:  new THREE.Vector3(), rightHand: new THREE.Vector3(),
-          leftFoot:  new THREE.Vector3(), rightFoot: new THREE.Vector3(),
+        // Cache bone nodes + scratch vectors on first call to avoid lookups/allocations each frame.
+        const cache = (tick as any)._dbgVizCache ??= {
+          hipsNode:  vrm.humanoid.getNormalizedBoneNode('hips'      as any),
+          lhNode:    vrm.humanoid.getNormalizedBoneNode('leftHand'  as any),
+          rhNode:    vrm.humanoid.getNormalizedBoneNode('rightHand' as any),
+          lfNode:    vrm.humanoid.getNormalizedBoneNode('leftFoot'  as any),
+          rfNode:    vrm.humanoid.getNormalizedBoneNode('rightFoot' as any),
+          hipWorld:  new THREE.Vector3(),
+          actualBones: {
+            leftHand:  new THREE.Vector3(), rightHand: new THREE.Vector3(),
+            leftFoot:  new THREE.Vector3(), rightFoot: new THREE.Vector3(),
+          },
         };
-        lhNode?.getWorldPosition(actualBones.leftHand);
-        rhNode?.getWorldPosition(actualBones.rightHand);
-        lfNode?.getWorldPosition(actualBones.leftFoot);
-        rfNode?.getWorldPosition(actualBones.rightFoot);
+        const hipWorld = cache.hipWorld;
+        cache.hipsNode?.getWorldPosition(hipWorld);
+        const actualBones = cache.actualBones;
+        cache.lhNode?.getWorldPosition(actualBones.leftHand);
+        cache.rhNode?.getWorldPosition(actualBones.rightHand);
+        cache.lfNode?.getWorldPosition(actualBones.leftFoot);
+        cache.rfNode?.getWorldPosition(actualBones.rightFoot);
 
+        const cal = mocap.calibration;
         mocapDebugViz.update(
-          frame, hipWorld, mocap.calibration.bodyScale(), mocap.hipsBaseWorld,
+          frame, hipWorld, cal.bodyScale(), mocap.hipsBaseWorld,
           mocap.debugTargets, actualBones,
+          {
+            armL: cal.armScale('left'),
+            armR: cal.armScale('right'),
+            legL: cal.legScale(),
+            legR: cal.legScale(),
+          },
         );
       }
     }
@@ -252,6 +307,67 @@ function startRenderLoop(
     requestAnimationFrame(tick);
   };
   tick();
+}
+
+function formatTime(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 0) sec = 0;
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function mountTransport(controller: AnimationController): void {
+  const bar      = document.getElementById('transport');
+  const nameEl   = document.getElementById('tp-name');
+  const prevBtn  = document.getElementById('tp-prev');
+  const playBtn  = document.getElementById('tp-play');
+  const nextBtn  = document.getElementById('tp-next');
+  const timeline = document.getElementById('tp-timeline');
+  const progress = document.getElementById('tp-progress');
+  const timeEl   = document.getElementById('tp-time');
+  if (!bar || !nameEl || !prevBtn || !playBtn || !nextBtn || !timeline || !progress || !timeEl) return;
+
+  prevBtn.addEventListener('click', () => controller.prev());
+  nextBtn.addEventListener('click', () => controller.next());
+  playBtn.addEventListener('click', () => {
+    controller.togglePaused();
+    playBtn.textContent = controller.paused ? '▶' : '⏸';
+  });
+
+  const seekFromEvent = (ev: PointerEvent): void => {
+    const dur = controller.currentDuration;
+    if (dur <= 0) return;
+    const rect = timeline.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+    controller.seek(frac * dur);
+  };
+  timeline.addEventListener('pointerdown', (ev) => {
+    (ev.target as HTMLElement).setPointerCapture(ev.pointerId);
+    seekFromEvent(ev as PointerEvent);
+  });
+  timeline.addEventListener('pointermove', (ev) => {
+    if ((ev as PointerEvent).pressure > 0 || (ev.buttons & 1)) seekFromEvent(ev as PointerEvent);
+  });
+
+  // Refresh UI 10× per second
+  setInterval(() => {
+    const hasActive = controller.hasBvhActive;
+    bar.classList.toggle('empty', !hasActive);
+    if (!hasActive) {
+      nameEl.textContent   = '—';
+      timeEl.textContent   = '0:00 / 0:00';
+      (progress as HTMLElement).style.width = '0%';
+      playBtn.textContent  = '▶';
+      return;
+    }
+    const t    = controller.currentTime;
+    const dur  = controller.currentDuration;
+    const frac = dur > 0 ? Math.min(t / dur, 1) : 0;
+    nameEl.textContent   = formatLibraryName(controller.currentName);
+    timeEl.textContent   = `${formatTime(t)} / ${formatTime(dur)}`;
+    (progress as HTMLElement).style.width = `${frac * 100}%`;
+    playBtn.textContent  = controller.paused ? '▶' : '⏸';
+  }, 100);
 }
 
 main().catch((err) => {
