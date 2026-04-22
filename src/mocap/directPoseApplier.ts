@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import { Hand as KalidoHand } from 'kalidokit';
-import type { PoseFrame } from './poseDetector';
+import type { HandFrame, PoseFrame } from './poseDetector';
 import type { MocapCalibration } from './mocapCalibration';
 import { solveTwoBoneIK, type TwoBoneIKResult } from './twoBoneIK';
 import { buildHumanoidRestAxes, HUMANOID_DIRECTION_CHILD } from '../humanoidRestPose';
@@ -57,6 +57,13 @@ const FINGER_VRM_NAMES = (() => {
   return names;
 })();
 
+const PALM_ROOT_SUFFIXES = [
+  'IndexProximal',
+  'MiddleProximal',
+  'RingProximal',
+  'LittleProximal',
+] as const;
+
 function kalidoHandBoneToVrm(kalidoName: string): string {
   const side    = kalidoName.startsWith('Right') ? 'right' : 'left';
   const without = kalidoName.replace(/^(Left|Right)/, '');
@@ -92,6 +99,7 @@ export class DirectPoseApplier {
   private calibration: MocapCalibration | null = null;
   private nodeCache     = new Map<string, THREE.Object3D>();
   private restLocalAxis = new Map<string, THREE.Vector3>();
+  private handRestBasis = new Map<string, THREE.Quaternion>();
 
   // sysAnimOnline uses separate filters per body region:
   //   head_chest_rot: minCutoff=0.25 → very heavy torso smoothing (stable trunk)
@@ -100,6 +108,7 @@ export class DirectPoseApplier {
   private _spineLerp    = 0.25;  // hips + spine/chest twist — heavily smoothed
   private _bodyLerp     = 0.7;   // arms + legs IK
   private _handLerp     = 0.7;
+  private _handTrackingPriorityEnabled = true;
   private _mirrorX      = true;  // mirror landmarks left↔right (selfie view)
   private _depthScale   = 1;     // Default to full 3D depth; the panel can still reduce it if Z gets noisy
   private _visThreshold = 0.3;   // MediaPipe visibility score below this = skip bone
@@ -135,6 +144,7 @@ export class DirectPoseApplier {
   private _q1 = new THREE.Quaternion();
   private _q2 = new THREE.Quaternion();
   private _m1 = new THREE.Matrix4();
+  private _m2 = new THREE.Matrix4();
   private _ikResult: TwoBoneIKResult = {
     upperDir: new THREE.Vector3(),
     elbowPos: new THREE.Vector3(),
@@ -319,6 +329,10 @@ export class DirectPoseApplier {
     this._handLerp  = enabled ? 1 : 0.7;
   }
 
+  /** When enabled, wrist + fingers from hand tracking are treated as a top layer. */
+  setHandTrackingPriorityEnabled(v: boolean): void { this._handTrackingPriorityEnabled = v; }
+  get handTrackingPriorityEnabled(): boolean { return this._handTrackingPriorityEnabled; }
+
   /** Mirror landmarks left↔right so the model reflects the user. */
   setMirrorX(enabled: boolean): void { this._mirrorX = enabled; }
   get mirrorX(): boolean { return this._mirrorX; }
@@ -372,8 +386,18 @@ export class DirectPoseApplier {
       this._applyLimb(bone, frame, pIdx, cIdx);
     }
 
+    this.applyTrackedHands(frame, this._handTrackingPriorityEnabled);
+  }
+
+  /**
+   * Apply tracked hand pose on top of the current arm chain.
+   * When `prioritized` is true we also rotate the wrist/hand bone and snap to
+   * the tracked result so a later overlay pass can reassert the exact pose.
+   */
+  applyTrackedHands(frame: PoseFrame, prioritized = false): void {
     for (const hand of frame.hands) {
-      this._applyHand(hand.landmarks, hand.side);
+      if (prioritized) this._applyTrackedPalm(hand, true);
+      this._applyHandKalido(hand.landmarks, hand.side, false, prioritized);
     }
   }
 
@@ -419,6 +443,35 @@ export class DirectPoseApplier {
     const restAxes = buildHumanoidRestAxes(this.vrm);
     for (const [bone, info] of restAxes) {
       this.restLocalAxis.set(bone, info.rawAxis.clone());
+    }
+
+    // Palm basis in hand-local space. We use it to align the wrist from palm
+    // landmarks directly, which is much more robust than assuming KalidoKit's
+    // generic wrist Euler basis matches this avatar.
+    for (const side of ['left', 'right'] as const) {
+      const handName = `${side}Hand`;
+      const indexRoot = this.nodeCache.get(`${side}IndexProximal`);
+      const littleRoot = this.nodeCache.get(`${side}LittleProximal`);
+      const roots = PALM_ROOT_SUFFIXES
+        .map((suffix) => this.nodeCache.get(`${side}${suffix}`))
+        .filter((node): node is THREE.Object3D => !!node);
+      if (!indexRoot || !littleRoot || roots.length < 4) continue;
+
+      this._v1.copy(indexRoot.position).sub(littleRoot.position);
+      this._v2.set(0, 0, 0);
+      for (const root of roots) this._v2.add(root.position);
+      this._v2.multiplyScalar(1 / roots.length);
+      if (this._v1.lengthSq() < 1e-6 || this._v2.lengthSq() < 1e-6) continue;
+
+      this._v1.normalize();
+      this._v2.normalize();
+      this._v3.crossVectors(this._v1, this._v2);
+      if (this._v3.lengthSq() < 1e-6) continue;
+      this._v3.normalize();
+      this._v1.crossVectors(this._v2, this._v3).normalize();
+
+      this._m2.makeBasis(this._v1, this._v2, this._v3);
+      this.handRestBasis.set(handName, this._q1.setFromRotationMatrix(this._m2).clone());
     }
   }
 
@@ -1060,14 +1113,62 @@ export class DirectPoseApplier {
     lowerNode.updateWorldMatrix(false, true);
   }
 
-  private _applyHand(landmarks: any[], side: 'Left' | 'Right'): void {
-    const solvedSide: 'Left' | 'Right' = this._mirrorX
-      ? (side === 'Left' ? 'Right' : 'Left')
-      : side;
-    const rig = KalidoHand.solve(landmarks as any, solvedSide);
+  private _applyTrackedPalm(hand: HandFrame, snap = false): void {
+    const side = hand.side === 'Left' ? 'left' : 'right';
+    const handName = `${side}Hand`;
+    const handNode = this.nodeCache.get(handName);
+    const restBasis = this.handRestBasis.get(handName);
+    const lms = hand.worldLandmarks;
+    const wrist = lms[0];
+    const index = lms[5];
+    const middle = lms[9];
+    const ring = lms[13];
+    const little = lms[17];
+    if (!handNode || !handNode.parent || !restBasis || !wrist || !index || !middle || !ring || !little) return;
+
+    // Palm across: little -> index. Palm forward: wrist -> average MCP line.
+    this._mpDirToVrm(index.x - little.x, index.y - little.y, index.z - little.z, this._v1);
+    this._mpDirToVrm(
+      (index.x + middle.x + ring.x + little.x) * 0.25 - wrist.x,
+      (index.y + middle.y + ring.y + little.y) * 0.25 - wrist.y,
+      (index.z + middle.z + ring.z + little.z) * 0.25 - wrist.z,
+      this._v2,
+    );
+    if (this._v1.lengthSq() < 1e-6 || this._v2.lengthSq() < 1e-6) return;
+
+    handNode.parent.updateWorldMatrix(true, false);
+    handNode.parent.getWorldQuaternion(this._q1).invert();
+    this._v1.applyQuaternion(this._q1).normalize();
+    this._v2.applyQuaternion(this._q1).normalize();
+    this._v3.crossVectors(this._v1, this._v2);
+    if (this._v3.lengthSq() < 1e-6) return;
+    this._v3.normalize();
+    this._v1.crossVectors(this._v2, this._v3).normalize();
+
+    this._m1.makeBasis(this._v1, this._v2, this._v3);
+    this._q2.setFromRotationMatrix(this._m1);
+    this._q1.copy(restBasis).invert();
+    this._q2.multiply(this._q1);
+
+    if (snap || this._handLerp >= 1) handNode.quaternion.copy(this._q2);
+    else                             handNode.quaternion.slerp(this._q2, this._handLerp);
+    handNode.updateWorldMatrix(false, true);
+  }
+
+  private _applyHandKalido(
+    landmarks: any[],
+    side: 'Left' | 'Right',
+    includeWrist = false,
+    snap = false,
+  ): void {
+    // PoseDetector already flips holistic hand labels into the same mirrored
+    // avatar-side convention that body tracking uses, so applying another
+    // left/right swap here would send wrist/finger rotations to the opposite
+    // hand and make palm orientation diverge from the video.
+    const rig = KalidoHand.solve(landmarks as any, side);
     if (!rig) return;
     for (const [kalidoKey, rot] of Object.entries(rig)) {
-      if (kalidoKey.endsWith('Wrist')) continue;
+      if (!includeWrist && kalidoKey.endsWith('Wrist')) continue;
       const vrmName = kalidoHandBoneToVrm(kalidoKey);
       const n = this.nodeCache.get(vrmName);
       if (!n) continue;
@@ -1075,8 +1176,8 @@ export class DirectPoseApplier {
       this._q1.setFromEuler(
         new THREE.Euler(r.x, r.y, r.z, (r.rotationOrder ?? 'XYZ') as THREE.EulerOrder),
       );
-      if (this._handLerp >= 1) n.quaternion.copy(this._q1);
-      else                     n.quaternion.slerp(this._q1, this._handLerp);
+      if (snap || this._handLerp >= 1) n.quaternion.copy(this._q1);
+      else                             n.quaternion.slerp(this._q1, this._handLerp);
     }
   }
 }

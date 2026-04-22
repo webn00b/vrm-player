@@ -121,6 +121,9 @@ export class MocapController {
   setLateralBendScale(v: number): void { this.applier.setLateralBendScale(v); }
   get lateralBendScale(): number { return this.applier.lateralBendScale; }
 
+  setHandTrackingPriorityEnabled(v: boolean): void { this.applier.setHandTrackingPriorityEnabled(v); }
+  get handTrackingPriorityEnabled(): boolean { return this.applier.handTrackingPriorityEnabled; }
+
   setFaceTrackingEnabled(v: boolean): void { this.faceApplier.setEnabled(v); }
   get faceTrackingEnabled(): boolean { return this.faceApplier.enabled; }
 
@@ -141,6 +144,15 @@ export class MocapController {
       this.recorder.addFrame((name) => this.applier.getQuaternion(name));
       this._frameRecorded = true;
     }
+  }
+
+  /**
+   * Re-apply tracked wrist + finger pose after other authored overlays so hands
+   * remain the top layer when hand-priority mode is enabled.
+   */
+  applyTrackedHandsOverlay(): void {
+    if (!this._latestFrame || this._state === 'off' || !this.applier.handTrackingPriorityEnabled) return;
+    this.applier.applyTrackedHands(this._latestFrame, true);
   }
 
   // ── Calibration ────────────────────────────────────────────────────────────

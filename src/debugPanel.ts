@@ -179,6 +179,10 @@ export function mountDebugPanel(
         <button class="dbg-toggle" id="mocap-filter-btn">ON</button>
       </div>
       <div class="dbg-row">
+        <label class="dbg-label" for="mocap-handprio-box">✋ Wrist + fingers priority</label>
+        <input type="checkbox" id="mocap-handprio-box" checked style="width:14px;height:14px;accent-color:#6ea8ff">
+      </div>
+      <div class="dbg-row">
         <span class="dbg-label">🟢 Performer skeleton</span>
         <button class="dbg-toggle off" id="mocap-dbgskel-btn">OFF</button>
       </div>
@@ -547,6 +551,19 @@ export function mountDebugPanel(
     mocap.setHipPositionEnabled(next);
     hipBtn.textContent = next ? 'ON' : 'OFF';
     hipBtn.classList.toggle('off', !next);
+  });
+
+  // ── Hand priority checkbox ──────────────────────────────────────────────────
+
+  const handPrioBox = root.querySelector<HTMLInputElement>('#mocap-handprio-box')!;
+  handPrioBox.checked = getMocap()?.handTrackingPriorityEnabled ?? true;
+  handPrioBox.addEventListener('change', () => {
+    const mocap = getMocap();
+    if (!mocap) {
+      handPrioBox.checked = true;
+      return;
+    }
+    mocap.setHandTrackingPriorityEnabled(handPrioBox.checked);
   });
 
   // ── Shoulder spread slider (in tuning panel) ───────────────────────────────

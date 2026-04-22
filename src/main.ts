@@ -244,6 +244,11 @@ function startRenderLoop(
     // 3b. Manual bone pose offsets (post-multiplied on top of mocap/animation).
     bonePanel.apply();
 
+    // 3b2. Optional final wrist/finger overlay from hand tracking. This keeps
+    // tracked hands as the highest-priority authored layer even if another
+    // tool wrote hand bones earlier in the frame.
+    mocap.applyTrackedHandsOverlay();
+
     // 3c. Clamp the final authored pose (BVH / idle / mocap / manual offsets)
     // before debug capture and before micro-animations add their small deltas.
     validator.clampAll(mocap.state === 'off' ? undefined : LIVE_MOCAP_VALIDATION_EXCLUDED_BONES);
