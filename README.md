@@ -1,178 +1,330 @@
-# VRM BVH Player
+# VRM Player
 
-Плеер BVH-анимаций для VRM-моделей на three.js + `@pixiv/three-vrm`. Все BVH-файлы из папки `animations/` проигрываются по кругу с плавными кроссфейдами.
+Это небольшой локальный инструмент для работы с VRM-аватаром.
+
+Простыми словами:
+
+- вы кладете в проект `.vrm` модель и `.bvh` анимации;
+- запускаете приложение;
+- смотрите, как аватар проигрывает анимации;
+- при желании включаете мокап с камеры или из видео;
+- можете записать результат обратно в `.bvh` или скачать текущую позу как `1-frame BVH`.
+
+Проект полезен в двух сценариях:
+
+1. Вы хотите быстро смотреть и отлаживать BVH-анимации на VRM-модели.
+2. Вы хотите ретаргетить мокап из MediaPipe на VRM и разбираться, где именно ломается поза.
+
+## Что умеет проект
+
+- Загружает первый `.vrm` из папки `models/`.
+- Автоматически подхватывает все `.bvh` из папки `animations/`.
+- Проигрывает BVH-клипы в очереди с кроссфейдами.
+- Поверх анимации накладывает live mocap с камеры или видеофайла.
+- Ретаргетит руки и пальцы через отдельный пайплайн с калибровкой и IK.
+- Показывает debug-панель с диагностикой торса, рук, ног и калибровки.
+- Записывает мокап в `.bvh`.
+- Экспортирует текущую позу как отдельный `1-frame BVH`.
 
 ## Быстрый старт
+
+### Требования
+
+- Node.js 18+
+- npm
+
+### Установка и запуск
 
 ```bash
 npm install
 npm run dev
 ```
 
-Откроется `http://127.0.0.1:5333`.
+Приложение откроется на [http://127.0.0.1:5333](http://127.0.0.1:5333).
 
-По умолчанию включён skeleton overlay, а модель скрыта до нажатия `Show model` в панели слева.
+### Самый короткий путь
 
-## Ассеты
+1. Положите `.vrm` в `models/`.
+2. Положите `.bvh` в `animations/`.
+3. Запустите `npm run dev`.
+4. Откройте вкладку `Main` и включите `Show model`.
+5. Перетащите клипы из `Library` в `Queue`.
 
-### VRM-модель
+Если в `animations/` ничего нет, проект все равно запустится. В этом режиме можно использовать idle и мокап без BVH-библиотеки.
 
-Бросьте `.vrm`-файл в папку `models/` в корне проекта. Имя любое — берётся первый по алфавиту. Источники (CC0):
+## Структура ассетов
 
-- https://vroid.pixiv.help/hc/en-us/articles/4402394424089 (`AvatarSample_A` ... `_G`)
-- https://github.com/vrm-c/vrm-specification/tree/master/samples
+### VRM
 
-### BVH-анимации
+- Папка: `models/`
+- Формат: `.vrm`
+- Берется первый файл по алфавиту
 
-Просто кладите `.bvh`-файлы в **папку `animations/`** в корне проекта. Vite при старте сам их подберёт — никакого конфига и перезагрузки.
+Пример:
 
-**Порядок воспроизведения** — алфавитный по имени файла. Хочется конкретный порядок — используйте префиксы:
-
+```text
+models/
+  avatar.vrm
 ```
+
+Источники тестовых моделей:
+
+- [VRoid sample avatars](https://vroid.pixiv.help/hc/en-us/articles/4402394424089)
+- [VRM specification samples](https://github.com/vrm-c/vrm-specification/tree/master/samples)
+
+### BVH
+
+- Папка: `animations/`
+- Формат: `.bvh`
+- Подхватываются автоматически при старте
+- Порядок по умолчанию: алфавитный
+
+Пример:
+
+```text
 animations/
-├── 01-idle.bvh
-├── 02-walk.bvh
-├── 03-wave.bvh
-└── 04-sit.bvh
+  01-idle.bvh
+  02-walk.bvh
+  03-wave.bvh
 ```
 
-Дойдя до последней, плеер начинает с первой. Кликните по пункту в правой панели, чтобы сразу переключиться.
+## Как пользоваться
 
-#### Как получить BVH из Mixamo
+## 1. Проигрывание BVH
 
-1. https://www.mixamo.com → выбрать `Y Bot` (или любого с `mixamorig` скелетом).
-2. Выбрать анимацию → **Download** → **FBX Binary (.fbx)**, **Without Skin**, `30 fps`.
-3. В Blender: `File → Import → FBX`.
-4. `File → Export → Motion Capture (.bvh)` → настройки: `Rotation: Native`, `Root Transform Only: выкл`.
-5. Сохранить в `animations/` c нужным префиксом.
+1. Добавьте анимации в `animations/`.
+2. Запустите проект.
+3. В правой панели перетащите нужные анимации в очередь.
+4. Используйте transport для проигрывания, прыжка по очереди и проверки кроссфейдов.
 
-## Архитектура
+## 2. Мокап с камеры
 
-- `src/scene.ts` — three.js сцена, OrbitControls, свет, grid.
-- `src/vrmLoader.ts` — загрузка VRM через `GLTFLoader` + `VRMLoaderPlugin`.
-- `src/bvhLoader.ts` — парсинг BVH.
-- `src/skeletonMap.ts` — **структурное авто-определение** humanoid-костей BVH-скелета (по иерархии и длинам, адаптировано из [pixiv/bvh2vrma](https://github.com/pixiv/bvh2vrma)). Работает с любым биped-скелетом независимо от имён (Mixamo, MMD, кастомные).
-- `src/retarget.ts` — использует `skeletonMap` и переписывает треки BVH-клипа в имена нормализованного VRM humanoid; auto-scale + anchor hips к rest-позе.
-- `src/animationController.ts` — `AnimationMixer` + последовательное воспроизведение с `crossFadeTo` (0.5 сек).
-- `src/ui.ts` — панель со списком, подсветка активного.
-- `src/main.ts` — `import.meta.glob('/models/*.vrm')`, `import.meta.glob('/animations/*.bvh')`, склейка всего.
+Вкладка `Video`:
 
-## Mocap-калибровка и IK на руках
+1. Нажмите `Start`.
+2. Разрешите доступ к камере.
+3. При необходимости включите `Show model`, чтобы видеть аватара.
+4. Для записи нажмите `Rec`.
 
-Чистый angle-driven ретаргет (см. `directPoseApplier.ts`) копирует углы поворотов с landmark'ов MediaPipe на кости VRM. Если пропорции перформера отличаются от аватара (шире плечи, длиннее предплечье), углы совпадут, а вот **мировые позиции кистей не совпадут** — в кадре руки перформера касаются, у аватара промах.
+Полезные переключатели:
 
-Фикс — two-bone IK на плечо+локоть с авто-калибровкой масштаба.
+- `Mirror mode` - селфи-режим
+- `Face tracking` - blendshapes лица
+- `Hip position` - перенос таза по позиции
+- `1€ smoothing` - сглаживание landmark'ов
+- `Wrist + fingers priority` - кисти и пальцы остаются верхним слоем
 
-### Как работает
+## 3. Мокап из видеофайла
 
-**Калибровка** (`src/mocap/mocapCalibration.ts`):
+Вкладка `Video`:
 
-- Один раз на конструкторе читает длины костей VRM из rest-позы (`leftUpperArm`, `leftLowerArm`, `rightUpperArm`, `rightLowerArm`, ширина плеч).
-- Каждый кадр mocap'а кормится в `calibration.feed(frame)`. Кадр принимается только если `visibility ≥ 0.9` на всех шести ключевых точках (плечи, локти, запястья).
-- После 30 принятых сэмплов берётся **медиана** длин перформера, флаг `calibrated = true` зажигается.
-- `armScale(side) = avatarArmLen / performerArmLen` — ratio для соответствующей руки, используется IK'ом.
-- `recalibrate()` сбрасывает сэмплы — следующие 30 «хороших» кадров заново обучат.
+1. Нажмите `Load`.
+2. Выберите видеофайл.
+3. Проект прогонит ролик, построит мокап и автоматически скачает записанный `.bvh`.
+4. После этого новый BVH автоматически появится в очереди и может быть тут же проигран на той же модели.
 
-**IK** (`src/mocap/twoBoneIK.ts`, `solveTwoBoneIK`):
+Это удобно для сравнения:
 
-- Закрытая формула по закону косинусов. Вход: shoulder world pos, target hand world pos, pole vector (куда локоть «бугрится»), длины upper/lower. Выход: направления upperDir / lowerDir в мировом frame + elbow pos.
-- Unreachable (target дальше чем upper+lower) → цепь вытягивается в прямую линию к цели.
-- Degenerate (target совсем близко к shoulder) → fallback на направление pole-вектора.
+- что показывал live-мокап;
+- что получилось после записи в BVH;
+- что вернулось после ретаргета BVH обратно на VRM.
 
-**Интеграция** (`directPoseApplier._applyArmIK`):
+## 4. Пошаговый просмотр видео
 
-1. Якорь цели — **середина плеч аватара** (midpoint `leftUpperArm.worldPos` + `rightUpperArm.worldPos`), не само плечо. Это критично: когда перформер сводит руки на средней линии тела, scaled offset от midline → 0 → target на midline у аватара; без этого при разнице ширины плеч руки аватара пересекают друг друга.
-2. `wristOffset = performerWrist - midPerformerShoulder` (обе точки у перформера) → через `_mpDeltaToVrm` в VRM-frame.
-3. Масштабируем **по осям раздельно**: X (поперёк плеч) → `shoulderWidthRatio`, Y (вертикаль) и Z (глубина) → `armScale(side)`. Это сохраняет «руки встречаются на центре» и при этом даёт аватару тянуться на полную его длину руки при вертикальных/фронтальных движениях.
-4. `target = midAvatarShoulder + scaledOffset`. Plus `pole = elbow - shoulder` в VRM-frame (только направление, не масштаб).
-5. `solveTwoBoneIK(sameSideShoulderWorld, target, pole, upperLen, lowerLen)` — точка поворота IK остаётся в одноимённом плече, чтобы локоть крутился вокруг правильного суставa.
-6. Трансформируем world-space `upperDir`/`lowerDir` в parent-local frame каждой кости и пишем через `setFromUnitVectors(restAxis, dirLocal)` — как в обычном angle-based пайплайне.
-7. Пока калибровка не готова, фолбек на angle-based `_applyLimb` — mocap не блокируется.
+Если загружен видеофайл, можно:
 
-Ноги и торс идут по старому angle-driven пути: на ногах стопы хотят «прилипнуть» к полу, что требует foot-planting IK — другая задача. Кисть (wrist rotation) остаётся за `_applyHand` (KalidoHand из kalidokit).
+- ставить на паузу;
+- шагать по кадрам вперед и назад;
+- брать текущую позу;
+- скачивать собранный вручную BVH.
 
-### Debug-панель
+Кнопки в playback-строке:
 
-Секция **Mocap** → строка **📏 Calibration**:
+- `⏸` / `▶` - пауза
+- `⏮` - шаг назад
+- `⏭` - шаг вперед
+- `💾` - добавить текущий кадр в буфер ручной записи
+- `⬇` - скачать буфер ручной записи как `.bvh`
 
-- `—` — mocap ещё не запускался.
-- `collecting N/30` — набирается буфер «хороших» кадров.
-- `✓ arms L 95% R 107%` — готово; проценты = `armScale * 100` (если > 100%, рука аватара длиннее перформера).
+## 5. Экспорт текущей позы
 
-Кнопка **Recalibrate** сбрасывает буфер. Используй после смены перформера или когда камера переместилась и угол сильно поменялся.
+Во вкладке `Video` есть отдельная кнопка:
 
-### Известные ограничения IK
+- `Current pose -> Export .bvh`
 
-- **Unreachable target в исходных кадрах**: если перформер сильно вытянул руку, scaled target иногда чуть дальше `upperLen + lowerLen` — solver переходит в fully-extended режим, локоть визуально «выпрямляется». На нормальных позах не срабатывает.
-- **Depth jitter**: target складывается из всех трёх осей, включая MediaPipe-Z. Если `Depth` в панели стоит на `3D` и Z-landmark'ы нестабильны, target болтается. Переключись на `mid` или `2D` — IK «проецирует» руки на frontal-плоскость.
-- **Rest pose аватара**: если VRM экспортирован в A-pose (не T-pose), `restLocalAxis` у `upperArm` окажется не параллельным «вниз», и IK положит руку в ту же сторону, что и rest. Для A-pose-аватаров нужно или переэкспортировать, или ввести per-bone rest-offset (TODO).
+Она скачивает текущую позу аватара как отдельный `1-frame BVH`.
 
-## Валидация поворотов костей (ROM)
+Это полезно, когда нужно:
 
-Модуль `src/validation/` клэмпит повороты гуманоидных костей в анатомически реалистичный диапазон. Нужен, чтобы mocap с плохой видимостью или кривой BVH не выворачивал локти назад и не крутил шею на 270°.
+- сохранить проблемный кадр;
+- быстро отдать позу в другой инструмент;
+- сравнить "как выглядит сейчас" без полной записи ролика.
 
-### Источник данных
+Важно:
 
-`src/validation/boneConstraints.ts` — таблица из 55 VRM-гуманоидных костей (`VRMHumanBoneName` из `@pixiv/three-vrm`). Каждая запись — `min/max` по трём осям Эйлера в радианах плюс порядок осей (`XYZ`, `YXZ`, …):
+- экспорт берется из текущего состояния аватара;
+- он не трогает основной recorder;
+- его можно использовать отдельно от обычной записи мокапа.
 
-```ts
-leftUpperArm: {
-  order: 'YXZ',
-  min: [d(-80), d(-110), d(-60)],   // flexion / twist / abduction
-  max: [d(+110), d(+110), d(+180)],
-}
+## Откуда берется итоговая поза
+
+Каждый кадр в проекте собирается слоями:
+
+1. BVH-анимация через `AnimationMixer`
+2. idle / procedural анимации
+3. live mocap
+4. ручные оффсеты костей
+5. финальный overlay кистей и пальцев
+6. validator ROM
+7. micro-animations и `vrm.update()`
+
+Это важно понимать при отладке:
+
+- если live mocap "не побеждает" BVH, значит ошибка в порядке слоев;
+- если проблема видна уже на debug skeleton, то баг раньше, чем ретаргет;
+- если debug skeleton выглядит правильно, а аватар нет, то проблема уже в solver/retarget.
+
+## Диагностика и debug
+
+В проекте много встроенной диагностики.
+
+### Основные инструменты
+
+- `Performer skeleton` - зеленый debug-скелет перформера
+- `Skeleton Info` - текстовый дамп по торсу, рукам, ногам и solver-метрикам
+- `Debug record` - запись внутренних данных в JSON
+- `Validation (ROM)` - контроль анатомических ограничений
+
+### Что смотреть в первую очередь
+
+Если ломается торс:
+
+- `Green sh mid`
+- `Norm sh mid`
+- `Err sh axis`
+- `Err hip axis`
+- `Torso fwd raw`
+- `Torso fwd applied`
+- `Torso lat raw`
+- `Torso lat applied`
+- `Torso lat gain`
+
+Если ломаются руки:
+
+- `Reach`
+- `Blue target`
+- `Elbow target`
+- `Arm scale raw/eff`
+- `Hands-together`
+- `Prayer blend`
+- `Face-near blend`
+- `Front-pose blend`
+
+Если ломаются ноги:
+
+- `Legs ready`
+- `Ankle targets`
+- `Leg reach`
+- foot lock (`locked/free`)
+
+## Ограничения
+
+Сейчас проект хорошо подходит для отладки, но у него есть понятные границы.
+
+### Что уже работает неплохо
+
+- обычные BVH на бипедах;
+- live mocap для торса и рук;
+- upper-body видео;
+- prayer / folded hands / hand-near-face кейсы лучше, чем в базовом angle-only ретаргете;
+- экспорт текущей позы и запись мокапа в BVH.
+
+### Что может ломаться
+
+- A-pose vs T-pose на модели и источнике;
+- очень шумный Z из MediaPipe;
+- частичная окклюзия рук и пальцев;
+- сильные стилизованные пропорции аватара;
+- видео, где ноги почти не видны, но включен full-body режим;
+- экстремальные позы, где landmark'и сами ошибаются.
+
+### Что важно помнить
+
+- hand tracking не гарантирует идеальное совпадение пальцев с видео на каждом кадре;
+- `bodyScale`, `armScale`, `legScale` зависят от качества калибровки;
+- если модель экспортирована с нестандартным rest pose, иногда нужен дополнительный rest correction.
+
+## Как устроен проект
+
+### Основные файлы
+
+- [src/main.ts](/Users/fedor/projects/personal/vrm-player/src/main.ts) - сборка приложения и порядок слоев в render loop
+- [src/debugPanel.ts](/Users/fedor/projects/personal/vrm-player/src/debugPanel.ts) - вся debug UI и `Skeleton Info`
+- [src/mocap/mocapController.ts](/Users/fedor/projects/personal/vrm-player/src/mocap/mocapController.ts) - orchestration камеры, видео, записи и экспорта
+- [src/mocap/directPoseApplier.ts](/Users/fedor/projects/personal/vrm-player/src/mocap/directPoseApplier.ts) - основной solver мокапа
+- [src/mocap/mocapCalibration.ts](/Users/fedor/projects/personal/vrm-player/src/mocap/mocapCalibration.ts) - калибровка пропорций
+- [src/mocap/twoBoneIK.ts](/Users/fedor/projects/personal/vrm-player/src/mocap/twoBoneIK.ts) - IK для рук и ног
+- [src/mocap/bvhRecorder.ts](/Users/fedor/projects/personal/vrm-player/src/mocap/bvhRecorder.ts) - запись BVH
+- [src/retarget.ts](/Users/fedor/projects/personal/vrm-player/src/retarget.ts) - BVH -> VRM retarget
+- [src/skeletonMap.ts](/Users/fedor/projects/personal/vrm-player/src/skeletonMap.ts) - структурный маппинг костей BVH
+- [src/validation/](/Users/fedor/projects/personal/vrm-player/src/validation) - validator вращений костей
+
+### Внешние зависимости
+
+- `three`
+- `@pixiv/three-vrm`
+- `@pixiv/three-vrm-animation`
+- `@mediapipe/tasks-vision`
+- `kalidokit`
+
+## Документация
+
+- [docs/mocap-pipeline.md](/Users/fedor/projects/personal/vrm-player/docs/mocap-pipeline.md) - технический разбор пайплайна мокапа и ретаргета
+
+## Разработка
+
+### Команды
+
+```bash
+npm run dev
+npm run build
+npm run preview
 ```
 
-Значения взяты из **AAOS Joint Motion** (клинические ROM-таблицы) и **ISB** рекомендаций для сегментов, которых нет в AAOS (пальцы, посегментный позвоночник). Диапазоны сознательно широкие (~110% от медианы ROM), чтобы не резать стилизованные анимации — задача валидатора ловить **явно невозможное**, а не причёсывать под учебник анатомии.
+### Перед изменениями
 
-### Как клэмпится
+Если вы меняете solver или ретаргет, обычно полезно проверить:
 
-`src/validation/boneValidator.ts` — `clampQuaternion(bone, quat)`:
+1. Как выглядит зеленый performer skeleton.
+2. Что показывает `Skeleton Info`.
+3. Как выглядит записанный `.bvh` после auto-replay.
+4. Не начал ли validator постоянно clamp'ить одну и ту же кость.
 
-1. `quat → Euler` с порядком осей из конфига для этой кости.
-2. Поэлементный clamp по `min`/`max`.
-3. Если что-то вышло за границы — `Euler → quat` обратно, иначе no-op.
+### Типичный цикл отладки
 
-Алгоритм без матрицы и SVD, ~20 float-ops на кость, бюджет <0.2 мс на 55 костей.
+1. Воспроизвести проблему на видео.
+2. Скопировать `Skeleton Info`.
+3. Проверить, где именно ломается:
+   - landmarks;
+   - target;
+   - final normalized bones;
+   - replay из записанного BVH.
+4. Править только один слой за раз.
 
-### Две точки применения
+## Как получить BVH из Mixamo
 
-**Runtime (кадр)** — в `src/main.ts`, единый chokepoint между шагом 2 (`pa.applyAll()`) и шагом 3 (`micro.update`):
+1. Откройте [Mixamo](https://www.mixamo.com).
+2. Возьмите `Y Bot` или другой стандартный biped.
+3. Скачайте анимацию как `FBX Binary`, `Without Skin`, `30 fps`.
+4. Импортируйте в Blender.
+5. Экспортируйте как `.bvh`.
+6. Положите файл в `animations/`.
 
-```
-BVH mixer  ──┐
-PriorityAnimator (idle) ─┼─▶ validator.clampAll() ─▶ micro-animations ─▶ render
-mocap (mediapipe) ──────┘
-```
+## Что еще можно улучшить
 
-Один вызов покрывает все три источника поворотов; micro-анимации добавляют маленькие дельты **после** clamp, поэтому не борются с валидатором.
+Если захотите продолжить проект, самые очевидные направления такие:
 
-**Offline (импорт BVH)** — в `src/retarget.ts`:
-
-```ts
-await retargetBvhToVrm(vrm, bvh, name);                         // validate-only
-await retargetBvhToVrm(vrm, bvh, name, { clampOutOfRange: true }); // clamp in-place
-```
-
-`validateClip(clip, vrm)` / `clampClip(clip, vrm)` из `src/validation/clipValidator.ts` обходят `QuaternionKeyframeTrack`, маппят UUID трека обратно в имя VRM-кости через `humanoid.getNormalizedBoneNode`, применяют тот же clamp к каждому keyframe. По умолчанию `retargetBvhToVrm` только логирует: `[validator] clip "walk": 42 out-of-range keyframes across 12 bones; worst rightUpperArm (+28.3°)`.
-
-### Debug-панель
-
-Секция **Validation (ROM)**:
-
-- **Clamp bone rotations** — toggle ON/OFF валидатора в runtime.
-- `clamped/frame: N` — сколько костей прищёлкнуто в последнем кадре.
-- `worst: <bone> +X°` — самое большое превышение за кадр.
-- **Dump** — выводит текущий конфиг в консоль для тюнинга.
-
-Если конкретная поза в mocap постоянно триггерит одну и ту же кость, открой `boneConstraints.ts`, расширь `min`/`max` у неё и перезагрузи — HMR подхватит без рестарта.
-
-### Per-avatar override
-
-`BoneValidator` вторым аргументом принимает `Partial<Record<VRMHumanBoneName, RotationConstraint>>` — shallow-merge поверх `DEFAULT_BONE_CONSTRAINTS`. Нужно сделать стилизованному персонажу плечо с большей амплитудой — передаёшь только эту запись, остальные берутся по умолчанию.
-
-## Известные ограничения
-
-- **A-pose vs T-pose**: если rest-поза BVH-рига — A-pose, а у VRM — T-pose, ретаргет разницу не компенсирует, руки смотрятся слегка опущенными. Фикс: в Blender применить `Apply Pose as Rest Pose` на риг до экспорта BVH, либо добавить per-bone rest-offset в `retarget.ts`.
-- Пальцы не ретаргетятся (`skeletonMap` определяет их, но `retarget` их пропускает).
-- Кроссфейд жёстко 0.4 сек.
+- вынести документацию в отдельный user guide и troubleshooting guide;
+- добавить импорт/экспорт поз не только в `BVH`, но и в `JSON`/`VRMA`;
+- сделать явные preset'ы для upper-body и full-body видео;
+- сохранить пользовательские настройки debug/mocap между сессиями.
