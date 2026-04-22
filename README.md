@@ -15,6 +15,13 @@
 1. Вы хотите быстро смотреть и отлаживать BVH-анимации на VRM-модели.
 2. Вы хотите ретаргетить мокап из MediaPipe на VRM и разбираться, где именно ломается поза.
 
+## Навигация по документации
+
+- [docs/user-guide.md](/Users/fedor/projects/personal/vrm-player/docs/user-guide.md) - пользовательское руководство: запуск, интерфейс, BVH, мокап, экспорт позы
+- [docs/troubleshooting.md](/Users/fedor/projects/personal/vrm-player/docs/troubleshooting.md) - практическая диагностика: что смотреть в `Skeleton Info` и как разбирать типовые баги
+- [docs/mocap-pipeline.md](/Users/fedor/projects/personal/vrm-player/docs/mocap-pipeline.md) - техническая документация по пайплайну, solver-у и порядку слоев
+- [docs/architecture.md](/Users/fedor/projects/personal/vrm-player/docs/architecture.md) - карта модулей проекта, зависимостей и потока данных
+
 ## Что умеет проект
 
 - Загружает первый `.vrm` из папки `models/`.
@@ -90,14 +97,18 @@ animations/
 
 ## Как пользоваться
 
-## 1. Проигрывание BVH
+Подробное руководство вынесено в [docs/user-guide.md](/Users/fedor/projects/personal/vrm-player/docs/user-guide.md).
+
+Ниже — короткая версия.
+
+### 1. Проигрывание BVH
 
 1. Добавьте анимации в `animations/`.
 2. Запустите проект.
 3. В правой панели перетащите нужные анимации в очередь.
 4. Используйте transport для проигрывания, прыжка по очереди и проверки кроссфейдов.
 
-## 2. Мокап с камеры
+### 2. Мокап с камеры
 
 Вкладка `Video`:
 
@@ -114,7 +125,7 @@ animations/
 - `1€ smoothing` - сглаживание landmark'ов
 - `Wrist + fingers priority` - кисти и пальцы остаются верхним слоем
 
-## 3. Мокап из видеофайла
+### 3. Мокап из видеофайла
 
 Вкладка `Video`:
 
@@ -129,7 +140,7 @@ animations/
 - что получилось после записи в BVH;
 - что вернулось после ретаргета BVH обратно на VRM.
 
-## 4. Пошаговый просмотр видео
+### 4. Пошаговый просмотр видео
 
 Если загружен видеофайл, можно:
 
@@ -146,7 +157,7 @@ animations/
 - `💾` - добавить текущий кадр в буфер ручной записи
 - `⬇` - скачать буфер ручной записи как `.bvh`
 
-## 5. Экспорт текущей позы
+### 5. Экспорт текущей позы
 
 Во вкладке `Video` есть отдельная кнопка:
 
@@ -165,6 +176,12 @@ animations/
 - экспорт берется из текущего состояния аватара;
 - он не трогает основной recorder;
 - его можно использовать отдельно от обычной записи мокапа.
+
+## Как дальше читать проект
+
+Если нужна практическая диагностика, откройте [docs/troubleshooting.md](/Users/fedor/projects/personal/vrm-player/docs/troubleshooting.md).
+
+Если нужен внутренний разбор solver-а и порядка слоев, откройте [docs/mocap-pipeline.md](/Users/fedor/projects/personal/vrm-player/docs/mocap-pipeline.md).
 
 ## Откуда берется итоговая поза
 
@@ -187,6 +204,8 @@ animations/
 ## Диагностика и debug
 
 В проекте много встроенной диагностики.
+
+Полный symptom-oriented разбор вынесен в [docs/troubleshooting.md](/Users/fedor/projects/personal/vrm-player/docs/troubleshooting.md).
 
 ### Основные инструменты
 
@@ -279,7 +298,10 @@ animations/
 
 ## Документация
 
-- [docs/mocap-pipeline.md](/Users/fedor/projects/personal/vrm-player/docs/mocap-pipeline.md) - технический разбор пайплайна мокапа и ретаргета
+- [docs/user-guide.md](/Users/fedor/projects/personal/vrm-player/docs/user-guide.md) - пользовательский сценарий работы с проектом
+- [docs/troubleshooting.md](/Users/fedor/projects/personal/vrm-player/docs/troubleshooting.md) - symptom-oriented отладка и чтение `Skeleton Info`
+- [docs/mocap-pipeline.md](/Users/fedor/projects/personal/vrm-player/docs/mocap-pipeline.md) - технический разбор мокап-пайплайна и solver-а
+- [docs/architecture.md](/Users/fedor/projects/personal/vrm-player/docs/architecture.md) - верхнеуровневая архитектура приложения
 
 ## Разработка
 
