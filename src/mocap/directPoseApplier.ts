@@ -133,6 +133,7 @@ export class DirectPoseApplier {
   private _hipPositionEnabled   = true;
   private _hipPerfBaseline:     THREE.Vector3 | null = null;
   private _hipAvatarBaseline:   THREE.Vector3 = new THREE.Vector3();
+  private _torsoForwardBaseline: number | null = null;
 
   // Scratch allocations — reused each frame to avoid GC pressure
   private _v1 = new THREE.Vector3();
@@ -197,6 +198,10 @@ export class DirectPoseApplier {
   // Fraction of residual torso midpoint lean applied to spine/chest as a
   // side-bend after hips orientation has already been solved.
   private _lateralBendScale = 0.35;
+  // Residual torso forward bend applied to spine/chest after hips orientation.
+  // Uses full torso Z (no /3 damping) so pronounced bows / forward leans still
+  // read correctly even though the hips basis stays conservative.
+  private _forwardBendScale = 1;
   // Hips landmarks are the noisiest torso anchors when one leg is lifted: the
   // pelvis line gets "dragged" by the active leg and the body appears to lean
   // the wrong way. We cap how far the pelvis cross-axis may diverge from the
@@ -298,7 +303,10 @@ export class DirectPoseApplier {
   get hipPositionEnabled(): boolean { return this._hipPositionEnabled; }
 
   /** Reset hip position baseline — next frame re-anchors to current performer position. */
-  resetHipBaseline(): void { this._hipPerfBaseline = null; }
+  resetHipBaseline(): void {
+    this._hipPerfBaseline = null;
+    this._torsoForwardBaseline = null;
+  }
 
   /** Release any locked feet and reset velocity history. Call on recalibrate / stop. */
   resetFootLock(): void {
@@ -359,6 +367,13 @@ export class DirectPoseApplier {
   }
 
   apply(frame: PoseFrame): void {
+    // Debug target flags are frame-local; reset them before solving this frame
+    // so stale arm/leg IK markers do not survive when tracking drops out.
+    this.debugTargets.hasArm = false;
+    this.debugTargets.hasLeg = false;
+    this.debugTargets.leftFootLocked = false;
+    this.debugTargets.rightFootLocked = false;
+
     // Torso first — its rotations propagate to limbs via parent world matrices.
     this._applyHips(frame);
     this._applySpine(frame);
@@ -368,6 +383,7 @@ export class DirectPoseApplier {
     // once calibration is ready; otherwise fall back to angle-based so
     // tracking is not blocked by an un-calibrated performer.
     const ikReady = this.calibration?.calibrated === true;
+    const legsReady = (this.calibration?.readiness().legs ?? 0) >= 1;
     for (const bone of PROCESS_ORDER) {
       const isArmUpper = bone === 'leftUpperArm' || bone === 'rightUpperArm';
       const isArmLower = bone === 'leftLowerArm' || bone === 'rightLowerArm';
@@ -378,7 +394,8 @@ export class DirectPoseApplier {
         continue;
       }
       if (ikReady && isLegUpper) {
-        this._applyLegIK(frame, bone.startsWith('left') ? 'left' : 'right');
+        if (legsReady) this._applyLegIK(frame, bone.startsWith('left') ? 'left' : 'right');
+        else this._relaxLegToRest(bone.startsWith('left') ? 'left' : 'right');
         continue;
       }
       if (ikReady && (isArmLower || isLegLower)) continue; // handled in the upper pass
@@ -552,11 +569,13 @@ export class DirectPoseApplier {
       if (shouldersVisible && performerShoulder && ls && rs) {
         const midX = (ls.x + rs.x) * 0.5;
         const midY = (ls.y + rs.y) * 0.5;
-        const midZ = (ls.z + rs.z) * 0.5;
-        this._mpDirToVrmTorso(
+        // Shoulder/clavicle auto should not chase camera depth. Using torso Z
+        // here makes the upper body "follow the camera" when the source shot
+        // is angled. Keep clavicles driven by lateral/vertical offset only.
+        this._mpDirToVrm(
           performerShoulder.x - midX,
           performerShoulder.y - midY,
-          performerShoulder.z - midZ,
+          0,
           this._v1,
         );
         if (this._v1.lengthSq() > 1e-6) {
@@ -729,15 +748,15 @@ export class DirectPoseApplier {
 
     // Transform shoulder axis into hips local frame
     hipsNode.updateWorldMatrix(true, false);
-    hipsNode.getWorldQuaternion(this._q1).invert();
-    shoulderAxis.applyQuaternion(this._q1);
+    hipsNode.getWorldQuaternion(this._q2).invert();
+    shoulderAxis.applyQuaternion(this._q2);
 
     shoulderAxis.y = 0;
     if (shoulderAxis.lengthSq() < 1e-6) return;
     shoulderAxis.normalize();
 
     if (hipsVisible) {
-      hipAxis.applyQuaternion(this._q1);
+      hipAxis.applyQuaternion(this._q2);
       hipAxis.y = 0;
       if (hipAxis.lengthSq() < 1e-6) return;
       hipAxis.normalize();
@@ -749,23 +768,43 @@ export class DirectPoseApplier {
     // At T-pose both project to the same direction → identity (no baseline bias).
     const fullTwist = this._q1.setFromUnitVectors(hipAxis, shoulderAxis);
 
-    // Residual side-bend after hips orientation:
+    // Residual torso bend after hips orientation:
     // use the shoulder-midpoint displacement relative to the hip midpoint,
-    // measured in hips-local space. This tracks actual torso lean, whereas
-    // shoulder-line slope mostly tracks one shoulder being higher/lower and can
-    // flip sign in crouched / asymmetric poses.
+    // measured in hips-local space. Unlike the conservative torso basis above,
+    // this uses the full MediaPipe Z so strong forward bows still show up in
+    // spine/chest even when hips pitch remains damped.
+    let forwardLean = 0;
     let lateralLean = 0;
     if (hipsVisible) {
-      this._mpDirToVrmTorso(
+      this._mpDirToVrm(
         (rs.x + ls.x) * 0.5 - (rh!.x + lh!.x) * 0.5,
         (rs.y + ls.y) * 0.5 - (rh!.y + lh!.y) * 0.5,
         (rs.z + ls.z) * 0.5 - (rh!.z + lh!.z) * 0.5,
         this._v3,
       );
       if (this._v3.lengthSq() > 1e-6) {
-        this._v3.applyQuaternion(this._q1);
+        this._v3.applyQuaternion(this._q2);
+        const forwardLeanRaw = Math.atan2(this._v3.z, Math.max(1e-6, this._v3.y));
+        if (this._torsoForwardBaseline == null) this._torsoForwardBaseline = forwardLeanRaw;
+        forwardLean = forwardLeanRaw - this._torsoForwardBaseline;
+        // Keep a small absolute forward component so clips that are globally
+        // shot with the performer already leaning slightly forward do not get
+        // completely flattened by the session baseline.
+        if (forwardLeanRaw > 0) forwardLean += forwardLeanRaw * 0.25;
         lateralLean = Math.atan2(this._v3.x, Math.max(1e-6, this._v3.y));
       }
+    }
+
+    if (Math.abs(forwardLean) > 1e-4 && this._forwardBendScale > 1e-4) {
+      this._q3.setFromAxisAngle(
+        this._v3.set(1, 0, 0),
+        THREE.MathUtils.clamp(
+          forwardLean * this._forwardBendScale,
+          THREE.MathUtils.degToRad(-35),
+          THREE.MathUtils.degToRad(35),
+        ),
+      );
+      fullTwist.multiply(this._q3);
     }
 
     // Rotation around +Z by a negative angle tilts +Y toward +X (lean right).
@@ -885,6 +924,10 @@ export class DirectPoseApplier {
     const perfMidX = (perfLs.x + perfRs.x) * 0.5;
     const perfMidY = (perfLs.y + perfRs.y) * 0.5;
     const perfMidZ = (perfLs.z + perfRs.z) * 0.5;
+    const shoulderDx = perfRs.x - perfLs.x;
+    const shoulderDy = perfRs.y - perfLs.y;
+    const shoulderDz = perfRs.z - perfLs.z;
+    const shoulderSpan = Math.hypot(shoulderDx, shoulderDy, shoulderDz);
     const shoulderCenterOffset = ps.x - perfMidX;
     const wristCenterOffset = pw.x - perfMidX;
     let midpointBlend = 0;
@@ -920,13 +963,9 @@ export class DirectPoseApplier {
     const hasLeftHandDetected = frame.hands.some((hand) => hand.side === 'Left');
     const hasRightHandDetected = frame.hands.some((hand) => hand.side === 'Right');
     const hasBothHandsDetected = hasLeftHandDetected && hasRightHandDetected;
+    let handsTogetherBlend = 0;
     const otherWrist = lms[side === 'left' ? 15 : 16];
     if (hasBothHandsDetected && otherWrist && this._visible(otherWrist)) {
-      const shoulderDx = perfRs.x - perfLs.x;
-      const shoulderDy = perfRs.y - perfLs.y;
-      const shoulderDz = perfRs.z - perfLs.z;
-      const shoulderSpan = Math.hypot(shoulderDx, shoulderDy, shoulderDz);
-
       const wristDx = pw.x - otherWrist.x;
       const wristDy = pw.y - otherWrist.y;
       const wristDz = pw.z - otherWrist.z;
@@ -935,7 +974,7 @@ export class DirectPoseApplier {
       if (shoulderSpan > 1e-4) {
         const gapRatio = wristGap / shoulderSpan;
         const wristLevelRatio = Math.abs(pw.y - otherWrist.y) / shoulderSpan;
-        const handsTogetherBlend = wristLevelRatio <= 0.25
+        handsTogetherBlend = wristLevelRatio <= 0.25
           ? THREE.MathUtils.clamp((0.55 - gapRatio) / 0.30, 0, 1)
           : 0;
         if (handsTogetherBlend > 1e-4) {
@@ -964,6 +1003,26 @@ export class DirectPoseApplier {
           target.addScaledVector(this._v4, desiredWristGap * 0.5 * handsTogetherBlend);
         }
       }
+    }
+
+    // Folded/front-hand poses often have decent wrist-relative depth, but the
+    // torso retarget stays more conservative to avoid camera-follow on the
+    // upper body. In those cases the wrists can end up "inside/behind" the
+    // chest even though the source hands are clearly in front. Re-inject a
+    // portion of performer chest depth into the wrist target only when the
+    // wrist is near the centerline and closer to the camera than the shoulders.
+    const frontPoseBlendBase = Math.max(midpointBlend, handsTogetherBlend);
+    const wristForward = Math.max(0, perfMidZ - pw.z);
+    const wristFrontBlend = shoulderSpan > 1e-4
+      ? THREE.MathUtils.clamp(wristForward / (shoulderSpan * 0.18), 0, 1)
+      : 0;
+    const frontPoseBlend = frontPoseBlendBase * wristFrontBlend;
+    const lh = lms[LM.LEFT_HIP], rh = lms[LM.RIGHT_HIP];
+    if (frontPoseBlend > 1e-4 && lh && rh && this._visible(lh) && this._visible(rh)) {
+      const perfHipMidZ = (lh.z + rh.z) * 0.5;
+      this._mpDeltaToVrm(0, 0, perfMidZ - perfHipMidZ, this._v1);
+      const chestForwardBias = Math.max(0, this._v1.z) * calib.bodyScale() * 0.9 * frontPoseBlend;
+      target.z += chestForwardBias;
     }
 
     this.debugTargets[side === 'left' ? 'leftWristTarget' : 'rightWristTarget'].copy(target);
@@ -1111,6 +1170,25 @@ export class DirectPoseApplier {
     if (this._bodyLerp >= 1) lowerNode.quaternion.copy(this._q2);
     else                     lowerNode.quaternion.slerp(this._q2, this._bodyLerp);
     lowerNode.updateWorldMatrix(false, true);
+  }
+
+  private _relaxLegToRest(side: 'left' | 'right'): void {
+    const upperNode = this.nodeCache.get(`${side}UpperLeg`);
+    const lowerNode = this.nodeCache.get(`${side}LowerLeg`);
+    if (!upperNode || !lowerNode) return;
+
+    this._q3.identity();
+    if (this._bodyLerp >= 1) upperNode.quaternion.copy(this._q3);
+    else                     upperNode.quaternion.slerp(this._q3, this._bodyLerp);
+    upperNode.updateWorldMatrix(false, true);
+
+    this._q3.identity();
+    if (this._bodyLerp >= 1) lowerNode.quaternion.copy(this._q3);
+    else                     lowerNode.quaternion.slerp(this._q3, this._bodyLerp);
+    lowerNode.updateWorldMatrix(false, true);
+
+    this._footLocked[side] = false;
+    this._polesLeg[side].set(0, 0, 0);
   }
 
   private _applyTrackedPalm(hand: HandFrame, snap = false): void {
