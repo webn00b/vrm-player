@@ -5,6 +5,7 @@ import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-v
 import type { ParsedBVH } from './bvhLoader';
 // @ts-ignore — copied JS module from pixiv/bvh2vrma
 import { convertBVHToVRMAnimation } from './bvh2vrma/convertBVHToVRMAnimation.js';
+import { applyHumanoidRestCorrectionsToClip } from './humanoidRestPose';
 import { validateClip, clampClip } from './validation/clipValidator';
 
 export interface RetargetOptions {
@@ -37,6 +38,10 @@ export async function retargetBvhToVrm(
     if (!vrmAnimations?.length) throw new Error('No VRM animations in exported VRMA');
     clip = createVRMAnimationClip(vrmAnimations[0], vrm);
     clip.name = name;
+    const correctedTracks = applyHumanoidRestCorrectionsToClip(clip, vrm);
+    if (correctedTracks > 0) {
+      console.info(`[retarget] applied rest-pose correction to ${correctedTracks} quaternion track(s) in "${name}"`);
+    }
   } finally {
     URL.revokeObjectURL(url);
   }

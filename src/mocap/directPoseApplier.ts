@@ -4,6 +4,7 @@ import { Hand as KalidoHand } from 'kalidokit';
 import type { PoseFrame } from './poseDetector';
 import type { MocapCalibration } from './mocapCalibration';
 import { solveTwoBoneIK, type TwoBoneIKResult } from './twoBoneIK';
+import { buildHumanoidRestAxes, HUMANOID_DIRECTION_CHILD } from '../humanoidRestPose';
 
 // ── MediaPipe BlazePose landmark indices ──────────────────────────────────────
 
@@ -30,20 +31,6 @@ const LIMB_BONES: Record<string, [number, number]> = {
   leftLowerLeg:  [LM.RIGHT_KNEE,     LM.RIGHT_ANKLE],
   rightUpperLeg: [LM.LEFT_HIP,       LM.LEFT_KNEE],
   rightLowerLeg: [LM.LEFT_KNEE,      LM.LEFT_ANKLE],
-};
-
-// Which VRM bone is the "child" used to compute the rest axis of this bone.
-const BONE_CHILD: Record<string, string> = {
-  leftShoulder:  'leftUpperArm',
-  leftUpperArm:  'leftLowerArm',
-  leftLowerArm:  'leftHand',
-  rightShoulder: 'rightUpperArm',
-  rightUpperArm: 'rightLowerArm',
-  rightLowerArm: 'rightHand',
-  leftUpperLeg:  'leftLowerLeg',
-  leftLowerLeg:  'leftFoot',
-  rightUpperLeg: 'rightLowerLeg',
-  rightLowerLeg: 'rightFoot',
 };
 
 // BFS order — parent bones processed before children so their world matrices
@@ -197,9 +184,14 @@ export class DirectPoseApplier {
   // direction, so more damping here helps stability without shortening reach.
   private _armPoleZ = 0.5;
 
-  // Fraction of shoulder lateral tilt applied to spine/chest as a side-lean.
-  // 0 = yaw-only (original behaviour), ~0.3–0.5 = natural-looking lateral bend.
+  // Fraction of residual torso midpoint lean applied to spine/chest as a
+  // side-bend after hips orientation has already been solved.
   private _lateralBendScale = 0.35;
+  // Hips landmarks are the noisiest torso anchors when one leg is lifted: the
+  // pelvis line gets "dragged" by the active leg and the body appears to lean
+  // the wrong way. We cap how far the pelvis cross-axis may diverge from the
+  // shoulder line and progressively trust shoulders more beyond that point.
+  private _torsoAxisMaxDivergenceDeg = 20;
 
   // World Y of the avatar's ankle bones at rest pose (≈ floor level for ankles).
   // Clamping IK targets to >= _groundY prevents feet from sinking into the floor.
@@ -222,6 +214,8 @@ export class DirectPoseApplier {
 
   // Extra scratch quaternion for spine lateral bend (keeps _q1/_q2 semantics unchanged).
   private _q3 = new THREE.Quaternion();
+  // Scratch Euler for isolating hips yaw/pitch from lateral roll.
+  private _e1 = new THREE.Euler(0, 0, 0, 'YXZ');
 
   constructor(vrm: VRM, calibration?: MocapCalibration) {
     this.vrm = vrm;
@@ -407,7 +401,7 @@ export class DirectPoseApplier {
   private _buildCache(): void {
     const names = new Set<string>([
       ...Object.keys(LIMB_BONES),
-      ...Object.values(BONE_CHILD), // leftHand, leftFoot, …
+      ...Object.values(HUMANOID_DIRECTION_CHILD), // leftHand, leftFoot, …
       ...FINGER_VRM_NAMES,
       'hips', 'spine', 'chest', 'upperChest', 'neck', 'head',
       'leftShoulder', 'rightShoulder',
@@ -419,17 +413,12 @@ export class DirectPoseApplier {
   }
 
   private _computeRestAxes(): void {
-    for (const [bone, childName] of Object.entries(BONE_CHILD)) {
-      const boneNode  = this.nodeCache.get(bone);
-      const childNode = this.nodeCache.get(childName);
-      if (!boneNode || !childNode) continue;
-      // In the normalized (T-pose) skeleton, childNode.position is the local
-      // offset from bone origin to child origin — which IS the bone's local
-      // primary axis (modulo sign).
-      const axis = childNode.position.clone();
-      if (axis.lengthSq() < 1e-6) continue;
-      axis.normalize();
-      this.restLocalAxis.set(bone, axis);
+    // Use the avatar's actual raw-bone chain direction when available.
+    // This compensates bind-pose / A-pose drift while keeping the same
+    // quaternion math everywhere else in the applier.
+    const restAxes = buildHumanoidRestAxes(this.vrm);
+    for (const [bone, info] of restAxes) {
+      this.restLocalAxis.set(bone, info.rawAxis.clone());
     }
   }
 
@@ -459,6 +448,36 @@ export class DirectPoseApplier {
    */
   private _mpDirToVrmTorso(dx: number, dy: number, dz: number, out: THREE.Vector3): void {
     out.set(this._mirrorX ? -dx : dx, -dy, -dz / 3);
+  }
+
+  /**
+   * Stabilize the pelvis cross-axis using the shoulder line as a reference.
+   * MediaPipe hip landmarks often over-rotate in single-leg poses; true torso
+   * twist rarely exceeds ~20° in ordinary footage, so beyond that we treat the
+   * extra divergence as landmark noise and pull the pelvis axis toward the
+   * shoulders.
+   */
+  private _stabilizeTorsoCrossAxis(
+    hipAxis: THREE.Vector3,
+    shoulderAxis: THREE.Vector3,
+    out: THREE.Vector3,
+  ): void {
+    out.copy(hipAxis);
+    if (out.lengthSq() < 1e-6 || shoulderAxis.lengthSq() < 1e-6) return;
+
+    this._v6.copy(shoulderAxis);
+    if (out.dot(this._v6) < 0) this._v6.multiplyScalar(-1);
+
+    const angle = out.angleTo(this._v6);
+    const maxAngle = THREE.MathUtils.degToRad(this._torsoAxisMaxDivergenceDeg);
+    if (angle <= maxAngle) return;
+
+    const blend = THREE.MathUtils.clamp(
+      (angle - maxAngle) / THREE.MathUtils.degToRad(25),
+      0,
+      1,
+    );
+    out.lerp(this._v6, blend).normalize();
   }
 
   private _applyShoulders(frame: PoseFrame): void {
@@ -542,12 +561,18 @@ export class DirectPoseApplier {
     if (spineDir.lengthSq() < 1e-6) return;
     spineDir.normalize();
 
+    const shoulderAxis = this._v4;
+    this._mpDirToVrmTorso(rs.x - ls.x, rs.y - ls.y, rs.z - ls.z, shoulderAxis);
+    if (shoulderAxis.lengthSq() < 1e-6) return;
+    shoulderAxis.normalize();
+
     // Hip axis — damp Z 3× (same reason as spine). Sideways body turns still
     // work because they're captured by X/Y changes of the hip vector.
     const hipAxis = this._v2;
     this._mpDirToVrmTorso(rh.x - lh.x, rh.y - lh.y, rh.z - lh.z, hipAxis);
     if (hipAxis.lengthSq() < 1e-6) return;
     hipAxis.normalize();
+    this._stabilizeTorsoCrossAxis(hipAxis, shoulderAxis, hipAxis);
 
     // Build orthonormal basis: Z = X × Y, then re-orthogonalise X = Y × Z.
     const zAxis = this._v3.crossVectors(hipAxis, spineDir);
@@ -566,6 +591,13 @@ export class DirectPoseApplier {
     hipsNode.parent.updateWorldMatrix(true, false);
     hipsNode.parent.getWorldQuaternion(this._q2).invert();
     this._q1.premultiply(this._q2);             // parentInv * worldTarget = local
+
+    // Keep pelvis orientation stable: lateral torso bend should mostly live in
+    // spine/chest, otherwise hips side-roll and spine side-bend can stack and
+    // send the upper body to the opposite side in asymmetrical poses.
+    this._e1.setFromQuaternion(this._q1, 'YXZ');
+    this._e1.z = 0;
+    this._q1.setFromEuler(this._e1);
 
     if (this._spineLerp >= 1) hipsNode.quaternion.copy(this._q1);
     else                      hipsNode.quaternion.slerp(this._q1, this._spineLerp);
@@ -639,18 +671,13 @@ export class DirectPoseApplier {
     if (hipsVisible) {
       this._mpDirToVrmTorso(rh!.x - lh!.x, rh!.y - lh!.y, rh!.z - lh!.z, hipAxis);
       if (hipAxis.lengthSq() < 1e-6) return;
+      this._stabilizeTorsoCrossAxis(hipAxis, shoulderAxis, hipAxis);
     }
 
     // Transform shoulder axis into hips local frame
     hipsNode.updateWorldMatrix(true, false);
     hipsNode.getWorldQuaternion(this._q1).invert();
     shoulderAxis.applyQuaternion(this._q1);
-
-    // Capture lateral tilt BEFORE XZ projection.
-    // shoulderAxis.y / |shoulderAxis| ≈ sin(tilt angle): negative when the right
-    // shoulder is lower (character tilts right), positive when leaning left.
-    const axisLen = shoulderAxis.length();
-    const lateralTilt = axisLen > 1e-6 ? shoulderAxis.y / axisLen : 0;
 
     shoulderAxis.y = 0;
     if (shoulderAxis.lengthSq() < 1e-6) return;
@@ -669,11 +696,35 @@ export class DirectPoseApplier {
     // At T-pose both project to the same direction → identity (no baseline bias).
     const fullTwist = this._q1.setFromUnitVectors(hipAxis, shoulderAxis);
 
-    // Lateral bend: apply a fraction of the shoulder tilt as a side-lean rotation
-    // around the spine's local +Z axis. Rotation around +Z by a negative angle
-    // tilts +Y toward +X (lean right), matching lateralTilt < 0 when right-low.
-    if (Math.abs(lateralTilt) > 1e-4 && this._lateralBendScale > 1e-4) {
-      this._q3.setFromAxisAngle(this._v3.set(0, 0, 1), lateralTilt * this._lateralBendScale);
+    // Residual side-bend after hips orientation:
+    // use the shoulder-midpoint displacement relative to the hip midpoint,
+    // measured in hips-local space. This tracks actual torso lean, whereas
+    // shoulder-line slope mostly tracks one shoulder being higher/lower and can
+    // flip sign in crouched / asymmetric poses.
+    let lateralLean = 0;
+    if (hipsVisible) {
+      this._mpDirToVrmTorso(
+        (rs.x + ls.x) * 0.5 - (rh!.x + lh!.x) * 0.5,
+        (rs.y + ls.y) * 0.5 - (rh!.y + lh!.y) * 0.5,
+        (rs.z + ls.z) * 0.5 - (rh!.z + lh!.z) * 0.5,
+        this._v3,
+      );
+      if (this._v3.lengthSq() > 1e-6) {
+        this._v3.applyQuaternion(this._q1);
+        lateralLean = Math.atan2(this._v3.x, Math.max(1e-6, this._v3.y));
+      }
+    }
+
+    // Rotation around +Z by a negative angle tilts +Y toward +X (lean right).
+    if (Math.abs(lateralLean) > 1e-4 && this._lateralBendScale > 1e-4) {
+      this._q3.setFromAxisAngle(
+        this._v3.set(0, 0, 1),
+        THREE.MathUtils.clamp(
+          lateralLean * this._lateralBendScale,
+          THREE.MathUtils.degToRad(-20),
+          THREE.MathUtils.degToRad(20),
+        ),
+      );
       fullTwist.multiply(this._q3);
     }
 

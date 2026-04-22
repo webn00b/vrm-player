@@ -1,9 +1,9 @@
 /**
  * Offline animation-clip validator.
  *
- * Walks each QuaternionKeyframeTrack in a THREE.AnimationClip, maps its UUID
- * back to a VRM humanoid bone name (via the VRM passed in), and reports or
- * clamps keyframes that violate the rotation constraint for that bone.
+ * Walks each QuaternionKeyframeTrack in a THREE.AnimationClip, maps its target
+ * node back to a VRM humanoid bone name (via the VRM passed in), and reports
+ * or clamps keyframes that violate the rotation constraint for that bone.
  *
  * Used at BVH → VRMA retarget time so bad source data is flagged (and
  * optionally fixed) once at import rather than per-frame at playback.
@@ -44,22 +44,24 @@ const _quat = new THREE.Quaternion();
 const _euler = new THREE.Euler();
 
 /**
- * Build a map from normalized-bone-node UUID to VRM bone name.
- * The VRM animation clip's track names are of the form `<uuid>.quaternion`,
- * using the UUID of the normalized bone node on the target VRM.
+ * Build a map from normalized-bone-node identity to VRM bone name.
+ * Track names are usually `<node.name>.quaternion` in current three-vrm-animation,
+ * but older code may still target UUIDs, so we accept both.
  */
-function buildUuidToBone(vrm: VRM): Map<string, VRMHumanBoneName> {
+function buildTrackTargetToBone(vrm: VRM): Map<string, VRMHumanBoneName> {
   const map = new Map<string, VRMHumanBoneName>();
   const names = Object.keys(vrm.humanoid.humanBones) as VRMHumanBoneName[];
   for (const name of names) {
     const node = vrm.humanoid.getNormalizedBoneNode(name);
-    if (node) map.set(node.uuid, name);
+    if (!node) continue;
+    map.set(node.uuid, name);
+    map.set(node.name, name);
   }
   return map;
 }
 
-/** Extract the UUID portion of a track name "<uuid>.<property>". */
-function parseTrackUuid(trackName: string): string | null {
+/** Extract the track target portion of "<target>.<property>". */
+function parseTrackTarget(trackName: string): string | null {
   const dot = trackName.lastIndexOf('.');
   if (dot <= 0) return null;
   return trackName.substring(0, dot);
@@ -76,7 +78,7 @@ function validateOrClamp(
   opts: ValidateOptions,
 ): ClipReport {
   const constraints = opts.overrides ? mergeConstraints(opts.overrides) : DEFAULT_BONE_CONSTRAINTS;
-  const uuidToBone = buildUuidToBone(vrm);
+  const trackTargetToBone = buildTrackTargetToBone(vrm);
 
   const report: ClipReport = {
     clipName: clip.name,
@@ -91,9 +93,9 @@ function validateOrClamp(
   for (const track of clip.tracks) {
     if (!(track instanceof THREE.QuaternionKeyframeTrack)) continue;
 
-    const uuid = parseTrackUuid(track.name);
-    if (!uuid) continue;
-    const bone = uuidToBone.get(uuid);
+    const trackTarget = parseTrackTarget(track.name);
+    if (!trackTarget) continue;
+    const bone = trackTargetToBone.get(trackTarget);
     if (!bone) continue;
     const c = constraints[bone];
     if (!c) continue;

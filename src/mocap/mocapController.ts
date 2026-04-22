@@ -411,6 +411,8 @@ export class MocapController {
   /** Start camera + live pose preview. */
   async startLive(): Promise<void> {
     if (this._state !== 'off') return;
+    this._latestFrame = null;
+    this._frameRecorded = false;
     await this.detector.start();
     this._setState('live');
   }
@@ -441,6 +443,8 @@ export class MocapController {
    */
   async startFromFile(file: File): Promise<void> {
     if (this._state !== 'off') return;
+    this._latestFrame = null;
+    this._frameRecorded = false;
 
     // Recording from file: snap directly to detected pose, no torso dampening,
     // so the output BVH matches the source video instead of the smoothed preview.
@@ -464,7 +468,6 @@ export class MocapController {
   stop(): void {
     if (this._state === 'recording') this.recorder.stop(); // discard
     this.detector.stop();
-    this._latestFrame = null;
     this.applier.resetHipBaseline();
     this.applier.resetFootLock();
     this.faceApplier.reset();

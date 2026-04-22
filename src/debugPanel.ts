@@ -399,14 +399,15 @@ export function mountDebugPanel(
     clearInterval(framesTimer);
     const mocap = getMocap();
     if (state === 'off') {
-      statusLbl.textContent     = '📷 Camera off';
+      const hasFrozenFrame = !!mocap?.latestFrame;
+      statusLbl.textContent     = hasFrozenFrame ? '📷 Camera off (last frame)' : '📷 Camera off';
       camBtn.textContent        = 'Start';
       camBtn.classList.add('off');
       camBtn.disabled           = false;
       fileLabel.classList.add('off');
       recRow.style.display      = 'none';
       playRow.style.display     = 'none';
-      previewPanel.style.display  = 'none';
+      previewPanel.style.display  = hasFrozenFrame ? 'block' : 'none';
       mocap?.setCanvas(null);
       // Auto-stop debug recorder when file processing completes
       if (dbgRecorder.active) dbgRecorder.stop();
