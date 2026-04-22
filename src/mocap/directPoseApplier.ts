@@ -17,6 +17,13 @@ const LM = {
   LEFT_ANKLE:     27, RIGHT_ANKLE:    28,
 } as const;
 
+const FACE = {
+  MOUTH_TOP: 13,
+  MOUTH_BOTTOM: 14,
+  MOUTH_LEFT: 61,
+  MOUTH_RIGHT: 291,
+} as const;
+
 // VRM bone → [parent-landmark index, child-landmark index].
 // Swapped sides for mirror effect: person's right hand drives character's LEFT
 // bones (which in VRM T-pose appear on viewer's right side when character
@@ -165,6 +172,29 @@ export class DirectPoseApplier {
     rightArmPoleSmoothed: new THREE.Vector3(),
     leftAnkleTarget:  new THREE.Vector3(),
     rightAnkleTarget: new THREE.Vector3(),
+    leftArmRawScale: Number.NaN,
+    rightArmRawScale: Number.NaN,
+    leftArmEffectiveScale: Number.NaN,
+    rightArmEffectiveScale: Number.NaN,
+    leftArmSegmentScaleCap: Number.NaN,
+    rightArmSegmentScaleCap: Number.NaN,
+    leftArmMidpointBlend: Number.NaN,
+    rightArmMidpointBlend: Number.NaN,
+    leftArmHandsTogetherBlend: Number.NaN,
+    rightArmHandsTogetherBlend: Number.NaN,
+    leftArmChestPrayerBlend: Number.NaN,
+    rightArmChestPrayerBlend: Number.NaN,
+    leftArmWristFrontBlend: Number.NaN,
+    rightArmWristFrontBlend: Number.NaN,
+    leftArmFrontPoseBlend: Number.NaN,
+    rightArmFrontPoseBlend: Number.NaN,
+    leftArmFaceNearBlend: Number.NaN,
+    rightArmFaceNearBlend: Number.NaN,
+    torsoForwardLeanRaw: Number.NaN,
+    torsoForwardLeanApplied: Number.NaN,
+    torsoLateralLeanRaw: Number.NaN,
+    torsoLateralLeanApplied: Number.NaN,
+    torsoLateralLeanGain: Number.NaN,
     hasArm:         false,
     hasLeg:         false,
     leftFootLocked:  false,
@@ -198,6 +228,11 @@ export class DirectPoseApplier {
   // Fraction of residual torso midpoint lean applied to spine/chest as a
   // side-bend after hips orientation has already been solved.
   private _lateralBendScale = 0.35;
+  // Larger side leans are currently underrepresented because the residual
+  // torso midpoint angle is already conservative and then gets split across
+  // spine+chest. For pronounced bends we boost the gain adaptively, while
+  // keeping small/noisy leans on the original lower gain.
+  private _lateralBendScaleMax = 0.7;
   // Residual torso forward bend applied to spine/chest after hips orientation.
   // Uses full torso Z (no /3 damping) so pronounced bows / forward leans still
   // read correctly even though the hips basis stays conservative.
@@ -373,6 +408,29 @@ export class DirectPoseApplier {
     this.debugTargets.hasLeg = false;
     this.debugTargets.leftFootLocked = false;
     this.debugTargets.rightFootLocked = false;
+    this.debugTargets.leftArmRawScale = Number.NaN;
+    this.debugTargets.rightArmRawScale = Number.NaN;
+    this.debugTargets.leftArmEffectiveScale = Number.NaN;
+    this.debugTargets.rightArmEffectiveScale = Number.NaN;
+    this.debugTargets.leftArmSegmentScaleCap = Number.NaN;
+    this.debugTargets.rightArmSegmentScaleCap = Number.NaN;
+    this.debugTargets.leftArmMidpointBlend = Number.NaN;
+    this.debugTargets.rightArmMidpointBlend = Number.NaN;
+    this.debugTargets.leftArmHandsTogetherBlend = Number.NaN;
+    this.debugTargets.rightArmHandsTogetherBlend = Number.NaN;
+    this.debugTargets.leftArmChestPrayerBlend = Number.NaN;
+    this.debugTargets.rightArmChestPrayerBlend = Number.NaN;
+    this.debugTargets.leftArmWristFrontBlend = Number.NaN;
+    this.debugTargets.rightArmWristFrontBlend = Number.NaN;
+    this.debugTargets.leftArmFrontPoseBlend = Number.NaN;
+    this.debugTargets.rightArmFrontPoseBlend = Number.NaN;
+    this.debugTargets.leftArmFaceNearBlend = Number.NaN;
+    this.debugTargets.rightArmFaceNearBlend = Number.NaN;
+    this.debugTargets.torsoForwardLeanRaw = Number.NaN;
+    this.debugTargets.torsoForwardLeanApplied = Number.NaN;
+    this.debugTargets.torsoLateralLeanRaw = Number.NaN;
+    this.debugTargets.torsoLateralLeanApplied = Number.NaN;
+    this.debugTargets.torsoLateralLeanGain = Number.NaN;
 
     // Torso first — its rotations propagate to limbs via parent world matrices.
     this._applyHips(frame);
@@ -773,6 +831,7 @@ export class DirectPoseApplier {
     // measured in hips-local space. Unlike the conservative torso basis above,
     // this uses the full MediaPipe Z so strong forward bows still show up in
     // spine/chest even when hips pitch remains damped.
+    let forwardLeanRaw = 0;
     let forwardLean = 0;
     let lateralLean = 0;
     if (hipsVisible) {
@@ -784,7 +843,7 @@ export class DirectPoseApplier {
       );
       if (this._v3.lengthSq() > 1e-6) {
         this._v3.applyQuaternion(this._q2);
-        const forwardLeanRaw = Math.atan2(this._v3.z, Math.max(1e-6, this._v3.y));
+        forwardLeanRaw = Math.atan2(this._v3.z, Math.max(1e-6, this._v3.y));
         if (this._torsoForwardBaseline == null) this._torsoForwardBaseline = forwardLeanRaw;
         forwardLean = forwardLeanRaw - this._torsoForwardBaseline;
         // Keep a small absolute forward component so clips that are globally
@@ -794,6 +853,10 @@ export class DirectPoseApplier {
         lateralLean = Math.atan2(this._v3.x, Math.max(1e-6, this._v3.y));
       }
     }
+
+    this.debugTargets.torsoForwardLeanRaw = forwardLeanRaw;
+    this.debugTargets.torsoForwardLeanApplied = forwardLean;
+    this.debugTargets.torsoLateralLeanRaw = lateralLean;
 
     if (Math.abs(forwardLean) > 1e-4 && this._forwardBendScale > 1e-4) {
       this._q3.setFromAxisAngle(
@@ -807,15 +870,29 @@ export class DirectPoseApplier {
       fullTwist.multiply(this._q3);
     }
 
-    // Rotation around +Z by a negative angle tilts +Y toward +X (lean right).
+    // In the mirrored VRM mapping the hips-local X sign of the residual torso
+    // midpoint displacement is opposite to the sign needed for chest roll, so
+    // apply the lateral bend with the negated sign here.
     if (Math.abs(lateralLean) > 1e-4 && this._lateralBendScale > 1e-4) {
+      const lateralLeanGain = THREE.MathUtils.lerp(
+        this._lateralBendScale,
+        Math.max(this._lateralBendScale, this._lateralBendScaleMax),
+        THREE.MathUtils.clamp(
+          (Math.abs(lateralLean) - THREE.MathUtils.degToRad(5)) / THREE.MathUtils.degToRad(12),
+          0,
+          1,
+        ),
+      );
+      const lateralApplied = THREE.MathUtils.clamp(
+        -lateralLean * lateralLeanGain,
+        THREE.MathUtils.degToRad(-28),
+        THREE.MathUtils.degToRad(28),
+      );
+      this.debugTargets.torsoLateralLeanGain = lateralLeanGain;
+      this.debugTargets.torsoLateralLeanApplied = lateralApplied;
       this._q3.setFromAxisAngle(
         this._v3.set(0, 0, 1),
-        THREE.MathUtils.clamp(
-          lateralLean * this._lateralBendScale,
-          THREE.MathUtils.degToRad(-20),
-          THREE.MathUtils.degToRad(20),
-        ),
+        lateralApplied,
       );
       fullTwist.multiply(this._q3);
     }
@@ -913,8 +990,23 @@ export class DirectPoseApplier {
     otherUpperNode.updateWorldMatrix(false, false);
     const midAvatarShoulder = this._v6.copy(shoulderWorld).add(otherUpperNode.getWorldPosition(this._v4)).multiplyScalar(0.5);
 
-    const armScale = calib.armScale(side);
+    const rawArmScale = calib.armScale(side);
+    let armScale = rawArmScale;
     const shoulderScale = calib.shoulderWidthRatio();
+    const avatarArmLen = calib.upperArmLength(side) + calib.lowerArmLength(side);
+    const perfUpperLen = Math.hypot(pe.x - ps.x, pe.y - ps.y, pe.z - ps.z);
+    const perfLowerLen = Math.hypot(pw.x - pe.x, pw.y - pe.y, pw.z - pe.z);
+    const perfSegmentLen = perfUpperLen + perfLowerLen;
+    let segmentScaleCap = Number.NaN;
+    if (armScale > 1.02 && avatarArmLen > 1e-4 && perfSegmentLen > 1e-4) {
+      // Shoulder→wrist "max extension" calibration underestimates true arm
+      // length on videos where the performer never fully straightens the arm.
+      // That makes wrist targets overshoot the chain, so IK goes almost fully
+      // straight and the elbow appears not to bend. Cap overscaled targets by
+      // the instantaneous shoulder→elbow + elbow→wrist length instead.
+      segmentScaleCap = (avatarArmLen / perfSegmentLen) * 1.05;
+      armScale = Math.min(armScale, segmentScaleCap);
+    }
     // Same-side shoulder anchor is better when the wrist is still on its own
     // side of the torso; midpoint anchoring is only needed once the arm folds
     // inward toward / across the centerline. As the wrist approaches the
@@ -940,17 +1032,15 @@ export class DirectPoseApplier {
       }
     }
 
-    const foldReachScale = THREE.MathUtils.lerp(armScale, shoulderScale, midpointBlend);
-
     // Performer wrist offset from shoulder midpoint → VRM world.
     this._mpDeltaToVrm(pw.x - perfMidX, pw.y - perfMidY, pw.z - perfMidZ, this._v1);
     this._v1.x *= shoulderScale;
-    this._v1.y *= foldReachScale;
-    this._v1.z *= foldReachScale * this._armZAttenuation;
+    this._v1.y *= armScale;
+    this._v1.z *= armScale * this._armZAttenuation;
     const midpointTarget = this._v4.copy(midAvatarShoulder).add(this._v1);
 
     this._mpDeltaToVrm(pw.x - ps.x, pw.y - ps.y, pw.z - ps.z, this._v2);
-    this._v2.multiplyScalar(foldReachScale);
+    this._v2.multiplyScalar(armScale);
     this._v2.z *= this._armZAttenuation;
     const target = this._v3.copy(shoulderWorld).add(this._v2);
     target.lerp(midpointTarget, midpointBlend);
@@ -981,11 +1071,10 @@ export class DirectPoseApplier {
           const wristMidX = (pw.x + otherWrist.x) * 0.5;
           const wristMidY = (pw.y + otherWrist.y) * 0.5;
           const wristMidZ = (pw.z + otherWrist.z) * 0.5;
-          const centerReachScale = THREE.MathUtils.lerp(foldReachScale, shoulderScale, handsTogetherBlend);
           this._mpDeltaToVrm(wristMidX - perfMidX, wristMidY - perfMidY, wristMidZ - perfMidZ, this._v1);
           this._v1.x *= shoulderScale;
-          this._v1.y *= centerReachScale;
-          this._v1.z *= centerReachScale * this._armZAttenuation;
+          this._v1.y *= armScale;
+          this._v1.z *= armScale * this._armZAttenuation;
           this._v2.copy(midAvatarShoulder).add(this._v1);
           target.lerp(this._v2, handsTogetherBlend);
 
@@ -996,7 +1085,7 @@ export class DirectPoseApplier {
           if (this._v4.lengthSq() > 1e-6) this._v4.normalize();
           else this._v4.set(side === 'left' ? -1 : 1, 0, 0);
           const desiredWristGap = THREE.MathUtils.clamp(
-            wristGap * centerReachScale,
+            wristGap * shoulderScale,
             calib.avatarShoulderWidth * 0.12,
             calib.avatarShoulderWidth * 0.22,
           );
@@ -1005,24 +1094,180 @@ export class DirectPoseApplier {
       }
     }
 
+    const lh = lms[LM.LEFT_HIP], rh = lms[LM.RIGHT_HIP];
+    const perfHipMidZ = lh && rh ? (lh.z + rh.z) * 0.5 : perfMidZ;
+    const wristDirectLen = Math.hypot(pw.x - ps.x, pw.y - ps.y, pw.z - ps.z);
+    const armBendRatio = perfSegmentLen > 1e-4
+      ? THREE.MathUtils.clamp(1 - wristDirectLen / perfSegmentLen, 0, 1)
+      : 0;
+    const wristBelowShoulders = shoulderSpan > 1e-4
+      ? THREE.MathUtils.clamp((pw.y - perfMidY) / (shoulderSpan * 0.45), 0, 1)
+      : 0;
+    const chestPrayerBlend = handsTogetherBlend * THREE.MathUtils.clamp((armBendRatio - 0.10) / 0.22, 0, 1) * wristBelowShoulders;
+    if (chestPrayerBlend > 1e-4) {
+      // Hands-together-at-chest poses should fold back toward the sternum, not
+      // keep the same "forward reach" response as true reach-toward-camera
+      // poses. In prayer / chest poses the hands should drop lower while also
+      // staying closer to the torso depth.
+      const chestNode =
+        this.nodeCache.get('upperChest') ??
+        this.nodeCache.get('chest') ??
+        this.nodeCache.get('spine');
+      const neckNode = this.nodeCache.get('neck');
+      const prayerYRatio = THREE.MathUtils.lerp(
+        1,
+        THREE.MathUtils.clamp(rawArmScale / Math.max(1e-4, armScale), 1, 1.6),
+        chestPrayerBlend,
+      );
+      const chestDepthScale = Math.max(shoulderScale, calib.bodyScale());
+      const prayerZRatio = THREE.MathUtils.lerp(
+        1,
+        chestDepthScale / Math.max(1e-4, armScale),
+        chestPrayerBlend * 0.9,
+      );
+      this._v1.copy(target).sub(midAvatarShoulder);
+      this._v1.y *= prayerYRatio;
+      this._v1.z *= prayerZRatio;
+      if (chestNode) {
+        chestNode.updateWorldMatrix(true, false);
+        chestNode.getWorldPosition(this._v2);
+        if (neckNode) {
+          neckNode.updateWorldMatrix(true, false);
+          neckNode.getWorldPosition(this._v4);
+          // In close prayer poses the wrist midpoint tends to sit just under the
+          // neck rather than around the middle of the chest. Blend the prayer
+          // anchor upward so folded hands can settle nearer the collarbone.
+          this._v2.lerp(this._v4, THREE.MathUtils.lerp(0.2, 0.55, chestPrayerBlend));
+        }
+        this._v2.add(this._v1);
+        target.lerp(this._v2, chestPrayerBlend);
+      } else {
+        target.copy(midAvatarShoulder).add(this._v1);
+      }
+    }
+
+    let faceNearBlend = 0;
+    const face = frame.faceLandmarks;
+    const bodyNorm = frame.landmarks;
+    const hand = frame.hands.find((h) => h.side === (side === 'left' ? 'Left' : 'Right'));
+    const lShoulderNorm = bodyNorm[LM.LEFT_SHOULDER];
+    const rShoulderNorm = bodyNorm[LM.RIGHT_SHOULDER];
+    const mouthTop = face[FACE.MOUTH_TOP];
+    const mouthBottom = face[FACE.MOUTH_BOTTOM];
+    const mouthLeft = face[FACE.MOUTH_LEFT];
+    const mouthRight = face[FACE.MOUTH_RIGHT];
+    if (
+      hand?.landmarks.length &&
+      lShoulderNorm && rShoulderNorm &&
+      mouthTop && mouthBottom && mouthLeft && mouthRight
+    ) {
+      const tipA = hand.landmarks[8];
+      const tipB = hand.landmarks[12];
+      const wristNorm = hand.landmarks[0];
+      if (tipA && tipB && wristNorm) {
+        const shoulderSpan2D = Math.hypot(
+          rShoulderNorm.x - lShoulderNorm.x,
+          rShoulderNorm.y - lShoulderNorm.y,
+        );
+        if (shoulderSpan2D > 1e-4) {
+          const tipX = (tipA.x + tipB.x) * 0.5;
+          const tipY = Math.min(tipA.y, tipB.y);
+          const mouthX = (mouthLeft.x + mouthRight.x) * 0.5;
+          const mouthY = (mouthTop.y + mouthBottom.y) * 0.5;
+          const mouthSpan2D = Math.hypot(mouthRight.x - mouthLeft.x, mouthRight.y - mouthLeft.y);
+          const faceXAllowance = Math.max(mouthSpan2D * 1.4, shoulderSpan2D * 0.16);
+          const faceYAllowance = shoulderSpan2D * 0.20;
+          const dxBlend = THREE.MathUtils.clamp((faceXAllowance - Math.abs(tipX - mouthX)) / Math.max(1e-4, faceXAllowance), 0, 1);
+          const dyBlend = THREE.MathUtils.clamp((faceYAllowance - Math.abs(tipY - mouthY)) / Math.max(1e-4, faceYAllowance), 0, 1);
+          const wristLiftNeed = THREE.MathUtils.clamp((wristNorm.y - mouthY) / Math.max(1e-4, shoulderSpan2D * 0.35), 0, 1);
+          faceNearBlend = handsTogetherBlend * dxBlend * dyBlend * wristLiftNeed;
+        }
+      }
+    }
+
+    // Midpoint anchoring is helpful for generic crossed / inward folds, but in
+    // strong prayer poses it should not keep reclassifying the wrists as
+    // forward-reaching targets. Suppress midpoint-driven front bias when the
+    // dedicated prayer branch is already active.
+    const frontPoseBlendBase = Math.max(
+      midpointBlend * (1 - chestPrayerBlend * 0.95),
+      handsTogetherBlend * (1 - chestPrayerBlend * 0.85),
+    );
+
     // Folded/front-hand poses often have decent wrist-relative depth, but the
     // torso retarget stays more conservative to avoid camera-follow on the
     // upper body. In those cases the wrists can end up "inside/behind" the
     // chest even though the source hands are clearly in front. Re-inject a
     // portion of performer chest depth into the wrist target only when the
     // wrist is near the centerline and closer to the camera than the shoulders.
-    const frontPoseBlendBase = Math.max(midpointBlend, handsTogetherBlend);
     const wristForward = Math.max(0, perfMidZ - pw.z);
     const wristFrontBlend = shoulderSpan > 1e-4
       ? THREE.MathUtils.clamp(wristForward / (shoulderSpan * 0.18), 0, 1)
       : 0;
-    const frontPoseBlend = frontPoseBlendBase * wristFrontBlend;
-    const lh = lms[LM.LEFT_HIP], rh = lms[LM.RIGHT_HIP];
+    const frontPoseBlend = frontPoseBlendBase * wristFrontBlend * (1 - faceNearBlend * 0.9);
     if (frontPoseBlend > 1e-4 && lh && rh && this._visible(lh) && this._visible(rh)) {
-      const perfHipMidZ = (lh.z + rh.z) * 0.5;
       this._mpDeltaToVrm(0, 0, perfMidZ - perfHipMidZ, this._v1);
       const chestForwardBias = Math.max(0, this._v1.z) * calib.bodyScale() * 0.9 * frontPoseBlend;
       target.z += chestForwardBias;
+    }
+
+    if (faceNearBlend > 1e-4) {
+      const neckNode = this.nodeCache.get('neck') ?? this.nodeCache.get('upperChest') ?? this.nodeCache.get('chest');
+      const headNode = this.nodeCache.get('head');
+      if (neckNode) {
+        neckNode.updateWorldMatrix(true, false);
+        neckNode.getWorldPosition(this._v2);
+        if (headNode) {
+          headNode.updateWorldMatrix(true, false);
+          headNode.getWorldPosition(this._v4);
+          // Finger tips touching lips usually means the wrist sits just under the
+          // mouth/chin line. Lift the anchor above the chest toward the lower face.
+          this._v2.lerp(this._v4, THREE.MathUtils.lerp(0.12, 0.30, faceNearBlend));
+        }
+        this._v1.copy(target).sub(midAvatarShoulder);
+        this._v1.x *= THREE.MathUtils.lerp(1, 0.35, faceNearBlend);
+        this._v1.y *= THREE.MathUtils.lerp(1, 0.08, faceNearBlend);
+        this._v1.z *= THREE.MathUtils.lerp(1, 0.28, faceNearBlend);
+        this._v2.add(this._v1);
+        target.lerp(this._v2, faceNearBlend);
+      }
+    }
+
+    if (chestPrayerBlend > 1e-4 || faceNearBlend > 1e-4) {
+      // Even after chest anchoring, some prayer poses still leave the wrist
+      // target almost at full arm reach, which makes the IK chain visually
+      // straighten. Clamp prayer poses to a clearly bent range.
+      const foldBlend = Math.max(chestPrayerBlend, faceNearBlend);
+      const foldedReachRatio = THREE.MathUtils.lerp(0.82, 0.74, faceNearBlend);
+      const prayerReachMax = avatarArmLen * THREE.MathUtils.lerp(1, foldedReachRatio, foldBlend);
+      this._v1.copy(target).sub(shoulderWorld);
+      const reach = this._v1.length();
+      if (reach > prayerReachMax && reach > 1e-4) {
+        this._v1.multiplyScalar(prayerReachMax / reach);
+        target.copy(shoulderWorld).add(this._v1);
+      }
+    }
+
+    if (side === 'left') {
+      this.debugTargets.leftArmRawScale = rawArmScale;
+      this.debugTargets.leftArmEffectiveScale = armScale;
+      this.debugTargets.leftArmSegmentScaleCap = segmentScaleCap;
+      this.debugTargets.leftArmMidpointBlend = midpointBlend;
+      this.debugTargets.leftArmHandsTogetherBlend = handsTogetherBlend;
+      this.debugTargets.leftArmChestPrayerBlend = chestPrayerBlend;
+      this.debugTargets.leftArmWristFrontBlend = wristFrontBlend;
+      this.debugTargets.leftArmFrontPoseBlend = frontPoseBlend;
+      this.debugTargets.leftArmFaceNearBlend = faceNearBlend;
+    } else {
+      this.debugTargets.rightArmRawScale = rawArmScale;
+      this.debugTargets.rightArmEffectiveScale = armScale;
+      this.debugTargets.rightArmSegmentScaleCap = segmentScaleCap;
+      this.debugTargets.rightArmMidpointBlend = midpointBlend;
+      this.debugTargets.rightArmHandsTogetherBlend = handsTogetherBlend;
+      this.debugTargets.rightArmChestPrayerBlend = chestPrayerBlend;
+      this.debugTargets.rightArmWristFrontBlend = wristFrontBlend;
+      this.debugTargets.rightArmFrontPoseBlend = frontPoseBlend;
+      this.debugTargets.rightArmFaceNearBlend = faceNearBlend;
     }
 
     this.debugTargets[side === 'left' ? 'leftWristTarget' : 'rightWristTarget'].copy(target);
@@ -1033,14 +1278,15 @@ export class DirectPoseApplier {
     // much stabler bend hint than a midpoint-anchored elbow point when the hand
     // is close to the chest and the wrist target lies almost on the shoulder→hand
     // line.
+    const elbowPoleZ = THREE.MathUtils.lerp(this._armPoleZ, 1, frontPoseBlendBase);
     this._mpDeltaToVrm(pe.x - ps.x, pe.y - ps.y, pe.z - ps.z, this._v2);
-    this._v2.multiplyScalar(foldReachScale);
-    this._v2.z *= this._armPoleZ;
+    this._v2.multiplyScalar(armScale);
+    this._v2.z *= elbowPoleZ;
     const elbowTarget = this._v6.copy(shoulderWorld).add(this._v2);
     this.debugTargets[side === 'left' ? 'leftElbowTarget' : 'rightElbowTarget'].copy(elbowTarget);
 
     this._mpDirToVrm(pe.x - ps.x, pe.y - ps.y, pe.z - ps.z, this._v2);
-    this._v2.z *= this._armPoleZ;
+    this._v2.z *= elbowPoleZ;
     if (this._v2.lengthSq() < 1e-6) this._v2.set(0, -1, 0);
     this.debugTargets[side === 'left' ? 'leftArmPoleRaw' : 'rightArmPoleRaw'].copy(this._v2);
     const smoothed = this._polesArm[side];

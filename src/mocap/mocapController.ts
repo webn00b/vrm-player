@@ -24,6 +24,7 @@ export class MocapController {
 
   private _state: MocapState = 'off';
   private _recordingIndex = 0;
+  private _poseExportIndex = 0;
 
   // Latest detected frame — applied each render tick via applyLatestFrame()
   // so mocap overlays on top of the BVH mixer output rather than fighting it.
@@ -416,6 +417,19 @@ export class MocapController {
     const name    = `mocap_${++this._recordingIndex}`;
     downloadBvh(bvhText, `${name}.bvh`);
     this.onBvhReady?.(bvhText, name);
+  }
+
+  /**
+   * Export the avatar's current pose as a single-frame BVH without touching the
+   * live recorder buffer. Safe to call during live preview or active recording.
+   */
+  exportCurrentPoseBvh(): string {
+    const poseRecorder = new BvhRecorder();
+    poseRecorder.captureFrame((name) => this.applier.getQuaternion(name));
+    const bvhText = poseRecorder.stop();
+    const name = `pose_${++this._poseExportIndex}`;
+    downloadBvh(bvhText, `${name}.bvh`);
+    return name;
   }
 
   // ── State transitions ──────────────────────────────────────────────────────

@@ -155,6 +155,10 @@ export function mountDebugPanel(
         <input type="file" id="mocap-file-input" accept="video/*" style="display:none">
       </div>
       <div class="dbg-row">
+        <span class="dbg-label">📤 Current pose</span>
+        <button class="dbg-toggle off" id="mocap-export-pose-btn" title="Download current avatar pose as a 1-frame BVH">Export .bvh</button>
+      </div>
+      <div class="dbg-row">
         <span class="dbg-label">🎯 Pose model</span>
         <div style="display:flex;gap:3px">
           <button class="dbg-toggle off" data-quality="lite">lite</button>
@@ -386,6 +390,7 @@ export function mountDebugPanel(
   const stepFwdBtn  = root.querySelector<HTMLButtonElement>('#mocap-step-fwd-btn')!;
   const grabBtn     = root.querySelector<HTMLButtonElement>('#mocap-grab-btn')!;
   const flushBtn    = root.querySelector<HTMLButtonElement>('#mocap-flush-btn')!;
+  const exportPoseBtn = root.querySelector<HTMLButtonElement>('#mocap-export-pose-btn')!;
   const statusLbl   = root.querySelector<HTMLElement>('#mocap-status-label')!;
   const framesLbl   = root.querySelector<HTMLElement>('#mocap-frames')!;
   const previewPanel = document.getElementById('mocap-preview-panel')!;
@@ -780,6 +785,25 @@ export function mountDebugPanel(
     m.flushGrabbed();
   });
 
+  exportPoseBtn.addEventListener('click', () => {
+    const m = getMocap();
+    if (!m) return;
+    const prevText = exportPoseBtn.textContent || 'Export .bvh';
+    exportPoseBtn.textContent = '…';
+    exportPoseBtn.disabled = true;
+    try {
+      const name = m.exportCurrentPoseBvh();
+      exportPoseBtn.textContent = 'Saved';
+      exportPoseBtn.title = `Downloaded ${name}.bvh`;
+    } finally {
+      window.setTimeout(() => {
+        exportPoseBtn.textContent = prevText;
+        exportPoseBtn.title = 'Download current avatar pose as a 1-frame BVH';
+        exportPoseBtn.disabled = false;
+      }, 900);
+    }
+  });
+
   // ── Tuning-panel wiring (all elements live in #mocap-tuning-panel) ───────
 
   const recalBtn  = document.querySelector<HTMLButtonElement>('#mocap-recal-btn')!;
@@ -1067,6 +1091,15 @@ export function mountDebugPanel(
     elbowTarget: THREE.Vector3 | null;
     poleRaw: THREE.Vector3 | null;
     poleSmoothed: THREE.Vector3 | null;
+    rawScale: number;
+    effectiveScale: number;
+    segmentScaleCap: number;
+    midpointBlend: number;
+    handsTogetherBlend: number;
+    chestPrayerBlend: number;
+    wristFrontBlend: number;
+    frontPoseBlend: number;
+    faceNearBlend: number;
   };
 
   const skelRow = (label: string, value: string): string =>
@@ -1237,6 +1270,17 @@ export function mountDebugPanel(
       target,
       poleRaw: armDebug.poleRaw,
       poleSmoothed: armDebug.poleSmoothed,
+      solver: {
+        rawScale: armDebug.rawScale,
+        effectiveScale: armDebug.effectiveScale,
+        segmentScaleCap: armDebug.segmentScaleCap,
+        midpointBlend: armDebug.midpointBlend,
+        handsTogetherBlend: armDebug.handsTogetherBlend,
+        chestPrayerBlend: armDebug.chestPrayerBlend,
+        faceNearBlend: armDebug.faceNearBlend,
+        wristFrontBlend: armDebug.wristFrontBlend,
+        frontPoseBlend: armDebug.frontPoseBlend,
+      },
       reachPercent,
       errors: {
         shoulderGreenToNorm:   distVec(performerAvatarShoulder, actualNormShoulder),
@@ -1276,6 +1320,13 @@ export function mountDebugPanel(
     rawAvatar: AvatarJointPositions,
     bodyScale: number,
     scales: LimbScales,
+    torsoDebug: {
+      forwardLeanRaw: number;
+      forwardLeanApplied: number;
+      lateralLeanRaw: number;
+      lateralLeanApplied: number;
+      lateralLeanGain: number;
+    },
   ) => {
     const projectedLeftShoulder  = computePerformerAvatarSpacePoint(frame, normalizedAvatar.hips, bodyScale, scales, 12);
     const projectedRightShoulder = computePerformerAvatarSpacePoint(frame, normalizedAvatar.hips, bodyScale, scales, 11);
@@ -1366,6 +1417,13 @@ export function mountDebugPanel(
         torsoDepthNorm:     deltaAxis(normShoulderMid, normHipMid, 'z'),
         torsoDepthRaw:      deltaAxis(rawShoulderMid, rawHipMid, 'z'),
       },
+      solver: {
+        forwardLeanRaw: torsoDebug.forwardLeanRaw,
+        forwardLeanApplied: torsoDebug.forwardLeanApplied,
+        lateralLeanRaw: torsoDebug.lateralLeanRaw,
+        lateralLeanApplied: torsoDebug.lateralLeanApplied,
+        lateralLeanGain: torsoDebug.lateralLeanGain,
+      },
     };
   };
 
@@ -1406,6 +1464,15 @@ export function mountDebugPanel(
         elbowTarget: dt.hasArm ? dt.leftElbowTarget : null,
         poleRaw: dt.hasArm ? dt.leftArmPoleRaw : null,
         poleSmoothed: dt.hasArm ? dt.leftArmPoleSmoothed : null,
+        rawScale: dt.hasArm ? dt.leftArmRawScale : Number.NaN,
+        effectiveScale: dt.hasArm ? dt.leftArmEffectiveScale : Number.NaN,
+        segmentScaleCap: dt.hasArm ? dt.leftArmSegmentScaleCap : Number.NaN,
+        midpointBlend: dt.hasArm ? dt.leftArmMidpointBlend : Number.NaN,
+        handsTogetherBlend: dt.hasArm ? dt.leftArmHandsTogetherBlend : Number.NaN,
+        chestPrayerBlend: dt.hasArm ? dt.leftArmChestPrayerBlend : Number.NaN,
+        wristFrontBlend: dt.hasArm ? dt.leftArmWristFrontBlend : Number.NaN,
+        frontPoseBlend: dt.hasArm ? dt.leftArmFrontPoseBlend : Number.NaN,
+        faceNearBlend: dt.hasArm ? dt.leftArmFaceNearBlend : Number.NaN,
       },
       dt.hasArm ? dt.leftWristTarget : null,
       reach.armL,
@@ -1421,6 +1488,15 @@ export function mountDebugPanel(
         elbowTarget: dt.hasArm ? dt.rightElbowTarget : null,
         poleRaw: dt.hasArm ? dt.rightArmPoleRaw : null,
         poleSmoothed: dt.hasArm ? dt.rightArmPoleSmoothed : null,
+        rawScale: dt.hasArm ? dt.rightArmRawScale : Number.NaN,
+        effectiveScale: dt.hasArm ? dt.rightArmEffectiveScale : Number.NaN,
+        segmentScaleCap: dt.hasArm ? dt.rightArmSegmentScaleCap : Number.NaN,
+        midpointBlend: dt.hasArm ? dt.rightArmMidpointBlend : Number.NaN,
+        handsTogetherBlend: dt.hasArm ? dt.rightArmHandsTogetherBlend : Number.NaN,
+        chestPrayerBlend: dt.hasArm ? dt.rightArmChestPrayerBlend : Number.NaN,
+        wristFrontBlend: dt.hasArm ? dt.rightArmWristFrontBlend : Number.NaN,
+        frontPoseBlend: dt.hasArm ? dt.rightArmFrontPoseBlend : Number.NaN,
+        faceNearBlend: dt.hasArm ? dt.rightArmFaceNearBlend : Number.NaN,
       },
       dt.hasArm ? dt.rightWristTarget : null,
       reach.armR,
@@ -1431,6 +1507,13 @@ export function mountDebugPanel(
       avatarRaw,
       bodyScale,
       { ...scales, armL: scales.armL, armR: scales.armR },
+      {
+        forwardLeanRaw: dt.torsoForwardLeanRaw,
+        forwardLeanApplied: dt.torsoForwardLeanApplied,
+        lateralLeanRaw: dt.torsoLateralLeanRaw,
+        lateralLeanApplied: dt.torsoLateralLeanApplied,
+        lateralLeanGain: dt.torsoLateralLeanGain,
+      },
     );
 
     return {
@@ -1503,6 +1586,11 @@ export function mountDebugPanel(
         ${skelRow('Err sh axis G→R', fmtDeg(torso.errors.shoulderAxisGreenToRaw))}
         ${skelRow('Err hip axis G→N', fmtDeg(torso.errors.hipAxisGreenToNorm))}
         ${skelRow('Err hip axis G→R', fmtDeg(torso.errors.hipAxisGreenToRaw))}
+        ${skelRow('Torso fwd raw', fmtDeg(torso.solver.forwardLeanRaw))}
+        ${skelRow('Torso fwd applied', fmtDeg(torso.solver.forwardLeanApplied))}
+        ${skelRow('Torso lat raw', fmtDeg(torso.solver.lateralLeanRaw))}
+        ${skelRow('Torso lat applied', fmtDeg(torso.solver.lateralLeanApplied))}
+        ${skelRow('Torso lat gain', fmtNum(torso.solver.lateralLeanGain))}
         ${skelRow('Δ shoulder width G→N', fmtCm(torso.errors.shoulderWidthGreenToNorm))}
         ${skelRow('Δ shoulder width G→R', fmtCm(torso.errors.shoulderWidthGreenToRaw))}
         ${skelRow('Δ torso height G→N', fmtCm(torso.errors.torsoHeightGreenToNorm))}
@@ -1530,6 +1618,14 @@ export function mountDebugPanel(
         ${skelRow('Blue target', fmtVecHtml(arm.target))}
         ${skelRow('Pole raw', fmtVecHtml(arm.poleRaw))}
         ${skelRow('Pole smooth', fmtVecHtml(arm.poleSmoothed))}
+        ${skelRow('Arm scale raw/eff', `${fmtPct(arm.solver.rawScale)} / ${fmtPct(arm.solver.effectiveScale)}`)}
+        ${skelRow('Arm scale cap', fmtPct(arm.solver.segmentScaleCap))}
+        ${skelRow('Midpoint blend', fmtPct(arm.solver.midpointBlend))}
+        ${skelRow('Hands-together', fmtPct(arm.solver.handsTogetherBlend))}
+        ${skelRow('Prayer blend', fmtPct(arm.solver.chestPrayerBlend))}
+        ${skelRow('Face-near blend', fmtPct(arm.solver.faceNearBlend))}
+        ${skelRow('Wrist front', fmtPct(arm.solver.wristFrontBlend))}
+        ${skelRow('Front-pose blend', fmtPct(arm.solver.frontPoseBlend))}
         ${skelRow('Norm shoulder', fmtVecHtml(arm.actualNormalized.shoulder))}
         ${skelRow('Norm elbow', fmtVecHtml(arm.actualNormalized.elbow))}
         ${skelRow('Norm wrist', fmtVecHtml(arm.actualNormalized.wrist))}
@@ -1710,6 +1806,7 @@ export function mountDebugPanel(
     const p = (v: number) => v > 0 ? (v * 100).toFixed(1) + '%' : '—';
     const r = (a: number, b: number) => (a > 1e-4 && b > 1e-4) ? (a / b).toFixed(3) + '×' : '—';
     const cm = (v: number) => Number.isFinite(v) ? `${(v * 100).toFixed(1)} cm` : '—';
+    const deg = (v: number) => Number.isFinite(v) ? `${(v * 180 / Math.PI).toFixed(1)}°` : '—';
 
     const armText = (title: string, arm: ReturnType<typeof buildArmSnapshot>): string[] => [
       `--- ${title} ---`,
@@ -1725,6 +1822,14 @@ export function mountDebugPanel(
       `Blue target:     ${fmtVecText(arm.target)}`,
       `Pole raw:        ${fmtVecText(arm.poleRaw)}`,
       `Pole smooth:     ${fmtVecText(arm.poleSmoothed)}`,
+      `Arm scale raw/eff:${p(arm.solver.rawScale)} / ${p(arm.solver.effectiveScale)}`,
+      `Arm scale cap:   ${p(arm.solver.segmentScaleCap)}`,
+      `Midpoint blend:  ${p(arm.solver.midpointBlend)}`,
+      `Hands-together:  ${p(arm.solver.handsTogetherBlend)}`,
+      `Prayer blend:    ${p(arm.solver.chestPrayerBlend)}`,
+      `Face-near blend: ${p(arm.solver.faceNearBlend)}`,
+      `Wrist front:     ${p(arm.solver.wristFrontBlend)}`,
+      `Front-pose blend:${p(arm.solver.frontPoseBlend)}`,
       `Norm shoulder:   ${fmtVecText(arm.actualNormalized.shoulder)}`,
       `Norm elbow:      ${fmtVecText(arm.actualNormalized.elbow)}`,
       `Norm wrist:      ${fmtVecText(arm.actualNormalized.wrist)}`,
@@ -1772,6 +1877,11 @@ export function mountDebugPanel(
       `Err sh axis G→R: ${Number.isFinite(torso.errors.shoulderAxisGreenToRaw) ? torso.errors.shoulderAxisGreenToRaw.toFixed(1) + '°' : '—'}`,
       `Err hip axis G→N:${Number.isFinite(torso.errors.hipAxisGreenToNorm) ? torso.errors.hipAxisGreenToNorm.toFixed(1) + '°' : '—'}`,
       `Err hip axis G→R:${Number.isFinite(torso.errors.hipAxisGreenToRaw) ? torso.errors.hipAxisGreenToRaw.toFixed(1) + '°' : '—'}`,
+      `Torso fwd raw:   ${deg(torso.solver.forwardLeanRaw)}`,
+      `Torso fwd applied:${deg(torso.solver.forwardLeanApplied)}`,
+      `Torso lat raw:   ${deg(torso.solver.lateralLeanRaw)}`,
+      `Torso lat applied:${deg(torso.solver.lateralLeanApplied)}`,
+      `Torso lat gain:  ${Number.isFinite(torso.solver.lateralLeanGain) ? torso.solver.lateralLeanGain.toFixed(3) : '—'}`,
       `Δ shoulder width G→N:${cm(torso.errors.shoulderWidthGreenToNorm)}`,
       `Δ shoulder width G→R:${cm(torso.errors.shoulderWidthGreenToRaw)}`,
       `Δ torso height G→N:${cm(torso.errors.torsoHeightGreenToNorm)}`,
