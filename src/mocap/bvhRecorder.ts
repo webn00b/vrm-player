@@ -80,6 +80,10 @@ interface Frame {
   hipsPos?: [number, number, number];
 }
 
+interface BvhRecorderOptions {
+  getJointOffset?: (name: string) => [number, number, number] | null;
+}
+
 // ── BvhRecorder ───────────────────────────────────────────────────────────────
 
 /**
@@ -93,6 +97,11 @@ export class BvhRecorder {
   private startTime  = 0;
   private _recording = false;
   private _lastFrameTime = -1;
+  private readonly _getJointOffset: ((name: string) => [number, number, number] | null) | null;
+
+  constructor(options: BvhRecorderOptions = {}) {
+    this._getJointOffset = options.getJointOffset ?? null;
+  }
 
   get recording():  boolean { return this._recording; }
   get frameCount(): number  { return this.frames.length; }
@@ -108,7 +117,10 @@ export class BvhRecorder {
    * Snapshot current bone state. Rate-limited to FRAME_RATE so the BVH's declared
    * Frame Time matches actual playback speed regardless of RAF rate.
    */
-  addFrame(getQuaternion: (name: string) => [number, number, number, number] | null): void {
+  addFrame(
+    getQuaternion: (name: string) => [number, number, number, number] | null,
+    getHipsPosition?: () => [number, number, number] | null,
+  ): void {
     if (!this._recording) return;
     const time = (performance.now() - this.startTime) / 1000;
     if (time - this._lastFrameTime < FRAME_TIME - 0.001) return;
@@ -118,7 +130,7 @@ export class BvhRecorder {
     for (const j of JOINTS) {
       bones[j.name] = getQuaternion(j.name) ?? [0, 0, 0, 1];
     }
-    this.frames.push({ time, bones });
+    this.frames.push({ time, bones, hipsPos: getHipsPosition?.() ?? undefined });
   }
 
   /**
@@ -127,7 +139,10 @@ export class BvhRecorder {
    * call adds exactly one frame regardless of how fast the user clicks.
    * Auto-starts the recording buffer if not already recording.
    */
-  captureFrame(getQuaternion: (name: string) => [number, number, number, number] | null): void {
+  captureFrame(
+    getQuaternion: (name: string) => [number, number, number, number] | null,
+    getHipsPosition?: () => [number, number, number] | null,
+  ): void {
     if (!this._recording) {
       this.frames    = [];
       this.startTime = performance.now();
@@ -139,7 +154,7 @@ export class BvhRecorder {
     for (const j of JOINTS) {
       bones[j.name] = getQuaternion(j.name) ?? [0, 0, 0, 1];
     }
-    this.frames.push({ time, bones });
+    this.frames.push({ time, bones, hipsPos: getHipsPosition?.() ?? undefined });
   }
 
   /** Stop and return the BVH text. */
@@ -171,7 +186,10 @@ export class BvhRecorder {
     const tag = joint.isRoot ? 'ROOT' : 'JOINT';
     lines.push(`${indent}${tag} ${name}`);
     lines.push(`${indent}{`);
-    lines.push(`${indent}  OFFSET 0.00 0.00 0.00`);
+    const offset = this._getJointOffset?.(name) ?? [0, 0, 0];
+    lines.push(
+      `${indent}  OFFSET ${offset[0].toFixed(2)} ${offset[1].toFixed(2)} ${offset[2].toFixed(2)}`,
+    );
 
     // YXZ Euler order (yaw → pitch → roll) matches how humanoid bones naturally decompose:
     // Y is the primary axis for spine-aligned bones, so decomposing around it first

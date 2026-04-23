@@ -53,7 +53,8 @@ export class AnimationController {
     const action = this.mixer.clipAction(clip);
     action.setLoop(THREE.LoopRepeat, Infinity);
     action.setEffectiveWeight(0);
-    action.play();
+    // Don't play() here — activate lazily in activateQueuePos so the mixer
+    // only ticks the 1–2 actions that are actually in use.
     this.items.push({ name, action, duration: clip.duration });
   }
 
@@ -134,10 +135,11 @@ export class AnimationController {
   setMuted(muted: boolean): void {
     this._muted = muted;
     if (muted) {
-      for (const item of this.items) item.action.setEffectiveWeight(0);
+      for (const item of this.items) { item.action.setEffectiveWeight(0); item.action.stop(); }
       this.crossfade = null;
     } else if (this.queuePos >= 0) {
-      this.items[this.queue[this.queuePos]]?.action.setEffectiveWeight(1);
+      const item = this.items[this.queue[this.queuePos]];
+      if (item) { item.action.play(); item.action.setEffectiveWeight(1); }
     }
   }
   get muted(): boolean { return this._muted; }
@@ -201,6 +203,7 @@ export class AnimationController {
       cf.to.setEffectiveWeight(eased);
       if (t >= 1) {
         cf.from.setEffectiveWeight(0);
+        cf.from.stop(); // remove from mixer — only the active action ticks
         cf.to.setEffectiveWeight(1);
         this.crossfade = null;
       }
@@ -231,9 +234,11 @@ export class AnimationController {
 
     if (this.prevItemIndex >= 0 && this.prevItemIndex !== itemIndex) {
       const from = this.items[this.prevItemIndex].action;
+      next.action.play();
       next.action.reset();
       this.crossfade = { from, to: next.action, elapsed: 0, duration: CROSSFADE_DURATION };
     } else {
+      next.action.play();
       next.action.reset();
       next.action.setEffectiveWeight(1);
       this.crossfade = null;
@@ -246,7 +251,7 @@ export class AnimationController {
   }
 
   private stopAll(): void {
-    for (const item of this.items) item.action.setEffectiveWeight(0);
+    for (const item of this.items) { item.action.setEffectiveWeight(0); item.action.stop(); }
     this.crossfade = null;
     this.timeInCurrent = 0;
   }

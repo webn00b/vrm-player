@@ -17,21 +17,21 @@
 
 ## Sprint 2: поддерживаемость solver-а
 
-- [ ] Разбить `src/mocap/directPoseApplier.ts` на torso / arms / legs / hands / diagnostics.
+- [x] Разбить `src/mocap/directPoseApplier.ts` на torso / arms / legs / hands / diagnostics.
 - [x] Ввести единый типизированный объект diagnostics для solver-а.
-- [ ] Улучшить экспорт BVH: реальные offsets, root motion, более честный внешний формат.
+- [x] Улучшить экспорт BVH: реальные offsets, root motion, более честный внешний формат.
 
 ## Sprint 3: архитектура UI и bootstrap
 
-- [ ] Разбить `src/debugPanel.ts` на несколько модулей.
-- [ ] Упростить bootstrap и wiring в `src/main.ts`.
-- [ ] Добавить более явные границы между playback, mocap и debug-инструментами.
+- [x] Разбить `src/debugPanel.ts` на несколько модулей.
+- [x] Упростить bootstrap и wiring в `src/main.ts`.
+- [x] Добавить более явные границы между playback, mocap и debug-инструментами.
 
 ## Later
 
-- [ ] Оптимизировать bundle и подумать про lazy-load debug/tooling частей.
-- [ ] Оптимизировать `AnimationController`, чтобы не держать активными все `AnimationAction`.
-- [ ] Добавить больше автоматических сценариев проверки ретаргета BVH -> VRM.
+- [x] Оптимизировать bundle и подумать про lazy-load debug/tooling частей.
+- [x] Оптимизировать `AnimationController`, чтобы не держать активными все `AnimationAction`.
+- [x] Добавить больше автоматических сценариев проверки ретаргета BVH -> VRM.
 
 ## Что уже сделано в этом проходе
 
@@ -40,3 +40,14 @@
 - [x] Добавлен первый слой regression-набора: fixture-тесты для ключевых solver-эвристик (`torso lateral gain`, `arm scale cap`, `midpoint`, `hands-together`, `prayer`, `face-near`).
 - [x] Добавлен cleanup-контур для `scene`, render loop, transport, debug panel и mocap runtime, чтобы listeners и интервалы не залипали между mount-ами.
 - [x] Solver diagnostics вынесены в отдельный модуль и стали общим типизированным контрактом для `DirectPoseApplier`, debug panel, debug recorder и debug viz.
+- [x] Из `DirectPoseApplier` вынесены отдельные модули для landmarks/config, hand-retarget, torso-math, arm-target solve и leg-target/foot-lock solve; дальше можно безопаснее разносить оставшийся torso / bone-application orchestration по файлам.
+- [x] Базовые преобразования MediaPipe -> VRM сведены в общий `motionSpace`-модуль, чтобы arms / hands / legs / torso не расходились по знакам и depth-scale.
+- [x] Для `arms` и `legs` вынесен общий two-bone IK apply-слой, так что `DirectPoseApplier` больше не дублирует world->local solve для двухзвенных цепей.
+- [x] Обычный one-bone direction retarget и clavicle/shoulder solve тоже вынесены в отдельные модули, так что в `DirectPoseApplier` осталось меньше низкоуровневой математики и больше orchestration.
+- [x] Для BVH export убраны нулевые joint offsets и заглушка root-position: recorder теперь пишет реальные normalized-bone offsets и текущую позицию `hips`.
+- [x] `src/debugPanel.ts` (2026 строк) разбит на три модуля: `debugPanelHtml.ts` — HTML-шаблоны (286 строк), `debugPanelSkelModal.ts` — skeleton info modal (962 строки), `debugPanel.ts` — orchestration + wiring (835 строк).
+- [x] `src/main.ts` упрощён до чистой orchestration (~200 строк): вынесены `startRenderLoop` → `renderLoop.ts`, `mountTransport` → `transport.ts`, `MOCAP_VALIDATION_EXCLUDED_BONES` → `mocap/mocapValidationBones.ts`.
+- [x] Введены явные типизированные группы `PlaybackSystems`, `MocapSystems`, `ToolingSystems` в `src/playerSystems.ts`; сигнатуры `startRenderLoop` и `mountDebugPanel` сокращены с 12/10 позиционных параметров до 4–5 семантических групп.
+- [x] `AnimationController`: убран `play()` при регистрации — миксер тикает только 1–2 активных action вместо всей библиотеки; `stop()` вызывается после завершения crossfade и при `setMuted`.
+- [x] Vite `manualChunks`: `vendor` (three.js + three-vrm) и `debug` (debugPanel + tooling) чанки для правильного HTTP-кэширования; true lazy-load отложен до рефактора render loop.
+- [x] `tests/regression/clipValidator.test.mjs`: 15 новых тестов для `clipValidator` + `boneConstraints` — детектирование нарушений ROM, кламп, симметрия L/R, worst-bone reporting, неизвестные bones; итого 28 тестов (было 13).

@@ -6,7 +6,8 @@
       "Bash(node -e ' *)",
       "Bash(npm list *)",
       "Bash(python3 -)",
-      "Bash(python3 /tmp/analyze_mocap.py)"
+      "Bash(python3 /tmp/analyze_mocap.py)",
+      "Bash(node --input-type=module)"
     ],
     "additionalDirectories": [
       "/Users/fedor/projects/personal/vrm-player/node_modules/@mediapipe/tasks-vision/wasm"

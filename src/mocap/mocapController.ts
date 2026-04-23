@@ -48,8 +48,8 @@ export class MocapController {
     this._calibration = new MocapCalibration(vrm);
     this.applier      = new DirectPoseApplier(vrm, this._calibration);
     this.faceApplier  = new FaceApplier(vrm);
-    this.liveRecorder = new BvhRecorder();
-    this.grabRecorder = new BvhRecorder();
+    this.liveRecorder = this._createRecorder();
+    this.grabRecorder = this._createRecorder();
 
     this._calibration.onStatusChange = (s) => this.onCalibrationChange?.(s);
 
@@ -81,6 +81,27 @@ export class MocapController {
   /** Attach / detach the preview canvas. Call after startLive(). */
   setCanvas(canvas: HTMLCanvasElement | null): void {
     this.detector.setCanvas(canvas);
+  }
+
+  private _createRecorder(): BvhRecorder {
+    return new BvhRecorder({
+      getJointOffset: (name) => this._getBvhJointOffset(name),
+    });
+  }
+
+  private _getBvhJointOffset(name: string): [number, number, number] | null {
+    if (name === 'hips') return [0, 0, 0];
+    const node = this._vrm.humanoid.getNormalizedBoneNode(name as any);
+    if (!node) return null;
+    return [node.position.x, node.position.y, node.position.z];
+  }
+
+  private _getBvhHipsPosition(): [number, number, number] | null {
+    const hips = this._vrm.humanoid.getNormalizedBoneNode('hips' as any);
+    if (!hips) return null;
+    const pos = new THREE.Vector3();
+    hips.getWorldPosition(pos);
+    return [pos.x, pos.y, pos.z];
   }
 
   // ── Debug knobs ────────────────────────────────────────────────────────────
@@ -147,7 +168,10 @@ export class MocapController {
 
     // Record AFTER apply so getQuaternion reads the freshly computed rotations.
     if (this._state === 'recording' && !this._frameRecorded) {
-      this.liveRecorder.addFrame((name) => this.applier.getQuaternion(name));
+      this.liveRecorder.addFrame(
+        (name) => this.applier.getQuaternion(name),
+        () => this._getBvhHipsPosition(),
+      );
       this._frameRecorded = true;
     }
   }
@@ -409,7 +433,10 @@ export class MocapController {
    * independent of the live "recording" auto-append.
    */
   grabFrame(): void {
-    this.grabRecorder.captureFrame((name) => this.applier.getQuaternion(name));
+    this.grabRecorder.captureFrame(
+      (name) => this.applier.getQuaternion(name),
+      () => this._getBvhHipsPosition(),
+    );
   }
 
   /**
@@ -429,8 +456,11 @@ export class MocapController {
    * live recorder buffer. Safe to call during live preview or active recording.
    */
   exportCurrentPoseBvh(): string {
-    const poseRecorder = new BvhRecorder();
-    poseRecorder.captureFrame((name) => this.applier.getQuaternion(name));
+    const poseRecorder = this._createRecorder();
+    poseRecorder.captureFrame(
+      (name) => this.applier.getQuaternion(name),
+      () => this._getBvhHipsPosition(),
+    );
     const bvhText = poseRecorder.stop();
     const name = `pose_${++this._poseExportIndex}`;
     downloadBvh(bvhText, `${name}.bvh`);
