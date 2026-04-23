@@ -10,7 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { getRootBone } from "./getRootBone.js";
-import { mapSkeletonToVRM } from "./mapSkeletonToVRM.js";
+import { mapSkeletonToVRM } from "../skeletonMap.js";
 import { VRMAnimationExporterPlugin } from "./VRMAnimationExporterPlugin.js";
 const _v3A = new THREE.Vector3();
 function createSkeletonBoundingBox(skeleton) {
