@@ -10,6 +10,7 @@ import type { MocapDebugViz } from './mocap/mocapDebugViz';
 import { STAT_LANDMARKS } from './mocap/mocapDebugViz';
 import type { MocapDebugRecorder } from './mocap/mocapDebugRecorder';
 import type { PoseFrame, Landmark3D } from './mocap/poseDetector';
+import type { ArmSolverDiagnostics, TorsoSolverDiagnostics } from './mocap/mocapDiagnostics';
 
 export function mountDebugPanel(
   micro: MicroAnimations,
@@ -1106,16 +1107,7 @@ export function mountDebugPanel(
     elbowTarget: THREE.Vector3 | null;
     poleRaw: THREE.Vector3 | null;
     poleSmoothed: THREE.Vector3 | null;
-    rawScale: number;
-    effectiveScale: number;
-    segmentScaleCap: number;
-    midpointBlend: number;
-    handsTogetherBlend: number;
-    chestPrayerBlend: number;
-    wristFrontBlend: number;
-    frontPoseBlend: number;
-    faceNearBlend: number;
-  };
+  } & ArmSolverDiagnostics;
 
   const skelRow = (label: string, value: string): string =>
     `<div class="skel-row">
@@ -1285,17 +1277,7 @@ export function mountDebugPanel(
       target,
       poleRaw: armDebug.poleRaw,
       poleSmoothed: armDebug.poleSmoothed,
-      solver: {
-        rawScale: armDebug.rawScale,
-        effectiveScale: armDebug.effectiveScale,
-        segmentScaleCap: armDebug.segmentScaleCap,
-        midpointBlend: armDebug.midpointBlend,
-        handsTogetherBlend: armDebug.handsTogetherBlend,
-        chestPrayerBlend: armDebug.chestPrayerBlend,
-        faceNearBlend: armDebug.faceNearBlend,
-        wristFrontBlend: armDebug.wristFrontBlend,
-        frontPoseBlend: armDebug.frontPoseBlend,
-      },
+      solver: armDebug,
       reachPercent,
       errors: {
         shoulderGreenToNorm:   distVec(performerAvatarShoulder, actualNormShoulder),
@@ -1335,13 +1317,7 @@ export function mountDebugPanel(
     rawAvatar: AvatarJointPositions,
     bodyScale: number,
     scales: LimbScales,
-    torsoDebug: {
-      forwardLeanRaw: number;
-      forwardLeanApplied: number;
-      lateralLeanRaw: number;
-      lateralLeanApplied: number;
-      lateralLeanGain: number;
-    },
+    torsoDebug: TorsoSolverDiagnostics,
   ) => {
     const projectedLeftShoulder  = computePerformerAvatarSpacePoint(frame, normalizedAvatar.hips, bodyScale, scales, 12);
     const projectedRightShoulder = computePerformerAvatarSpacePoint(frame, normalizedAvatar.hips, bodyScale, scales, 11);
@@ -1432,13 +1408,7 @@ export function mountDebugPanel(
         torsoDepthNorm:     deltaAxis(normShoulderMid, normHipMid, 'z'),
         torsoDepthRaw:      deltaAxis(rawShoulderMid, rawHipMid, 'z'),
       },
-      solver: {
-        forwardLeanRaw: torsoDebug.forwardLeanRaw,
-        forwardLeanApplied: torsoDebug.forwardLeanApplied,
-        lateralLeanRaw: torsoDebug.lateralLeanRaw,
-        lateralLeanApplied: torsoDebug.lateralLeanApplied,
-        lateralLeanGain: torsoDebug.lateralLeanGain,
-      },
+      solver: torsoDebug,
     };
   };
 
@@ -1479,15 +1449,17 @@ export function mountDebugPanel(
         elbowTarget: dt.hasArm ? dt.leftElbowTarget : null,
         poleRaw: dt.hasArm ? dt.leftArmPoleRaw : null,
         poleSmoothed: dt.hasArm ? dt.leftArmPoleSmoothed : null,
-        rawScale: dt.hasArm ? dt.leftArmRawScale : Number.NaN,
-        effectiveScale: dt.hasArm ? dt.leftArmEffectiveScale : Number.NaN,
-        segmentScaleCap: dt.hasArm ? dt.leftArmSegmentScaleCap : Number.NaN,
-        midpointBlend: dt.hasArm ? dt.leftArmMidpointBlend : Number.NaN,
-        handsTogetherBlend: dt.hasArm ? dt.leftArmHandsTogetherBlend : Number.NaN,
-        chestPrayerBlend: dt.hasArm ? dt.leftArmChestPrayerBlend : Number.NaN,
-        wristFrontBlend: dt.hasArm ? dt.leftArmWristFrontBlend : Number.NaN,
-        frontPoseBlend: dt.hasArm ? dt.leftArmFrontPoseBlend : Number.NaN,
-        faceNearBlend: dt.hasArm ? dt.leftArmFaceNearBlend : Number.NaN,
+        ...(dt.hasArm ? dt.leftArmSolver : {
+          rawScale: Number.NaN,
+          effectiveScale: Number.NaN,
+          segmentScaleCap: Number.NaN,
+          midpointBlend: Number.NaN,
+          handsTogetherBlend: Number.NaN,
+          chestPrayerBlend: Number.NaN,
+          wristFrontBlend: Number.NaN,
+          frontPoseBlend: Number.NaN,
+          faceNearBlend: Number.NaN,
+        }),
       },
       dt.hasArm ? dt.leftWristTarget : null,
       reach.armL,
@@ -1503,15 +1475,17 @@ export function mountDebugPanel(
         elbowTarget: dt.hasArm ? dt.rightElbowTarget : null,
         poleRaw: dt.hasArm ? dt.rightArmPoleRaw : null,
         poleSmoothed: dt.hasArm ? dt.rightArmPoleSmoothed : null,
-        rawScale: dt.hasArm ? dt.rightArmRawScale : Number.NaN,
-        effectiveScale: dt.hasArm ? dt.rightArmEffectiveScale : Number.NaN,
-        segmentScaleCap: dt.hasArm ? dt.rightArmSegmentScaleCap : Number.NaN,
-        midpointBlend: dt.hasArm ? dt.rightArmMidpointBlend : Number.NaN,
-        handsTogetherBlend: dt.hasArm ? dt.rightArmHandsTogetherBlend : Number.NaN,
-        chestPrayerBlend: dt.hasArm ? dt.rightArmChestPrayerBlend : Number.NaN,
-        wristFrontBlend: dt.hasArm ? dt.rightArmWristFrontBlend : Number.NaN,
-        frontPoseBlend: dt.hasArm ? dt.rightArmFrontPoseBlend : Number.NaN,
-        faceNearBlend: dt.hasArm ? dt.rightArmFaceNearBlend : Number.NaN,
+        ...(dt.hasArm ? dt.rightArmSolver : {
+          rawScale: Number.NaN,
+          effectiveScale: Number.NaN,
+          segmentScaleCap: Number.NaN,
+          midpointBlend: Number.NaN,
+          handsTogetherBlend: Number.NaN,
+          chestPrayerBlend: Number.NaN,
+          wristFrontBlend: Number.NaN,
+          frontPoseBlend: Number.NaN,
+          faceNearBlend: Number.NaN,
+        }),
       },
       dt.hasArm ? dt.rightWristTarget : null,
       reach.armR,
@@ -1522,13 +1496,7 @@ export function mountDebugPanel(
       avatarRaw,
       bodyScale,
       { ...scales, armL: scales.armL, armR: scales.armR },
-      {
-        forwardLeanRaw: dt.torsoForwardLeanRaw,
-        forwardLeanApplied: dt.torsoForwardLeanApplied,
-        lateralLeanRaw: dt.torsoLateralLeanRaw,
-        lateralLeanApplied: dt.torsoLateralLeanApplied,
-        lateralLeanGain: dt.torsoLateralLeanGain,
-      },
+      dt.torsoSolver,
     );
 
     return {

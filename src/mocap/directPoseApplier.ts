@@ -14,6 +14,17 @@ import {
   computeMidpointBlend,
   computePrayerBlend,
 } from './solverHeuristics';
+import {
+  createMocapDebugTargets,
+  getAnkleTarget,
+  getArmPoleRaw,
+  getArmPoleSmoothed,
+  getArmSolverDiagnostics,
+  getElbowTarget,
+  getWristTarget,
+  resetMocapDebugTargets,
+  type MocapDebugTargets,
+} from './mocapDiagnostics';
 
 // ── MediaPipe BlazePose landmark indices ──────────────────────────────────────
 
@@ -170,45 +181,7 @@ export class DirectPoseApplier {
   };
 
   // IK debug targets — updated each frame, read by MocapDebugViz
-  readonly debugTargets = {
-    leftWristTarget:  new THREE.Vector3(),
-    rightWristTarget: new THREE.Vector3(),
-    leftElbowTarget:  new THREE.Vector3(),
-    rightElbowTarget: new THREE.Vector3(),
-    leftArmPoleRaw:   new THREE.Vector3(),
-    rightArmPoleRaw:  new THREE.Vector3(),
-    leftArmPoleSmoothed:  new THREE.Vector3(),
-    rightArmPoleSmoothed: new THREE.Vector3(),
-    leftAnkleTarget:  new THREE.Vector3(),
-    rightAnkleTarget: new THREE.Vector3(),
-    leftArmRawScale: Number.NaN,
-    rightArmRawScale: Number.NaN,
-    leftArmEffectiveScale: Number.NaN,
-    rightArmEffectiveScale: Number.NaN,
-    leftArmSegmentScaleCap: Number.NaN,
-    rightArmSegmentScaleCap: Number.NaN,
-    leftArmMidpointBlend: Number.NaN,
-    rightArmMidpointBlend: Number.NaN,
-    leftArmHandsTogetherBlend: Number.NaN,
-    rightArmHandsTogetherBlend: Number.NaN,
-    leftArmChestPrayerBlend: Number.NaN,
-    rightArmChestPrayerBlend: Number.NaN,
-    leftArmWristFrontBlend: Number.NaN,
-    rightArmWristFrontBlend: Number.NaN,
-    leftArmFrontPoseBlend: Number.NaN,
-    rightArmFrontPoseBlend: Number.NaN,
-    leftArmFaceNearBlend: Number.NaN,
-    rightArmFaceNearBlend: Number.NaN,
-    torsoForwardLeanRaw: Number.NaN,
-    torsoForwardLeanApplied: Number.NaN,
-    torsoLateralLeanRaw: Number.NaN,
-    torsoLateralLeanApplied: Number.NaN,
-    torsoLateralLeanGain: Number.NaN,
-    hasArm:         false,
-    hasLeg:         false,
-    leftFootLocked:  false,
-    rightFootLocked: false,
-  };
+  readonly debugTargets: MocapDebugTargets = createMocapDebugTargets();
 
   // Smoothed pole vectors per limb (world-frame). MediaPipe sometimes flips
   // the mid-joint (elbow/knee) when the limb is near-straight — smoothing
@@ -413,33 +386,7 @@ export class DirectPoseApplier {
   apply(frame: PoseFrame): void {
     // Debug target flags are frame-local; reset them before solving this frame
     // so stale arm/leg IK markers do not survive when tracking drops out.
-    this.debugTargets.hasArm = false;
-    this.debugTargets.hasLeg = false;
-    this.debugTargets.leftFootLocked = false;
-    this.debugTargets.rightFootLocked = false;
-    this.debugTargets.leftArmRawScale = Number.NaN;
-    this.debugTargets.rightArmRawScale = Number.NaN;
-    this.debugTargets.leftArmEffectiveScale = Number.NaN;
-    this.debugTargets.rightArmEffectiveScale = Number.NaN;
-    this.debugTargets.leftArmSegmentScaleCap = Number.NaN;
-    this.debugTargets.rightArmSegmentScaleCap = Number.NaN;
-    this.debugTargets.leftArmMidpointBlend = Number.NaN;
-    this.debugTargets.rightArmMidpointBlend = Number.NaN;
-    this.debugTargets.leftArmHandsTogetherBlend = Number.NaN;
-    this.debugTargets.rightArmHandsTogetherBlend = Number.NaN;
-    this.debugTargets.leftArmChestPrayerBlend = Number.NaN;
-    this.debugTargets.rightArmChestPrayerBlend = Number.NaN;
-    this.debugTargets.leftArmWristFrontBlend = Number.NaN;
-    this.debugTargets.rightArmWristFrontBlend = Number.NaN;
-    this.debugTargets.leftArmFrontPoseBlend = Number.NaN;
-    this.debugTargets.rightArmFrontPoseBlend = Number.NaN;
-    this.debugTargets.leftArmFaceNearBlend = Number.NaN;
-    this.debugTargets.rightArmFaceNearBlend = Number.NaN;
-    this.debugTargets.torsoForwardLeanRaw = Number.NaN;
-    this.debugTargets.torsoForwardLeanApplied = Number.NaN;
-    this.debugTargets.torsoLateralLeanRaw = Number.NaN;
-    this.debugTargets.torsoLateralLeanApplied = Number.NaN;
-    this.debugTargets.torsoLateralLeanGain = Number.NaN;
+    resetMocapDebugTargets(this.debugTargets);
 
     // Torso first — its rotations propagate to limbs via parent world matrices.
     this._applyHips(frame);
@@ -863,9 +810,9 @@ export class DirectPoseApplier {
       }
     }
 
-    this.debugTargets.torsoForwardLeanRaw = forwardLeanRaw;
-    this.debugTargets.torsoForwardLeanApplied = forwardLean;
-    this.debugTargets.torsoLateralLeanRaw = lateralLean;
+    this.debugTargets.torsoSolver.forwardLeanRaw = forwardLeanRaw;
+    this.debugTargets.torsoSolver.forwardLeanApplied = forwardLean;
+    this.debugTargets.torsoSolver.lateralLeanRaw = lateralLean;
 
     if (Math.abs(forwardLean) > 1e-4 && this._forwardBendScale > 1e-4) {
       this._q3.setFromAxisAngle(
@@ -893,8 +840,8 @@ export class DirectPoseApplier {
         THREE.MathUtils.degToRad(-28),
         THREE.MathUtils.degToRad(28),
       );
-      this.debugTargets.torsoLateralLeanGain = lateralLeanGain;
-      this.debugTargets.torsoLateralLeanApplied = lateralApplied;
+      this.debugTargets.torsoSolver.lateralLeanGain = lateralLeanGain;
+      this.debugTargets.torsoSolver.lateralLeanApplied = lateralApplied;
       this._q3.setFromAxisAngle(
         this._v3.set(0, 0, 1),
         lateralApplied,
@@ -1240,29 +1187,18 @@ export class DirectPoseApplier {
       }
     }
 
-    if (side === 'left') {
-      this.debugTargets.leftArmRawScale = rawArmScale;
-      this.debugTargets.leftArmEffectiveScale = armScale;
-      this.debugTargets.leftArmSegmentScaleCap = segmentScaleCap;
-      this.debugTargets.leftArmMidpointBlend = midpointBlend;
-      this.debugTargets.leftArmHandsTogetherBlend = handsTogetherBlend;
-      this.debugTargets.leftArmChestPrayerBlend = chestPrayerBlend;
-      this.debugTargets.leftArmWristFrontBlend = wristFrontBlend;
-      this.debugTargets.leftArmFrontPoseBlend = frontPoseBlend;
-      this.debugTargets.leftArmFaceNearBlend = faceNearBlend;
-    } else {
-      this.debugTargets.rightArmRawScale = rawArmScale;
-      this.debugTargets.rightArmEffectiveScale = armScale;
-      this.debugTargets.rightArmSegmentScaleCap = segmentScaleCap;
-      this.debugTargets.rightArmMidpointBlend = midpointBlend;
-      this.debugTargets.rightArmHandsTogetherBlend = handsTogetherBlend;
-      this.debugTargets.rightArmChestPrayerBlend = chestPrayerBlend;
-      this.debugTargets.rightArmWristFrontBlend = wristFrontBlend;
-      this.debugTargets.rightArmFrontPoseBlend = frontPoseBlend;
-      this.debugTargets.rightArmFaceNearBlend = faceNearBlend;
-    }
+    const armDiag = getArmSolverDiagnostics(this.debugTargets, side);
+    armDiag.rawScale = rawArmScale;
+    armDiag.effectiveScale = armScale;
+    armDiag.segmentScaleCap = segmentScaleCap;
+    armDiag.midpointBlend = midpointBlend;
+    armDiag.handsTogetherBlend = handsTogetherBlend;
+    armDiag.chestPrayerBlend = chestPrayerBlend;
+    armDiag.wristFrontBlend = wristFrontBlend;
+    armDiag.frontPoseBlend = frontPoseBlend;
+    armDiag.faceNearBlend = faceNearBlend;
 
-    this.debugTargets[side === 'left' ? 'leftWristTarget' : 'rightWristTarget'].copy(target);
+    getWristTarget(this.debugTargets, side).copy(target);
     this.debugTargets.hasArm = true;
 
     // Pole vector: keep the wrist target midpoint-based, but drive the elbow
@@ -1275,16 +1211,16 @@ export class DirectPoseApplier {
     this._v2.multiplyScalar(armScale);
     this._v2.z *= elbowPoleZ;
     const elbowTarget = this._v6.copy(shoulderWorld).add(this._v2);
-    this.debugTargets[side === 'left' ? 'leftElbowTarget' : 'rightElbowTarget'].copy(elbowTarget);
+    getElbowTarget(this.debugTargets, side).copy(elbowTarget);
 
     this._mpDirToVrm(pe.x - ps.x, pe.y - ps.y, pe.z - ps.z, this._v2);
     this._v2.z *= elbowPoleZ;
     if (this._v2.lengthSq() < 1e-6) this._v2.set(0, -1, 0);
-    this.debugTargets[side === 'left' ? 'leftArmPoleRaw' : 'rightArmPoleRaw'].copy(this._v2);
+    getArmPoleRaw(this.debugTargets, side).copy(this._v2);
     const smoothed = this._polesArm[side];
     if (smoothed.lengthSq() < 1e-6) smoothed.copy(this._v2);
     else smoothed.lerp(this._v2, this._poleAlpha);
-    this.debugTargets[side === 'left' ? 'leftArmPoleSmoothed' : 'rightArmPoleSmoothed'].copy(smoothed);
+    getArmPoleSmoothed(this.debugTargets, side).copy(smoothed);
 
     // Solve the chain in world space.
     const upperLen = calib.upperArmLength(side);
@@ -1377,7 +1313,7 @@ export class DirectPoseApplier {
       }
     }
 
-    this.debugTargets[side === 'left' ? 'leftAnkleTarget'  : 'rightAnkleTarget'].copy(target);
+    getAnkleTarget(this.debugTargets, side).copy(target);
     this.debugTargets[side === 'left' ? 'leftFootLocked'   : 'rightFootLocked'] = this._footLocked[side];
     this.debugTargets.hasLeg = true;
 

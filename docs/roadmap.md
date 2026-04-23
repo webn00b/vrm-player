@@ -18,7 +18,7 @@
 ## Sprint 2: поддерживаемость solver-а
 
 - [ ] Разбить `src/mocap/directPoseApplier.ts` на torso / arms / legs / hands / diagnostics.
-- [ ] Ввести единый типизированный объект diagnostics для solver-а.
+- [x] Ввести единый типизированный объект diagnostics для solver-а.
 - [ ] Улучшить экспорт BVH: реальные offsets, root motion, более честный внешний формат.
 
 ## Sprint 3: архитектура UI и bootstrap
@@ -39,3 +39,4 @@
 - [x] `grab/flush` отделены от основной live-записи BVH.
 - [x] Добавлен первый слой regression-набора: fixture-тесты для ключевых solver-эвристик (`torso lateral gain`, `arm scale cap`, `midpoint`, `hands-together`, `prayer`, `face-near`).
 - [x] Добавлен cleanup-контур для `scene`, render loop, transport, debug panel и mocap runtime, чтобы listeners и интервалы не залипали между mount-ами.
+- [x] Solver diagnostics вынесены в отдельный модуль и стали общим типизированным контрактом для `DirectPoseApplier`, debug panel, debug recorder и debug viz.
