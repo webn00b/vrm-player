@@ -22,9 +22,23 @@ export function mountDebugPanel(
   mocapDebugViz: MocapDebugViz,
   dbgRecorder: MocapDebugRecorder,
   setModelVisible: (v: boolean) => void,
-): void {
+): () => void {
   const root = document.getElementById('debug-panel');
-  if (!root) return;
+  if (!root) return () => {};
+
+  const listenerAbort = new AbortController();
+  const intervalIds: number[] = [];
+  const timeoutIds: number[] = [];
+  const rememberInterval = (fn: () => void, ms: number): number => {
+    const id = window.setInterval(fn, ms);
+    intervalIds.push(id);
+    return id;
+  };
+  const rememberTimeout = (fn: () => void, ms: number): number => {
+    const id = window.setTimeout(fn, ms);
+    timeoutIds.push(id);
+    return id;
+  };
 
   root.innerHTML = `
     <div class="dbg-tabs">
@@ -366,7 +380,7 @@ export function mountDebugPanel(
   const statBones = document.getElementById('dbg-bones')!;
   const MAX_BONES = 15;
 
-  setInterval(() => {
+  rememberInterval(() => {
     let lv1 = 0, lv2 = 0, lv5 = 0;
     for (const [, level] of pa.levelSnapshot) {
       if (level >= 5) lv5++; else if (level === 2) lv2++; else if (level === 1) lv1++;
@@ -441,13 +455,13 @@ export function mountDebugPanel(
       playRow.style.display     = 'flex';
       previewPanel.style.display  = 'block';
       mocap?.setCanvas(previewCvs);
-      framesTimer = window.setInterval(() => {
+      framesTimer = rememberInterval(() => {
         const m = getMocap();
         if (!m) return;
         const dur = m.duration;
         framesLbl.textContent = dur > 0
           ? `${m.currentTime.toFixed(1)}s / ${dur.toFixed(1)}s`
-          : `${m.frameCount} frames`;
+          : `${m.recordingFrameCount} frames`;
       }, 200);
     }
   }
@@ -616,7 +630,7 @@ export function mountDebugPanel(
   let prevFrameRef: unknown = null;
   let fpsFrames = 0;
   let fpsWindowStart = performance.now();
-  setInterval(() => {
+  rememberInterval(() => {
     const m = getMocap();
     const frame = m?.latestFrame;
     if (frame && frame !== prevFrameRef) {
@@ -633,7 +647,7 @@ export function mountDebugPanel(
   }, 100);
 
   // Update all stats every 200ms when debug skeleton is on
-  setInterval(() => {
+  rememberInterval(() => {
     if (!dbgSkelOn) return;
     const m     = getMocap();
     const frame = m?.latestFrame;
@@ -714,7 +728,7 @@ export function mountDebugPanel(
       row('😶 Face pts',      hasFace),
       row('👁 Avg vis',       `${Math.round(avgVis * 100)}%`),
       row('⏱ Detector fps',  fps.toFixed(1)),
-      row('📼 BVH frames',    String(m.frameCount)),
+      row('📼 BVH rec/grab', `${m.recordingFrameCount}/${m.grabbedFrameCount}`),
       row('▶ State',          m.state),
     ].join('');
   }, 200);
@@ -776,13 +790,14 @@ export function mountDebugPanel(
     const m = getMocap();
     if (!m) return;
     m.grabFrame();
-    framesLbl.textContent = `${m.frameCount} frames`;
+    framesLbl.textContent = `${m.grabbedFrameCount} frames`;
   });
 
   flushBtn.addEventListener('click', () => {
     const m = getMocap();
     if (!m) return;
     m.flushGrabbed();
+    framesLbl.textContent = `${m.grabbedFrameCount} frames`;
   });
 
   exportPoseBtn.addEventListener('click', () => {
@@ -796,7 +811,7 @@ export function mountDebugPanel(
       exportPoseBtn.textContent = 'Saved';
       exportPoseBtn.title = `Downloaded ${name}.bvh`;
     } finally {
-      window.setTimeout(() => {
+      rememberTimeout(() => {
         exportPoseBtn.textContent = prevText;
         exportPoseBtn.title = 'Download current avatar pose as a 1-frame BVH';
         exportPoseBtn.disabled = false;
@@ -853,7 +868,7 @@ export function mountDebugPanel(
       });
     }
   }
-  setInterval(() => {
+  rememberInterval(() => {
     const m = getMocap();
     if (!m) return;
     const r = m.calibration.readiness() as Record<string, number>;
@@ -994,7 +1009,7 @@ export function mountDebugPanel(
     console.log('[validator] default bone constraints:', validator.getConstraints());
   });
 
-  setInterval(() => {
+  rememberInterval(() => {
     const s = validator.getStats();
     valStat.textContent = `clamped/frame: ${s.clampedThisFrame}`;
     if (s.worstBone) {
@@ -1064,7 +1079,7 @@ export function mountDebugPanel(
   });
 
   // Update frame counter while recording
-  setInterval(() => {
+  rememberInterval(() => {
     if (dbgRecorder.active) {
       dbgRecFrames.textContent = `${dbgRecorder.frameCount}fr`;
     } else {
@@ -2000,7 +2015,7 @@ export function mountDebugPanel(
   const openModal = (): void => {
     modalOverlay.classList.add('open');
     refreshModal();
-    modalTimer = window.setInterval(refreshModal, 500);
+    modalTimer = rememberInterval(refreshModal, 500);
   };
 
   const closeModal = (): void => {
@@ -2008,12 +2023,13 @@ export function mountDebugPanel(
     clearInterval(modalTimer);
   };
 
-  skelInfoBtn?.addEventListener('click', openModal);
-  modalCloseBtn.addEventListener('click', closeModal);
-  modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+  const modalListenerOpts: AddEventListenerOptions = { signal: listenerAbort.signal };
+  skelInfoBtn?.addEventListener('click', openModal, modalListenerOpts);
+  modalCloseBtn.addEventListener('click', closeModal, modalListenerOpts);
+  modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); }, modalListenerOpts);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modalOverlay.classList.contains('open')) closeModal();
-  });
+  }, modalListenerOpts);
 
   let copyResetTimer = 0;
   modalCopyBtn.addEventListener('click', () => {
@@ -2021,10 +2037,22 @@ export function mountDebugPanel(
       modalCopyBtn.textContent = '✓ copied!';
       modalCopyBtn.classList.add('copied');
       clearTimeout(copyResetTimer);
-      copyResetTimer = window.setTimeout(() => {
+      copyResetTimer = rememberTimeout(() => {
         modalCopyBtn.textContent = '📋 copy';
         modalCopyBtn.classList.remove('copied');
       }, 2000);
     });
-  });
+  }, modalListenerOpts);
+
+  return () => {
+    clearInterval(framesTimer);
+    clearInterval(modalTimer);
+    clearTimeout(copyResetTimer);
+    for (const id of intervalIds) clearInterval(id);
+    for (const id of timeoutIds) clearTimeout(id);
+    listenerAbort.abort();
+    closeModal();
+    if ((window as any).dumpSkeleton) delete (window as any).dumpSkeleton;
+    root.innerHTML = '';
+  };
 }

@@ -5,6 +5,15 @@ import type { HandFrame, PoseFrame } from './poseDetector';
 import type { MocapCalibration } from './mocapCalibration';
 import { solveTwoBoneIK, type TwoBoneIKResult } from './twoBoneIK';
 import { buildHumanoidRestAxes, HUMANOID_DIRECTION_CHILD } from '../humanoidRestPose';
+import {
+  capArmScaleByCurrentSegments,
+  computeAdaptiveLateralGain,
+  computeFaceNearBlend,
+  computeFrontPoseBlendBase,
+  computeHandsTogetherBlend,
+  computeMidpointBlend,
+  computePrayerBlend,
+} from './solverHeuristics';
 
 // ── MediaPipe BlazePose landmark indices ──────────────────────────────────────
 
@@ -874,14 +883,10 @@ export class DirectPoseApplier {
     // midpoint displacement is opposite to the sign needed for chest roll, so
     // apply the lateral bend with the negated sign here.
     if (Math.abs(lateralLean) > 1e-4 && this._lateralBendScale > 1e-4) {
-      const lateralLeanGain = THREE.MathUtils.lerp(
+      const lateralLeanGain = computeAdaptiveLateralGain(
         this._lateralBendScale,
-        Math.max(this._lateralBendScale, this._lateralBendScaleMax),
-        THREE.MathUtils.clamp(
-          (Math.abs(lateralLean) - THREE.MathUtils.degToRad(5)) / THREE.MathUtils.degToRad(12),
-          0,
-          1,
-        ),
+        this._lateralBendScaleMax,
+        Math.abs(lateralLean),
       );
       const lateralApplied = THREE.MathUtils.clamp(
         -lateralLean * lateralLeanGain,
@@ -998,15 +1003,9 @@ export class DirectPoseApplier {
     const perfLowerLen = Math.hypot(pw.x - pe.x, pw.y - pe.y, pw.z - pe.z);
     const perfSegmentLen = perfUpperLen + perfLowerLen;
     let segmentScaleCap = Number.NaN;
-    if (armScale > 1.02 && avatarArmLen > 1e-4 && perfSegmentLen > 1e-4) {
-      // Shoulder→wrist "max extension" calibration underestimates true arm
-      // length on videos where the performer never fully straightens the arm.
-      // That makes wrist targets overshoot the chain, so IK goes almost fully
-      // straight and the elbow appears not to bend. Cap overscaled targets by
-      // the instantaneous shoulder→elbow + elbow→wrist length instead.
-      segmentScaleCap = (avatarArmLen / perfSegmentLen) * 1.05;
-      armScale = Math.min(armScale, segmentScaleCap);
-    }
+    const armScaleCap = capArmScaleByCurrentSegments(rawArmScale, avatarArmLen, perfSegmentLen);
+    armScale = armScaleCap.effectiveScale;
+    if (armScaleCap.cap != null) segmentScaleCap = armScaleCap.cap;
     // Same-side shoulder anchor is better when the wrist is still on its own
     // side of the torso; midpoint anchoring is only needed once the arm folds
     // inward toward / across the centerline. As the wrist approaches the
@@ -1022,15 +1021,7 @@ export class DirectPoseApplier {
     const shoulderSpan = Math.hypot(shoulderDx, shoulderDy, shoulderDz);
     const shoulderCenterOffset = ps.x - perfMidX;
     const wristCenterOffset = pw.x - perfMidX;
-    let midpointBlend = 0;
-    if (Math.abs(shoulderCenterOffset) > 1e-4) {
-      if (shoulderCenterOffset * wristCenterOffset <= 0) {
-        midpointBlend = 1;
-      } else {
-        const centerRatio = Math.abs(wristCenterOffset) / Math.abs(shoulderCenterOffset);
-        midpointBlend = THREE.MathUtils.clamp((0.35 - centerRatio) / 0.35, 0, 1);
-      }
-    }
+    const midpointBlend = computeMidpointBlend(shoulderCenterOffset, wristCenterOffset);
 
     // Performer wrist offset from shoulder midpoint → VRM world.
     this._mpDeltaToVrm(pw.x - perfMidX, pw.y - perfMidY, pw.z - perfMidZ, this._v1);
@@ -1062,11 +1053,7 @@ export class DirectPoseApplier {
       const wristGap = Math.hypot(wristDx, wristDy, wristDz);
 
       if (shoulderSpan > 1e-4) {
-        const gapRatio = wristGap / shoulderSpan;
-        const wristLevelRatio = Math.abs(pw.y - otherWrist.y) / shoulderSpan;
-        handsTogetherBlend = wristLevelRatio <= 0.25
-          ? THREE.MathUtils.clamp((0.55 - gapRatio) / 0.30, 0, 1)
-          : 0;
+        handsTogetherBlend = computeHandsTogetherBlend(shoulderSpan, wristGap, pw.y - otherWrist.y);
         if (handsTogetherBlend > 1e-4) {
           const wristMidX = (pw.x + otherWrist.x) * 0.5;
           const wristMidY = (pw.y + otherWrist.y) * 0.5;
@@ -1103,7 +1090,7 @@ export class DirectPoseApplier {
     const wristBelowShoulders = shoulderSpan > 1e-4
       ? THREE.MathUtils.clamp((pw.y - perfMidY) / (shoulderSpan * 0.45), 0, 1)
       : 0;
-    const chestPrayerBlend = handsTogetherBlend * THREE.MathUtils.clamp((armBendRatio - 0.10) / 0.22, 0, 1) * wristBelowShoulders;
+    const chestPrayerBlend = computePrayerBlend(handsTogetherBlend, armBendRatio, wristBelowShoulders);
     if (chestPrayerBlend > 1e-4) {
       // Hands-together-at-chest poses should fold back toward the sternum, not
       // keep the same "forward reach" response as true reach-toward-camera
@@ -1175,12 +1162,16 @@ export class DirectPoseApplier {
           const mouthX = (mouthLeft.x + mouthRight.x) * 0.5;
           const mouthY = (mouthTop.y + mouthBottom.y) * 0.5;
           const mouthSpan2D = Math.hypot(mouthRight.x - mouthLeft.x, mouthRight.y - mouthLeft.y);
-          const faceXAllowance = Math.max(mouthSpan2D * 1.4, shoulderSpan2D * 0.16);
-          const faceYAllowance = shoulderSpan2D * 0.20;
-          const dxBlend = THREE.MathUtils.clamp((faceXAllowance - Math.abs(tipX - mouthX)) / Math.max(1e-4, faceXAllowance), 0, 1);
-          const dyBlend = THREE.MathUtils.clamp((faceYAllowance - Math.abs(tipY - mouthY)) / Math.max(1e-4, faceYAllowance), 0, 1);
-          const wristLiftNeed = THREE.MathUtils.clamp((wristNorm.y - mouthY) / Math.max(1e-4, shoulderSpan2D * 0.35), 0, 1);
-          faceNearBlend = handsTogetherBlend * dxBlend * dyBlend * wristLiftNeed;
+          faceNearBlend = computeFaceNearBlend({
+            handsTogetherBlend,
+            shoulderSpan2D,
+            tipX,
+            tipY,
+            mouthX,
+            mouthY,
+            mouthSpan2D,
+            wristNormY: wristNorm.y,
+          });
         }
       }
     }
@@ -1189,9 +1180,10 @@ export class DirectPoseApplier {
     // strong prayer poses it should not keep reclassifying the wrists as
     // forward-reaching targets. Suppress midpoint-driven front bias when the
     // dedicated prayer branch is already active.
-    const frontPoseBlendBase = Math.max(
-      midpointBlend * (1 - chestPrayerBlend * 0.95),
-      handsTogetherBlend * (1 - chestPrayerBlend * 0.85),
+    const frontPoseBlendBase = computeFrontPoseBlendBase(
+      midpointBlend,
+      handsTogetherBlend,
+      chestPrayerBlend,
     );
 
     // Folded/front-hand poses often have decent wrist-relative depth, but the

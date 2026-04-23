@@ -37,6 +37,20 @@ function resolveVrmUrl(): string {
 }
 
 interface AnimationEntry { name: string; url: string; }
+type CleanupFn = () => void;
+const GLOBAL_CLEANUP_KEY = '__vrmPlayerCleanup';
+
+function installGlobalCleanup(cleanup: CleanupFn): void {
+  let disposed = false;
+  const wrapped = (): void => {
+    if (disposed) return;
+    disposed = true;
+    cleanup();
+    if ((window as any)[GLOBAL_CLEANUP_KEY] === wrapped) delete (window as any)[GLOBAL_CLEANUP_KEY];
+  };
+  (window as any)[GLOBAL_CLEANUP_KEY] = wrapped;
+  import.meta.hot?.dispose(() => wrapped());
+}
 
 const LIVE_MOCAP_HAND_BONE_SUFFIXES = [
   'ThumbMetacarpal',
@@ -88,6 +102,8 @@ function resolveAnimations(): AnimationEntry[] {
 }
 
 async function main() {
+  const previousCleanup = (window as any)[GLOBAL_CLEANUP_KEY] as CleanupFn | undefined;
+  previousCleanup?.();
   const container = document.getElementById('app');
   if (!container) throw new Error('#app not found');
   const ctx = createScene(container);
@@ -131,13 +147,34 @@ async function main() {
   // ── Mocap ──────────────────────────────────────────────────────────────────
   const videoEl = document.getElementById('mocap-video') as HTMLVideoElement;
   const mocap   = new MocapController(vrm, videoEl);
+  const cleanupFns: CleanupFn[] = [];
+  const registerCleanup = (...fns: Array<CleanupFn | undefined>): void => {
+    for (const fn of fns) if (fn) cleanupFns.push(fn);
+  };
+  const cleanup = (): void => {
+    for (let i = cleanupFns.length - 1; i >= 0; i--) cleanupFns[i]();
+    cleanupFns.length = 0;
+    if ((window as any).__mocapDbg === dbgRecorder) delete (window as any).__mocapDbg;
+  };
+  registerCleanup(
+    () => mocap.dispose(),
+    () => mocapDebugViz.dispose(),
+    () => skelViz.dispose(),
+    () => {
+      vrm.scene.parent?.remove(vrm.scene);
+      ctx.dispose();
+    },
+  );
 
   const entries = resolveAnimations();
   if (entries.length === 0) {
     setStatus('no .bvh files — idle mode active');
     vrm.scene.visible = false;
-    mountDebugPanel(micro, idleLoop, pa, () => null, () => mocap, skelViz, validator, mocapDebugViz, dbgRecorder, (v) => { vrm.scene.visible = v; });
-    startRenderLoop(ctx, null, vrm, pa, micro, idleLoop, skelViz, validator, mocap, bonePanel, mocapDebugViz, dbgRecorder);
+    registerCleanup(
+      mountDebugPanel(micro, idleLoop, pa, () => null, () => mocap, skelViz, validator, mocapDebugViz, dbgRecorder, (v) => { vrm.scene.visible = v; }),
+      startRenderLoop(ctx, null, vrm, pa, micro, idleLoop, skelViz, validator, mocap, bonePanel, mocapDebugViz, dbgRecorder),
+    );
+    installGlobalCleanup(cleanup);
     return;
   }
 
@@ -153,11 +190,13 @@ async function main() {
   setStatus('drag animations from Library → Queue to play');
 
   // ── Transport bar ─────────────────────────────────────────────────────────
-  mountTransport(controller);
+  registerCleanup(mountTransport(controller));
 
   // ── Debug panel ────────────────────────────────────────────────────────────
   vrm.scene.visible = false;
-  mountDebugPanel(micro, idleLoop, pa, () => controller, () => mocap, skelViz, validator, mocapDebugViz, dbgRecorder, (v) => { vrm.scene.visible = v; });
+  registerCleanup(
+    mountDebugPanel(micro, idleLoop, pa, () => controller, () => mocap, skelViz, validator, mocapDebugViz, dbgRecorder, (v) => { vrm.scene.visible = v; }),
+  );
 
   // ── Library (source) ───────────────────────────────────────────────────────
   const names = entries.map((e) => e.name);
@@ -208,7 +247,10 @@ async function main() {
     setStatus(`${queuePos + 1}/${controller.queueLength} · ${item.name} · ${item.duration.toFixed(1)}s`);
   });
 
-  startRenderLoop(ctx, controller, vrm, pa, micro, idleLoop, skelViz, validator, mocap, bonePanel, mocapDebugViz, dbgRecorder);
+  registerCleanup(
+    startRenderLoop(ctx, controller, vrm, pa, micro, idleLoop, skelViz, validator, mocap, bonePanel, mocapDebugViz, dbgRecorder),
+  );
+  installGlobalCleanup(cleanup);
 }
 
 function startRenderLoop(
@@ -224,8 +266,11 @@ function startRenderLoop(
   bonePanel: BonePosePanel,
   mocapDebugViz: MocapDebugViz,
   dbgRecorder: MocapDebugRecorder,
-): void {
+): CleanupFn {
+  let stopped = false;
+  let rafId = 0;
   const tick = () => {
+    if (stopped) return;
     const delta = ctx.clock.getDelta();
 
     // 1. BVH mixer
@@ -309,9 +354,13 @@ function startRenderLoop(
 
     ctx.controls.update();
     ctx.renderer.render(ctx.scene, ctx.camera);
-    requestAnimationFrame(tick);
+    rafId = requestAnimationFrame(tick);
   };
   tick();
+  return () => {
+    stopped = true;
+    cancelAnimationFrame(rafId);
+  };
 }
 
 function formatTime(sec: number): string {
@@ -321,7 +370,7 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function mountTransport(controller: AnimationController): void {
+function mountTransport(controller: AnimationController): CleanupFn {
   const bar      = document.getElementById('transport');
   const nameEl   = document.getElementById('tp-name');
   const prevBtn  = document.getElementById('tp-prev');
@@ -330,14 +379,17 @@ function mountTransport(controller: AnimationController): void {
   const timeline = document.getElementById('tp-timeline');
   const progress = document.getElementById('tp-progress');
   const timeEl   = document.getElementById('tp-time');
-  if (!bar || !nameEl || !prevBtn || !playBtn || !nextBtn || !timeline || !progress || !timeEl) return;
+  if (!bar || !nameEl || !prevBtn || !playBtn || !nextBtn || !timeline || !progress || !timeEl) return () => {};
 
-  prevBtn.addEventListener('click', () => controller.prev());
-  nextBtn.addEventListener('click', () => controller.next());
+  const listenerAbort = new AbortController();
+  const listenerOpts: AddEventListenerOptions = { signal: listenerAbort.signal };
+
+  prevBtn.addEventListener('click', () => controller.prev(), listenerOpts);
+  nextBtn.addEventListener('click', () => controller.next(), listenerOpts);
   playBtn.addEventListener('click', () => {
     controller.togglePaused();
     playBtn.textContent = controller.paused ? '▶' : '⏸';
-  });
+  }, listenerOpts);
 
   const seekFromEvent = (ev: PointerEvent): void => {
     const dur = controller.currentDuration;
@@ -349,13 +401,13 @@ function mountTransport(controller: AnimationController): void {
   timeline.addEventListener('pointerdown', (ev) => {
     (ev.target as HTMLElement).setPointerCapture(ev.pointerId);
     seekFromEvent(ev as PointerEvent);
-  });
+  }, listenerOpts);
   timeline.addEventListener('pointermove', (ev) => {
     if ((ev as PointerEvent).pressure > 0 || (ev.buttons & 1)) seekFromEvent(ev as PointerEvent);
-  });
+  }, listenerOpts);
 
   // Refresh UI 10× per second
-  setInterval(() => {
+  const intervalId = window.setInterval(() => {
     const hasActive = controller.hasBvhActive;
     bar.classList.toggle('empty', !hasActive);
     if (!hasActive) {
@@ -373,6 +425,11 @@ function mountTransport(controller: AnimationController): void {
     (progress as HTMLElement).style.width = `${frac * 100}%`;
     playBtn.textContent  = controller.paused ? '▶' : '⏸';
   }, 100);
+
+  return () => {
+    listenerAbort.abort();
+    clearInterval(intervalId);
+  };
 }
 
 main().catch((err) => {

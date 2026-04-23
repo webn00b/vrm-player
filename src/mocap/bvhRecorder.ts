@@ -145,7 +145,10 @@ export class BvhRecorder {
   /** Stop and return the BVH text. */
   stop(): string {
     this._recording = false;
-    return this._generate();
+    const text = this._generate();
+    this.frames = [];
+    this._lastFrameTime = -1;
+    return text;
   }
 
   // ── BVH generation ───────────────────────────────────────────────────────────
