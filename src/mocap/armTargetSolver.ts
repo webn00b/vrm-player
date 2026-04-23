@@ -275,6 +275,8 @@ export function solveArmTarget(input: ArmTargetSolverInput): ArmTargetSolverResu
   }
 
   const elbowPoleZ = THREE.MathUtils.lerp(armPoleZ, 1, frontPoseBlendBase);
+  // _v1 is free here (elbow delta was already consumed into elbowTarget).
+  // Use _v1 for pole direction — _v3 aliases `target` and must not be overwritten.
   mpDeltaToVrm(
     mirrorX,
     perfElbow.x - perfShoulder.x,
@@ -291,15 +293,15 @@ export function solveArmTarget(input: ArmTargetSolverInput): ArmTargetSolverResu
     perfElbow.x - perfShoulder.x,
     perfElbow.y - perfShoulder.y,
     perfElbow.z - perfShoulder.z,
-    _v3,
+    _v1,
   );
-  _v3.z *= elbowPoleZ;
-  if (_v3.lengthSq() < 1e-6) _v3.set(0, -1, 0);
+  _v1.z *= elbowPoleZ;
+  if (_v1.lengthSq() < 1e-6) _v1.set(0, -1, 0);
 
   return {
     target: target.clone(),
     elbowTarget: elbowTarget.clone(),
-    rawPoleDirection: _v3.clone(),
+    rawPoleDirection: _v1.clone(),
     frontPoseBlendBase,
     diagnostics: {
       rawScale: rawArmScale,
