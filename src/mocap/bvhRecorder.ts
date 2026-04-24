@@ -82,6 +82,13 @@ interface Frame {
 
 interface BvhRecorderOptions {
   getJointOffset?: (name: string) => [number, number, number] | null;
+  /**
+   * Returns the inverse of the A-pose→T-pose correction quaternion for a bone.
+   * When provided, each recorded quaternion q (rawAxis-convention) is remapped
+   * to q_bvh = corrInv × q so that T-pose = identity in the exported file.
+   * This makes the BVH compatible with external players (Blender, etc.).
+   */
+  getRestCorrectionInv?: (name: string) => [number, number, number, number] | null;
 }
 
 // ── BvhRecorder ───────────────────────────────────────────────────────────────
@@ -98,9 +105,11 @@ export class BvhRecorder {
   private _recording = false;
   private _lastFrameTime = -1;
   private readonly _getJointOffset: ((name: string) => [number, number, number] | null) | null;
+  private readonly _getRestCorrectionInv: ((name: string) => [number, number, number, number] | null) | null;
 
   constructor(options: BvhRecorderOptions = {}) {
     this._getJointOffset = options.getJointOffset ?? null;
+    this._getRestCorrectionInv = options.getRestCorrectionInv ?? null;
   }
 
   get recording():  boolean { return this._recording; }
@@ -191,13 +200,10 @@ export class BvhRecorder {
       `${indent}  OFFSET ${offset[0].toFixed(2)} ${offset[1].toFixed(2)} ${offset[2].toFixed(2)}`,
     );
 
-    // YXZ Euler order (yaw → pitch → roll) matches how humanoid bones naturally decompose:
-    // Y is the primary axis for spine-aligned bones, so decomposing around it first
-    // minimises cross-axis ghosting. This is what the sysAnimOnline reference uses.
     if (joint.isRoot) {
-      lines.push(`${indent}  CHANNELS 6 Xposition Yposition Zposition Yrotation Xrotation Zrotation`);
+      lines.push(`${indent}  CHANNELS 6 Xposition Yposition Zposition Zrotation Yrotation Xrotation`);
     } else {
-      lines.push(`${indent}  CHANNELS 3 Yrotation Xrotation Zrotation`);
+      lines.push(`${indent}  CHANNELS 3 Zrotation Yrotation Xrotation`);
     }
 
     if (children.length === 0) {
@@ -220,11 +226,16 @@ export class BvhRecorder {
     const p = frame.hipsPos ?? [0, 0.9, 0];
     parts.push(p[0], p[1], p[2]);
 
-    // All joints in JOINTS order: Y X Z euler in degrees (matches CHANNELS declaration)
     for (const j of JOINTS) {
-      const q = frame.bones[j.name] ?? [0, 0, 0, 1];
-      const [ry, rx, rz] = quatToYXZ(q);
-      parts.push(ry * RAD2DEG, rx * RAD2DEG, rz * RAD2DEG);
+      let q = frame.bones[j.name] ?? [0, 0, 0, 1];
+      // Remap from rawAxis-convention (A-pose=identity) to T-pose-relative
+      // (T-pose=identity) so external players (Blender, etc.) get correct T-pose.
+      if (this._getRestCorrectionInv) {
+        const ci = this._getRestCorrectionInv(j.name);
+        if (ci) q = applyPreQuat(ci, q);
+      }
+      const [rz, ry, rx] = quatToZYX(q);
+      parts.push(rz * RAD2DEG, ry * RAD2DEG, rx * RAD2DEG);
     }
 
     return parts.map((v) => v.toFixed(4)).join(' ');
@@ -236,11 +247,23 @@ export class BvhRecorder {
 const RAD2DEG = 180 / Math.PI;
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
+const _qi = new THREE.Quaternion();
 
-function quatToYXZ(arr: [number, number, number, number]): [number, number, number] {
+function quatToZYX(arr: [number, number, number, number]): [number, number, number] {
   _q.fromArray(arr);
-  _e.setFromQuaternion(_q, 'YXZ');
-  return [_e.y, _e.x, _e.z];
+  _e.setFromQuaternion(_q, 'ZYX');
+  return [_e.z, _e.y, _e.x];
+}
+
+/** Returns corrInv × q (pre-multiply) as a plain array. */
+function applyPreQuat(
+  corrInv: [number, number, number, number],
+  q: [number, number, number, number],
+): [number, number, number, number] {
+  _qi.set(corrInv[0], corrInv[1], corrInv[2], corrInv[3]);
+  _q.set(q[0], q[1], q[2], q[3]);
+  _qi.multiply(_q); // _qi = corrInv * q
+  return [_qi.x, _qi.y, _qi.z, _qi.w];
 }
 
 // ── Download ──────────────────────────────────────────────────────────────────

@@ -377,6 +377,11 @@ export class DirectPoseApplier {
     return [q.x, q.y, q.z, q.w];
   }
 
+  /** Rest axis used for direction retargeting — should equal normalizedAxis after the fix. */
+  getRestAxis(boneName: string): THREE.Vector3 | null {
+    return this.restLocalAxis.get(boneName) ?? null;
+  }
+
   // ── Private ─────────────────────────────────────────────────────────────────
 
   private _captureGroundY(): void {
@@ -405,9 +410,6 @@ export class DirectPoseApplier {
   }
 
   private _computeRestAxes(): void {
-    // Use the avatar's actual raw-bone chain direction when available.
-    // This compensates bind-pose / A-pose drift while keeping the same
-    // quaternion math everywhere else in the applier.
     const restAxes = buildHumanoidRestAxes(this.vrm);
     for (const [bone, info] of restAxes) {
       this.restLocalAxis.set(bone, info.rawAxis.clone());

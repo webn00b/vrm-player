@@ -184,12 +184,49 @@ async function main() {
     },
   });
 
-  mountLibrary({
-    names,
-    onDragToQueue: (itemIdx) => {
-      controller.addToQueue(itemIdx);
-      queue.push(names[itemIdx]);
-    },
+  const addLibraryItemToQueue = (itemIdx: number): void => {
+    controller.addToQueue(itemIdx);
+    queue.push(names[itemIdx]);
+  };
+  const refreshLibrary = (): void => mountLibrary({ names, onDragToQueue: addLibraryItemToQueue });
+
+  refreshLibrary();
+
+  // ── File-system BVH drop ───────────────────────────────────────────────────
+  const handleDroppedBvhFile = async (file: File): Promise<void> => {
+    const name = file.name.replace(/\.bvh$/i, '');
+    setStatus(`loading ${name}…`);
+    try {
+      const text = await file.text();
+      const bvh  = parseBVH(text);
+      const clip = await retargetBvhToVrm(vrm, bvh, name);
+      controller.register(name, clip);
+      names.push(name);
+      refreshLibrary();
+      addLibraryItemToQueue(names.length - 1);
+      setStatus(`▶ ${name}`);
+    } catch (e) {
+      setStatus(`load failed: ${(e as Error).message}`);
+    }
+  };
+
+  const onWindowDragOver = (e: DragEvent): void => {
+    if (Array.from(e.dataTransfer?.items ?? []).some((it) => it.kind === 'file')) {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = 'copy';
+    }
+  };
+  const onWindowDrop = (e: DragEvent): void => {
+    const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => /\.bvh$/i.test(f.name));
+    if (!files.length) return;
+    e.preventDefault();
+    files.forEach((f) => void handleDroppedBvhFile(f));
+  };
+  window.addEventListener('dragover', onWindowDragOver);
+  window.addEventListener('drop', onWindowDrop);
+  registerCleanup(() => {
+    window.removeEventListener('dragover', onWindowDragOver);
+    window.removeEventListener('drop', onWindowDrop);
   });
 
   // ── Mocap → auto-replay recorded BVH ───────────────────────────────────────
@@ -202,9 +239,8 @@ async function main() {
       const clip = await retargetBvhToVrm(vrm, bvh, name);
       controller.register(name, clip);
       names.push(name);
-      const idx = names.length - 1;
-      controller.addToQueue(idx);
-      queue.push(name);
+      refreshLibrary();
+      addLibraryItemToQueue(names.length - 1);
       setStatus(`▶ replaying ${name}`);
     } catch (e) {
       setStatus(`replay failed: ${(e as Error).message}`);

@@ -5,6 +5,7 @@ import { DirectPoseApplier } from './directPoseApplier';
 import { FaceApplier } from './faceApplier';
 import { BvhRecorder, downloadBvh } from './bvhRecorder';
 import { MocapCalibration, type CalibrationStatus } from './mocapCalibration';
+import { buildHumanoidRestAxes } from '../humanoidRestPose';
 
 export type MocapState = 'off' | 'live' | 'recording';
 
@@ -84,9 +85,25 @@ export class MocapController {
   }
 
   private _createRecorder(): BvhRecorder {
+    const correctionInvMap = this._buildCorrectionInvMap();
     return new BvhRecorder({
       getJointOffset: (name) => this._getBvhJointOffset(name),
+      getRestCorrectionInv: (name) => correctionInvMap.get(name) ?? null,
     });
+  }
+
+  private _buildCorrectionInvMap(): Map<string, [number, number, number, number]> {
+    const map = new Map<string, [number, number, number, number]>();
+    const restAxes = buildHumanoidRestAxes(this._vrm);
+    const _q = new THREE.Quaternion();
+    for (const [bone, info] of restAxes) {
+      // correction = setFromUnitVectors(rawAxis, normalizedAxis)
+      // correctionInv rotates normalizedAxis back to rawAxis direction;
+      // pre-multiplying by corrInv maps rawAxis-convention q to T-pose-relative q.
+      _q.copy(info.correction).invert();
+      map.set(bone, [_q.x, _q.y, _q.z, _q.w]);
+    }
+    return map;
   }
 
   private _getBvhJointOffset(name: string): [number, number, number] | null {
@@ -465,6 +482,61 @@ export class MocapController {
     const name = `pose_${++this._poseExportIndex}`;
     downloadBvh(bvhText, `${name}.bvh`);
     return name;
+  }
+
+  /**
+   * Returns a multi-section diagnostic string covering:
+   * - VRM normalized bone offsets (used as BVH OFFSET values)
+   * - Humanoid rest-axis corrections (rawAxis vs normalizedAxis per bone)
+   * - Current-pose 1-frame BVH text
+   * Intended for the debug diagnostic modal.
+   */
+  getBvhDiagnosticText(): string {
+    const lines: string[] = ['=== BVH Diagnostic ===', `Timestamp: ${new Date().toISOString()}`, ''];
+
+    // ── Joint offsets ────────────────────────────────────────────────────────
+    lines.push('--- Joint offsets (BVH HIERARCHY OFFSET, metres) ---');
+    const boneNames = Object.keys(this._vrm.humanoid.humanBones);
+    for (const name of boneNames) {
+      const offset = this._getBvhJointOffset(name);
+      if (offset) {
+        lines.push(`  ${name.padEnd(30)} [${offset.map((v) => v.toFixed(5)).join(', ')}]`);
+      } else {
+        lines.push(`  ${name.padEnd(30)} (not in humanoid)`);
+      }
+    }
+
+    // ── Applier rest axes (what the mocap pipeline actually uses) ────────────
+    lines.push('', '--- Applier restLocalAxis + per-bone BVH correction ---');
+    lines.push('  applier uses rawAxis; BVH export pre-multiplies by corrInv to produce T-pose-relative output');
+    const axes = buildHumanoidRestAxes(this._vrm);
+    for (const [bone, info] of axes) {
+      const corrAngleDeg = THREE.MathUtils.radToDeg(2 * Math.acos(Math.min(1, Math.abs(info.correction.w))));
+      const na = info.normalizedAxis;
+      const ra = info.rawAxis;
+      const applierAxis = this.applier.getRestAxis(bone);
+      const matchesRaw = applierAxis
+        ? Math.abs(applierAxis.dot(ra) - 1) < 0.001
+        : false;
+      lines.push(`  ${bone.padEnd(20)} restAxis=[${(applierAxis?.x ?? NaN).toFixed(4)}, ${(applierAxis?.y ?? NaN).toFixed(4)}, ${(applierAxis?.z ?? NaN).toFixed(4)}]  normAxis=[${na.x.toFixed(4)}, ${na.y.toFixed(4)}, ${na.z.toFixed(4)}]  rawAxis=[${ra.x.toFixed(4)}, ${ra.y.toFixed(4)}, ${ra.z.toFixed(4)}]  corrAngle=${corrAngleDeg.toFixed(1)}°  useRaw=${matchesRaw}`);
+    }
+
+    // ── Current pose BVH (1 frame) ───────────────────────────────────────────
+    lines.push('', `--- Current pose BVH (1 frame) [mocap state: ${this._state}] ---`);
+    lines.push('  NOTE: bone values here reflect CURRENT node.quaternion (idle anim when camera off).');
+    lines.push('  To verify BVH fix: enable camera, stand in T-pose, then re-open this modal.');
+    try {
+      const recorder = this._createRecorder();
+      recorder.captureFrame(
+        (name) => this.applier.getQuaternion(name),
+        () => this._getBvhHipsPosition(),
+      );
+      lines.push(recorder.stop());
+    } catch (e) {
+      lines.push(`ERROR: ${(e as Error).message}`);
+    }
+
+    return lines.join('\n');
   }
 
   private _teardownFileCapture(): void {

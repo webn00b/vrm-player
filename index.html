@@ -600,6 +600,21 @@
       </div>
     </div>
 
+    <!-- BVH diagnostic modal -->
+    <div id="bvh-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1001;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+      <div id="bvh-modal" style="background:#131313;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:18px 20px 16px;width:660px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0">
+          <span style="font-size:12px;font-weight:700;letter-spacing:0.03em;opacity:0.9;font-family:ui-monospace,monospace">🔬 BVH диагностика</span>
+          <span style="display:flex;gap:6px">
+            <button class="skel-close" id="bvh-modal-copy">📋 copy</button>
+            <button class="skel-close" id="bvh-modal-refresh">🔄 refresh</button>
+            <button class="skel-close" id="bvh-modal-close">✕ close</button>
+          </span>
+        </div>
+        <pre id="bvh-modal-body" style="margin:0;overflow-y:auto;font-family:ui-monospace,monospace;font-size:10px;color:#e0e0e0;white-space:pre;line-height:1.55;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent;flex:1;min-height:0"></pre>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -2,6 +2,7 @@ import type { MocapState } from './mocap/mocapController';
 import { STAT_LANDMARKS } from './mocap/mocapDebugViz';
 import { buildMainPanelHtml, buildTuningPanelHtml } from './debugPanelHtml';
 import { mountSkelModal } from './debugPanelSkelModal';
+import { mountBvhModal } from './debugPanelBvhModal';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 
 export function mountDebugPanel(
@@ -814,10 +815,18 @@ export function mountDebugPanel(
     rememberTimeout,
   });
 
+  // ── BVH diagnostic modal ──────────────────────────────────────────────────
+
+  const cleanupBvhModal = mountBvhModal({
+    getMocap,
+    signal: listenerAbort.signal,
+    rememberTimeout,
+  });
 
   return () => {
     clearInterval(framesTimer);
     cleanupSkelModal();
+    cleanupBvhModal();
     for (const id of intervalIds) clearInterval(id);
     for (const id of timeoutIds) clearTimeout(id);
     listenerAbort.abort();

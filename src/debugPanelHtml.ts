@@ -110,30 +110,6 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
     <h2>Mocap</h2>
     <div class="dbg-section">
       <div class="dbg-row">
-        <span class="dbg-label" id="mocap-status-label">📷 Camera off</span>
-        <button class="dbg-toggle off" id="mocap-cam-btn">Start</button>
-      </div>
-      <div class="dbg-row" id="mocap-rec-row" style="display:none">
-        <span class="dbg-label" id="mocap-frames">0 frames</span>
-        <button class="dbg-toggle" id="mocap-rec-btn">⏺ Rec</button>
-      </div>
-      <div class="dbg-row" id="mocap-playback-row" style="display:none;gap:3px">
-        <button class="dbg-toggle" id="mocap-pause-btn">⏸</button>
-        <button class="dbg-toggle off" id="mocap-step-back-btn" title="Step -1 frame">⏮</button>
-        <button class="dbg-toggle off" id="mocap-step-fwd-btn"  title="Step +1 frame">⏭</button>
-        <button class="dbg-toggle off" id="mocap-grab-btn"      title="Grab current pose">💾</button>
-        <button class="dbg-toggle off" id="mocap-flush-btn"     title="Download captured BVH">⬇</button>
-      </div>
-      <div class="dbg-row">
-        <span class="dbg-label">📁 From video</span>
-        <label class="dbg-toggle off" id="mocap-file-label" style="cursor:pointer">Load</label>
-        <input type="file" id="mocap-file-input" accept="video/*" style="display:none">
-      </div>
-      <div class="dbg-row">
-        <span class="dbg-label">📤 Current pose</span>
-        <button class="dbg-toggle off" id="mocap-export-pose-btn" title="Download current avatar pose as a 1-frame BVH">Export .bvh</button>
-      </div>
-      <div class="dbg-row">
         <span class="dbg-label">🎯 Pose model</span>
         <div style="display:flex;gap:3px">
           <button class="dbg-toggle off" data-quality="lite">lite</button>
@@ -179,6 +155,10 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
           <button class="dbg-toggle"     data-depth="1">3D</button>
         </div>
       </div>
+      <div class="dbg-row">
+        <span class="dbg-label">🔬 BVH диагностика</span>
+        <button class="dbg-toggle off" id="bvh-diag-btn">Inspect</button>
+      </div>
       <div class="dbg-hint">Detailed tuning sliders are in the panel on the right →</div>
     </div>
     </div>
@@ -188,6 +168,35 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
 export function buildTuningPanelHtml(): string {
   return `
       <p class="panel-title"><span>Mocap tuning</span></p>
+
+      <div class="dbg-section">
+        <div class="dbg-row">
+          <span class="dbg-label" id="mocap-status-label">📷 Camera off</span>
+          <button class="dbg-toggle off" id="mocap-cam-btn">Start</button>
+        </div>
+        <div class="dbg-row" id="mocap-rec-row" style="display:none">
+          <span class="dbg-label" id="mocap-frames">0 frames</span>
+          <button class="dbg-toggle" id="mocap-rec-btn">⏺ Rec</button>
+        </div>
+        <div class="dbg-row" id="mocap-playback-row" style="display:none;gap:3px">
+          <button class="dbg-toggle" id="mocap-pause-btn">⏸</button>
+          <button class="dbg-toggle off" id="mocap-step-back-btn" title="Step -1 frame">⏮</button>
+          <button class="dbg-toggle off" id="mocap-step-fwd-btn"  title="Step +1 frame">⏭</button>
+          <button class="dbg-toggle off" id="mocap-grab-btn"      title="Grab current pose">💾</button>
+          <button class="dbg-toggle off" id="mocap-flush-btn"     title="Download captured BVH">⬇</button>
+        </div>
+        <div class="dbg-row">
+          <span class="dbg-label">📁 From video</span>
+          <label class="dbg-toggle off" id="mocap-file-label" style="cursor:pointer">Load</label>
+          <input type="file" id="mocap-file-input" accept="video/*" style="display:none">
+        </div>
+        <div class="dbg-row">
+          <span class="dbg-label">📤 Current pose</span>
+          <button class="dbg-toggle off" id="mocap-export-pose-btn" title="Download current avatar pose as a 1-frame BVH">Export .bvh</button>
+        </div>
+      </div>
+
+      <div class="dbg-divider"></div>
 
       <div class="dbg-section">
         <div class="dbg-row">

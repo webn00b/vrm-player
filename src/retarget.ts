@@ -11,6 +11,13 @@ import { validateClip, clampClip } from './validation/clipValidator';
 export interface RetargetOptions {
   /** If true, keyframes outside anatomical ROM are clamped in-place. Default false (log only). */
   clampOutOfRange?: boolean;
+  /**
+   * Skip the raw→normalized rest-pose correction step.
+   * Set this when the BVH was recorded from the VRM's own normalized bones
+   * (i.e. self-recorded via BvhRecorder), because those quaternions are already
+   * in normalized T-pose space and applying the correction again would corrupt them.
+   */
+  skipRestCorrection?: boolean;
 }
 
 /**
@@ -38,9 +45,11 @@ export async function retargetBvhToVrm(
     if (!vrmAnimations?.length) throw new Error('No VRM animations in exported VRMA');
     clip = createVRMAnimationClip(vrmAnimations[0], vrm);
     clip.name = name;
-    const correctedTracks = applyHumanoidRestCorrectionsToClip(clip, vrm);
-    if (correctedTracks > 0) {
-      console.info(`[retarget] applied rest-pose correction to ${correctedTracks} quaternion track(s) in "${name}"`);
+    if (!opts.skipRestCorrection) {
+      const correctedTracks = applyHumanoidRestCorrectionsToClip(clip, vrm);
+      if (correctedTracks > 0) {
+        console.info(`[retarget] applied rest-pose correction to ${correctedTracks} quaternion track(s) in "${name}"`);
+      }
     }
   } finally {
     URL.revokeObjectURL(url);
