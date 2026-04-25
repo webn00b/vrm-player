@@ -76,3 +76,26 @@ export async function retargetBvhToVrm(
 
   return clip;
 }
+
+/**
+ * Build the same VRMA glTF binary that the retarget pipeline produces and
+ * trigger a `<name>.vrma` download. Reuses convertBVHToVRMAnimation with the
+ * matching `hipsRestY` so the exported file plays back identically in third-
+ * party VRM viewers (UniVRM Sample, pixiv reference player, etc).
+ */
+export async function exportBvhAsVrma(
+  vrm: VRM,
+  bvh: ParsedBVH,
+  name: string,
+): Promise<void> {
+  const hipsRestY = (vrm.humanoid as any).normalizedRestPose?.hips?.position?.[1];
+  const buf: ArrayBuffer = await convertBVHToVRMAnimation(bvh, { hipsRestY });
+  const blob = new Blob([buf], { type: 'model/gltf-binary' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), {
+    href: url,
+    download: `${name}.vrma`,
+  });
+  a.click();
+  URL.revokeObjectURL(url);
+}

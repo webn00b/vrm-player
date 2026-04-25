@@ -1,7 +1,8 @@
 import { createScene } from './scene';
 import { loadVRM } from './vrmLoader';
 import { loadBVH, parseBVH } from './bvhLoader';
-import { retargetBvhToVrm } from './retarget';
+import { retargetBvhToVrm, exportBvhAsVrma } from './retarget';
+import type { ParsedBVH } from './bvhLoader';
 import { AnimationController } from './animationController';
 import { PriorityAnimator } from './priorityAnimator';
 import { MicroAnimations } from './microAnimations';
@@ -147,8 +148,14 @@ async function main() {
   setStatus(`loading ${entries.length} animation${entries.length === 1 ? '' : 's'}…`);
   const controller = new AnimationController(vrm);
 
-  for (const entry of entries) {
+  // Per-library-item parsed BVH cache. Used by the ⬇ export-as-VRMA button so
+  // we can re-run convertBVHToVRMAnimation on demand without re-fetching/parsing.
+  const bvhByIndex = new Map<number, ParsedBVH>();
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
     const bvh  = await loadBVH(entry.url);
+    bvhByIndex.set(i, bvh);
     const clip = await retargetBvhToVrm(vrm, bvh, entry.name);
     controller.register(entry.name, clip);
   }
@@ -188,7 +195,18 @@ async function main() {
     controller.addToQueue(itemIdx);
     queue.push(names[itemIdx]);
   };
-  const refreshLibrary = (): void => mountLibrary({ names, onDragToQueue: addLibraryItemToQueue });
+  const exportLibraryItemAsVrma = (itemIdx: number): void => {
+    const bvh = bvhByIndex.get(itemIdx);
+    if (!bvh) { setStatus(`no source BVH for ${names[itemIdx]}`); return; }
+    exportBvhAsVrma(vrm, bvh, names[itemIdx])
+      .then(() => setStatus(`saved ${names[itemIdx]}.vrma`))
+      .catch((e) => setStatus(`vrma export failed: ${(e as Error).message}`));
+  };
+  const refreshLibrary = (): void => mountLibrary({
+    names,
+    onDragToQueue: addLibraryItemToQueue,
+    onExport: exportLibraryItemAsVrma,
+  });
 
   refreshLibrary();
 
@@ -202,6 +220,7 @@ async function main() {
       const clip = await retargetBvhToVrm(vrm, bvh, name);
       controller.register(name, clip);
       names.push(name);
+      bvhByIndex.set(names.length - 1, bvh);
       refreshLibrary();
       addLibraryItemToQueue(names.length - 1);
       setStatus(`▶ ${name}`);
@@ -239,6 +258,7 @@ async function main() {
       const clip = await retargetBvhToVrm(vrm, bvh, name);
       controller.register(name, clip);
       names.push(name);
+      bvhByIndex.set(names.length - 1, bvh);
       refreshLibrary();
       addLibraryItemToQueue(names.length - 1);
       setStatus(`▶ replaying ${name}`);

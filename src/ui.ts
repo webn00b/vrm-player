@@ -5,6 +5,8 @@ export interface LibraryOptions {
   onDragToQueue: (itemIndex: number) => void;
   /** Called when user renames an item in the library (double-click). */
   onRename?: (itemIndex: number, newDisplayName: string) => void;
+  /** If provided, render a per-item download button. */
+  onExport?: (itemIndex: number) => void;
 }
 
 const LIBRARY_ALIAS_KEY = 'vrm-player.library-aliases';
@@ -54,8 +56,30 @@ export function mountLibrary(opts: LibraryOptions): void {
     const li = document.createElement('li');
     li.className = 'lib-item';
     li.setAttribute('draggable', 'true');
-    li.textContent = formatLibraryName(name);
     li.title = `${name}\n(double-click to rename, drag to Queue to play)`;
+
+    const label = document.createElement('span');
+    label.className = 'lib-item-label';
+    label.textContent = formatLibraryName(name);
+    li.appendChild(label);
+
+    if (opts.onExport) {
+      const exportBtn = document.createElement('button');
+      exportBtn.className = 'lib-item-export';
+      exportBtn.textContent = '⬇';
+      exportBtn.title = 'Download as VRMA';
+      exportBtn.setAttribute('draggable', 'false');
+      exportBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        opts.onExport!(i);
+      });
+      exportBtn.addEventListener('dragstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      li.appendChild(exportBtn);
+    }
 
     li.addEventListener('dragstart', (e) => {
       li.classList.add('dragging');
@@ -82,12 +106,13 @@ export function mountLibrary(opts: LibraryOptions): void {
           writeLibraryAlias(name, v || null);
           opts.onRename?.(i, v || name);
         }
-        li.replaceChildren(document.createTextNode(formatLibraryName(name)));
+        input.replaceWith(label);
+        label.textContent = formatLibraryName(name);
         li.setAttribute('draggable', 'true');
       };
 
       li.setAttribute('draggable', 'false');
-      li.replaceChildren(input);
+      label.replaceWith(input);
       input.focus();
       input.select();
       input.addEventListener('blur',    () => commit(true));
