@@ -8,7 +8,7 @@ interface BvhJoint {
   isRoot?: boolean;
 }
 
-const JOINTS: BvhJoint[] = [
+export const BVH_JOINTS: BvhJoint[] = [
   // ── Spine chain ────────────────────────────────────────────────────────────
   { name: 'hips',              parent: null,              isRoot: true },
   { name: 'spine',             parent: 'hips' },
@@ -74,6 +74,9 @@ const JOINTS: BvhJoint[] = [
 const FRAME_RATE = 30;
 const FRAME_TIME = 1 / FRAME_RATE;
 
+export const BVH_FRAME_RATE = FRAME_RATE;
+export const BVH_FRAME_TIME = FRAME_TIME;
+
 interface Frame {
   time:    number;
   bones:   Record<string, [number, number, number, number]>; // quat [x,y,z,w]
@@ -83,12 +86,36 @@ interface Frame {
 interface BvhRecorderOptions {
   getJointOffset?: (name: string) => [number, number, number] | null;
   /**
-   * Returns the inverse of the A-pose→T-pose correction quaternion for a bone.
-   * When provided, each recorded quaternion q (rawAxis-convention) is remapped
-   * to q_bvh = corrInv × q so that T-pose = identity in the exported file.
-   * This makes the BVH compatible with external players (Blender, etc.).
+   * Inverse of the A-pose→T-pose correction quaternion for a bone. When
+   * provided, each recorded quaternion `q_norm` (rawAxis-convention from the
+   * applier) is **post**-multiplied: `q_bvh = q_norm × corrInv`. That places
+   * T-pose at identity in the BVH file (so Blender / external players show
+   * the right rest pose) **and** remains an exact algebraic inverse of the
+   * loader's post-multiply by `correction`:
+   *
+   *   q_track = q_bvh × correction = q_norm × corrInv × correction = q_norm ✓
+   *
+   * Pre-multiply was tried first but it doesn't satisfy
+   *   q_bvh × normalizedAxis = d
+   * outside T-pose, and the resulting quaternions land in ZYX Euler
+   * gimbal-zones for typical arm poses, producing ~40° round-trip drift.
    */
   getRestCorrectionInv?: (name: string) => [number, number, number, number] | null;
+  /**
+   * If true, every quaternion's x/z components and every position's x/z
+   * components are negated before being written to the BVH. Set this when
+   * sourcing the recording from a VRM 0.x avatar (`vrm.meta.metaVersion === '0'`).
+   *
+   * Why: `@pixiv/three-vrm-animation/createVRMAnimationClip` automatically
+   * negates x/z of every loaded VRMA track when the **target** avatar is 0.x
+   * (to convert from VRMA's canonical 1.0-convention to 0.x's left-handed
+   * convention). Our recorder reads quaternions directly from 0.x normalized
+   * bones, so without this pre-flip the loader's flip on round-trip leaves the
+   * values doubly-flipped and produces ~150° drift on bones with non-trivial
+   * Z rotation. Pre-flipping here normalises BVH content to 1.0-convention,
+   * so the loader's flip cancels exactly.
+   */
+  flipForVrm0?: boolean;
 }
 
 // ── BvhRecorder ───────────────────────────────────────────────────────────────
@@ -106,10 +133,12 @@ export class BvhRecorder {
   private _lastFrameTime = -1;
   private readonly _getJointOffset: ((name: string) => [number, number, number] | null) | null;
   private readonly _getRestCorrectionInv: ((name: string) => [number, number, number, number] | null) | null;
+  private readonly _flipForVrm0: boolean;
 
   constructor(options: BvhRecorderOptions = {}) {
     this._getJointOffset = options.getJointOffset ?? null;
     this._getRestCorrectionInv = options.getRestCorrectionInv ?? null;
+    this._flipForVrm0 = options.flipForVrm0 ?? false;
   }
 
   get recording():  boolean { return this._recording; }
@@ -136,7 +165,7 @@ export class BvhRecorder {
     this._lastFrameTime = time;
 
     const bones: Record<string, [number, number, number, number]> = {};
-    for (const j of JOINTS) {
+    for (const j of BVH_JOINTS) {
       bones[j.name] = getQuaternion(j.name) ?? [0, 0, 0, 1];
     }
     this.frames.push({ time, bones, hipsPos: getHipsPosition?.() ?? undefined });
@@ -160,7 +189,7 @@ export class BvhRecorder {
     }
     const time = this.frames.length * FRAME_TIME;
     const bones: Record<string, [number, number, number, number]> = {};
-    for (const j of JOINTS) {
+    for (const j of BVH_JOINTS) {
       bones[j.name] = getQuaternion(j.name) ?? [0, 0, 0, 1];
     }
     this.frames.push({ time, bones, hipsPos: getHipsPosition?.() ?? undefined });
@@ -188,9 +217,9 @@ export class BvhRecorder {
   }
 
   private _writeJoint(lines: string[], name: string, depth: number): void {
-    const joint    = JOINTS.find((j) => j.name === name)!;
+    const joint    = BVH_JOINTS.find((j) => j.name === name)!;
     const indent   = '  '.repeat(depth);
-    const children = JOINTS.filter((j) => j.parent === name);
+    const children = BVH_JOINTS.filter((j) => j.parent === name);
 
     const tag = joint.isRoot ? 'ROOT' : 'JOINT';
     lines.push(`${indent}${tag} ${name}`);
@@ -222,17 +251,27 @@ export class BvhRecorder {
   private _frameRow(frame: Frame): string {
     const parts: number[] = [];
 
-    // Root position
+    // Root position. For VRM 0.x sources, negate x and z so the on-load flip
+    // performed by `@pixiv/three-vrm-animation/createVRMAnimationClip` cancels.
     const p = frame.hipsPos ?? [0, 0.9, 0];
-    parts.push(p[0], p[1], p[2]);
+    if (this._flipForVrm0) {
+      parts.push(-p[0], p[1], -p[2]);
+    } else {
+      parts.push(p[0], p[1], p[2]);
+    }
 
-    for (const j of JOINTS) {
+    for (const j of BVH_JOINTS) {
       let q = frame.bones[j.name] ?? [0, 0, 0, 1];
-      // Remap from rawAxis-convention (A-pose=identity) to T-pose-relative
-      // (T-pose=identity) so external players (Blender, etc.) get correct T-pose.
+      // Remap rawAxis-convention q_norm to T-pose-relative q_bvh by POST-
+      // multiplying by corrInv: q_bvh = q_norm × corrInv. See note in
+      // BvhRecorderOptions.getRestCorrectionInv for the algebra.
       if (this._getRestCorrectionInv) {
         const ci = this._getRestCorrectionInv(j.name);
-        if (ci) q = applyPreQuat(ci, q);
+        if (ci) q = applyPostQuat(q, ci);
+      }
+      // VRM 0.x → 1.0-convention flip (see flipForVrm0 docstring).
+      if (this._flipForVrm0) {
+        q = [-q[0], q[1], -q[2], q[3]];
       }
       const [rz, ry, rx] = quatToZYX(q);
       parts.push(rz * RAD2DEG, ry * RAD2DEG, rx * RAD2DEG);
@@ -255,15 +294,15 @@ function quatToZYX(arr: [number, number, number, number]): [number, number, numb
   return [_e.z, _e.y, _e.x];
 }
 
-/** Returns corrInv × q (pre-multiply) as a plain array. */
-function applyPreQuat(
-  corrInv: [number, number, number, number],
+/** Returns q × corrInv (post-multiply) as a plain array. */
+function applyPostQuat(
   q: [number, number, number, number],
+  corrInv: [number, number, number, number],
 ): [number, number, number, number] {
-  _qi.set(corrInv[0], corrInv[1], corrInv[2], corrInv[3]);
   _q.set(q[0], q[1], q[2], q[3]);
-  _qi.multiply(_q); // _qi = corrInv * q
-  return [_qi.x, _qi.y, _qi.z, _qi.w];
+  _qi.set(corrInv[0], corrInv[1], corrInv[2], corrInv[3]);
+  _q.multiply(_qi); // _q = q * corrInv
+  return [_q.x, _q.y, _q.z, _q.w];
 }
 
 // ── Download ──────────────────────────────────────────────────────────────────

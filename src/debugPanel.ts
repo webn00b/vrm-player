@@ -3,6 +3,7 @@ import { STAT_LANDMARKS } from './mocap/mocapDebugViz';
 import { buildMainPanelHtml, buildTuningPanelHtml } from './debugPanelHtml';
 import { mountSkelModal } from './debugPanelSkelModal';
 import { mountBvhModal } from './debugPanelBvhModal';
+import { mountBvhVerifyModal } from './debugPanelBvhVerifyModal';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 
 export function mountDebugPanel(
@@ -111,22 +112,24 @@ export function mountDebugPanel(
 
   // ── Mocap controls ────────────────────────────────────────────────────────
 
-  const camBtn      = root.querySelector<HTMLButtonElement>('#mocap-cam-btn')!;
-  const recBtn      = root.querySelector<HTMLButtonElement>('#mocap-rec-btn')!;
-  const recRow      = root.querySelector<HTMLElement>('#mocap-rec-row')!;
-  const playRow     = root.querySelector<HTMLElement>('#mocap-playback-row')!;
-  const pauseBtn    = root.querySelector<HTMLButtonElement>('#mocap-pause-btn')!;
-  const stepBackBtn = root.querySelector<HTMLButtonElement>('#mocap-step-back-btn')!;
-  const stepFwdBtn  = root.querySelector<HTMLButtonElement>('#mocap-step-fwd-btn')!;
-  const grabBtn     = root.querySelector<HTMLButtonElement>('#mocap-grab-btn')!;
-  const flushBtn    = root.querySelector<HTMLButtonElement>('#mocap-flush-btn')!;
-  const exportPoseBtn = root.querySelector<HTMLButtonElement>('#mocap-export-pose-btn')!;
-  const statusLbl   = root.querySelector<HTMLElement>('#mocap-status-label')!;
-  const framesLbl   = root.querySelector<HTMLElement>('#mocap-frames')!;
+  // Camera/record/playback/file/export rows live in the right tuning panel now,
+  // not inside #debug-panel — query from document so they resolve in either host.
+  const camBtn      = document.querySelector<HTMLButtonElement>('#mocap-cam-btn')!;
+  const recBtn      = document.querySelector<HTMLButtonElement>('#mocap-rec-btn')!;
+  const recRow      = document.querySelector<HTMLElement>('#mocap-rec-row')!;
+  const playRow     = document.querySelector<HTMLElement>('#mocap-playback-row')!;
+  const pauseBtn    = document.querySelector<HTMLButtonElement>('#mocap-pause-btn')!;
+  const stepBackBtn = document.querySelector<HTMLButtonElement>('#mocap-step-back-btn')!;
+  const stepFwdBtn  = document.querySelector<HTMLButtonElement>('#mocap-step-fwd-btn')!;
+  const grabBtn     = document.querySelector<HTMLButtonElement>('#mocap-grab-btn')!;
+  const flushBtn    = document.querySelector<HTMLButtonElement>('#mocap-flush-btn')!;
+  const exportPoseBtn = document.querySelector<HTMLButtonElement>('#mocap-export-pose-btn')!;
+  const statusLbl   = document.querySelector<HTMLElement>('#mocap-status-label')!;
+  const framesLbl   = document.querySelector<HTMLElement>('#mocap-frames')!;
   const previewPanel = document.getElementById('mocap-preview-panel')!;
   const previewCvs   = document.getElementById('mocap-canvas') as HTMLCanvasElement;
-  const fileInput    = root.querySelector<HTMLInputElement>('#mocap-file-input')!;
-  const fileLabel    = root.querySelector<HTMLElement>('#mocap-file-label')!;
+  const fileInput    = document.querySelector<HTMLInputElement>('#mocap-file-input')!;
+  const fileLabel    = document.querySelector<HTMLElement>('#mocap-file-label')!;
 
   // Set canvas intrinsic resolution (4:3 at 2× panel width for sharpness)
   previewCvs.width  = 440;
@@ -823,10 +826,17 @@ export function mountDebugPanel(
     rememberTimeout,
   });
 
+  const cleanupBvhVerifyModal = mountBvhVerifyModal({
+    getMocap,
+    signal: listenerAbort.signal,
+    rememberTimeout,
+  });
+
   return () => {
     clearInterval(framesTimer);
     cleanupSkelModal();
     cleanupBvhModal();
+    cleanupBvhVerifyModal();
     for (const id of intervalIds) clearInterval(id);
     for (const id of timeoutIds) clearTimeout(id);
     listenerAbort.abort();

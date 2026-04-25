@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import type { PoseFrame } from './poseDetector';
 import type { MocapCalibration } from './mocapCalibration';
-import { buildHumanoidRestAxes, HUMANOID_DIRECTION_CHILD } from '../humanoidRestPose';
+import { getCachedHumanoidRestAxes, HUMANOID_DIRECTION_CHILD } from '../humanoidRestPose';
 import {
   FACE,
   FINGER_VRM_NAMES,
@@ -410,7 +410,7 @@ export class DirectPoseApplier {
   }
 
   private _computeRestAxes(): void {
-    const restAxes = buildHumanoidRestAxes(this.vrm);
+    const restAxes = getCachedHumanoidRestAxes(this.vrm);
     for (const [bone, info] of restAxes) {
       this.restLocalAxis.set(bone, info.rawAxis.clone());
     }

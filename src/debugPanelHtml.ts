@@ -194,6 +194,21 @@ export function buildTuningPanelHtml(): string {
           <span class="dbg-label">📤 Current pose</span>
           <button class="dbg-toggle off" id="mocap-export-pose-btn" title="Download current avatar pose as a 1-frame BVH">Export .bvh</button>
         </div>
+        <div class="dbg-row">
+          <span class="dbg-label">🧪 BVH round-trip <span id="bvh-verify-state" style="opacity:.5"></span></span>
+          <div style="display:flex;gap:3px">
+            <button class="dbg-toggle off" id="bvh-verify-btn" title="Live camera: record 3s → replay the BVH → diff each frame">Live</button>
+            <button class="dbg-toggle off" id="bvh-verify-file-btn" title="Video file: process → replay BVH → diff each frame">Video…</button>
+            <input type="file" id="bvh-verify-file-input" accept="video/*" style="display:none">
+          </div>
+        </div>
+        <div class="dbg-row">
+          <span class="dbg-label" style="opacity:.7;font-size:11px">↳ replay mode</span>
+          <div style="display:flex;gap:3px">
+            <button class="dbg-toggle"     data-verify-mode="prod" title="Play through the live render loop (validator.clampAll + vrm.update). Catches production-path divergence.">prod</button>
+            <button class="dbg-toggle off" data-verify-mode="iso"  title="Scratch mixer + synchronous replay. Isolates BVH encoding math.">iso</button>
+          </div>
+        </div>
       </div>
 
       <div class="dbg-divider"></div>

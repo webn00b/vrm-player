@@ -3,6 +3,7 @@ import type { createScene } from './scene';
 import type { loadVRM } from './vrmLoader';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 import { MOCAP_VALIDATION_EXCLUDED_BONES } from './mocap/mocapValidationBones';
+import { renderLoopHooks } from './renderLoopHooks';
 
 type CleanupFn = () => void;
 
@@ -26,27 +27,54 @@ export function startRenderLoop(
     // 1. BVH mixer
     controller?.update(delta);
 
+    // 1b. Optional extra mixer (e.g. verifier's production-path replay clip).
+    renderLoopHooks.extraMixer?.update(delta);
+
+    const overlaysSuspended = renderLoopHooks.suspendOverlays;
+    const hasBvhActive = !!controller && controller.hasBvhActive && !controller.muted;
+
     // 2. Idle priority poses — only when BVH mixer is muted or absent
-    if (!controller || controller.muted) {
+    if (!overlaysSuspended && (!controller || controller.muted)) {
       idle.update(vrm, pa);
       pa.applyAll();
     }
 
     // 3. Mocap overlay — runs AFTER BVH mixer so it overwrites animation bones.
-    //    Face expressions also applied here (blendshapes don't conflict with BVH).
-    mocap.applyLatestFrame();
+    //    Skipped when an active BVH clip is playing so playback isn't perturbed
+    //    by live mocap. Face expressions also applied here (blendshapes don't
+    //    conflict with BVH).
+    if (!overlaysSuspended && !hasBvhActive) {
+      mocap.applyLatestFrame();
+    }
 
     // 3b. Manual bone pose offsets (post-multiplied on top of mocap/animation).
-    bonePanel.apply();
+    if (!overlaysSuspended) {
+      bonePanel.apply();
+    }
 
     // 3b2. Optional final wrist/finger overlay from hand tracking. This keeps
     // tracked hands as the highest-priority authored layer even if another
-    // tool wrote hand bones earlier in the frame.
-    mocap.applyTrackedHandsOverlay();
+    // tool wrote hand bones earlier in the frame. Suppressed during playback
+    // for the same reason as 3.
+    if (!overlaysSuspended && !hasBvhActive) {
+      mocap.applyTrackedHandsOverlay();
+    }
 
     // 3c. Clamp the final authored pose (BVH / idle / mocap / manual offsets)
     // before debug capture and before micro-animations add their small deltas.
-    validator.clampAll(mocap.state === 'off' ? undefined : MOCAP_VALIDATION_EXCLUDED_BONES);
+    // Use the same exclusion mask whenever a mocap source OR a BVH clip is
+    // active — this guarantees record and playback see identical clamp logic
+    // on arms/legs/hands/fingers, so a self-recorded clip plays back to the
+    // same on-screen pose it was captured from.
+    if (!renderLoopHooks.suspendValidatorClamp) {
+      const skipMocapClampZone = mocap.state !== 'off' || hasBvhActive;
+      validator.clampAll(skipMocapClampZone ? MOCAP_VALIDATION_EXCLUDED_BONES : undefined);
+    }
+
+    // 3c2. Record the on-screen pose (post-clamp, post-overlays) into the live
+    // recorder. Doing this AFTER clamp ensures the BVH file matches exactly
+    // what the user saw during capture.
+    mocap.captureRecordedFrame();
 
     // 3d. Debug recorder — snapshot landmarks + IK targets + final bone quaternions.
     if (dbgRecorder.active) {
@@ -94,10 +122,15 @@ export function startRenderLoop(
     }
 
     // 4. Micro-animations — always, delta-based
-    micro.update(vrm);
+    if (!overlaysSuspended) {
+      micro.update(vrm);
+    }
 
     // 5. VRM systems
     vrm.update(delta);
+
+    // 5b. Verifier hook — runs after bones have their final production values.
+    renderLoopHooks.onAfterVrmUpdate?.(delta);
 
     // 6. Skeleton overlay (after vrm.update so world matrices are fresh)
     skelViz.update();

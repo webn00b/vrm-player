@@ -53,6 +53,28 @@ function parseTrackTarget(trackName: string): string | null {
   return trackName.substring(0, dot);
 }
 
+// `buildHumanoidRestAxes` reads CURRENT raw-bone world positions, so the
+// computed `correction` quaternion depends on the avatar's live pose. That
+// breaks round-trip consistency: the recorder builds correction once (at
+// near-bind pose), the loader rebuilds at replay time (after hundreds of
+// mocap frames of movement) — different correction → asymmetric pipeline →
+// 60–80° drift on upper-arm bones.
+//
+// The cache pins the restAxes computed by the FIRST call per VRM (which is
+// expected to happen near the avatar's bind pose, e.g. during mocap controller
+// construction) and serves the same snapshot to subsequent callers including
+// `applyHumanoidRestCorrectionsToClip` at replay time.
+const _restAxesCache = new WeakMap<VRM, Map<string, HumanoidRestAxisInfo>>();
+
+export function getCachedHumanoidRestAxes(vrm: VRM): Map<string, HumanoidRestAxisInfo> {
+  let cached = _restAxesCache.get(vrm);
+  if (!cached) {
+    cached = buildHumanoidRestAxes(vrm);
+    _restAxesCache.set(vrm, cached);
+  }
+  return cached;
+}
+
 export function buildHumanoidRestAxes(vrm: VRM): Map<string, HumanoidRestAxisInfo> {
   const result = new Map<string, HumanoidRestAxisInfo>();
 
@@ -98,8 +120,25 @@ export function buildHumanoidRestAxes(vrm: VRM): Map<string, HumanoidRestAxisInf
   return result;
 }
 
+/**
+ * Loader-side correction. Each track's quaternion `q_bvh` is post-multiplied
+ * by `correction` to give the value the AnimationMixer should write onto our
+ * applier-convention normalized bones:
+ *
+ *   q_track = q_bvh × correction
+ *
+ * This is the exact inverse of the recorder's post-multiply by `corrInv`
+ * (`BvhRecorder._frameRow`): for self-recorded clips the round-trip is
+ * algebraically identity (`q_norm × corrInv × correction = q_norm`). For
+ * external BVHs (Blender, mocap systems) the same operation gives a swing-
+ * correct retargeting from "T-pose-relative" external convention to our
+ * applier's rawAxis-relative convention.
+ */
 export function applyHumanoidRestCorrectionsToClip(clip: THREE.AnimationClip, vrm: VRM): number {
-  const restAxes = buildHumanoidRestAxes(vrm);
+  // Use the cached restAxes — pinned to the bind pose at recorder construction
+  // time — so the post-multiply correction here is the exact algebraic inverse
+  // of the recorder's pre-multiply (which used the same snapshot).
+  const restAxes = getCachedHumanoidRestAxes(vrm);
   const trackTargets = buildTrackTargetMap(vrm);
   let correctedTracks = 0;
 
@@ -122,7 +161,7 @@ export function applyHumanoidRestCorrectionsToClip(clip: THREE.AnimationClip, vr
     const values = track.values as Float32Array;
     for (let i = 0; i < values.length; i += 4) {
       _trackQ.set(values[i], values[i + 1], values[i + 2], values[i + 3]);
-      _trackQ.multiply(corr).normalize();
+      _trackQ.multiply(corr).normalize();        // q × correction
       values[i] = _trackQ.x;
       values[i + 1] = _trackQ.y;
       values[i + 2] = _trackQ.z;

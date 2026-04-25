@@ -72,10 +72,23 @@ export function convertBVHToVRMAnimation(bvh, options) {
                 hipsPositionTrack.values[i] -= offset[i % 3];
             }
         }
-        // some BVHs does not ground correctly
-        const boundingBox = createSkeletonBoundingBox(skeleton);
-        if (boundingBox.min.y < 0) {
-            rootBone.position.y -= boundingBox.min.y;
+        // For self-recorded BVH the caller passes `options.hipsRestY` = target
+        // VRM's normalizedRestPose.hips.position[1]. We override rootBone.y so
+        // that hips.getWorldPosition().y matches the target bind exactly —
+        // otherwise the loader's `scale = humanoidY / animationY` ≠ 1 and
+        // every hips translation keyframe gets multiplied by that ratio,
+        // producing a constant 9–10 cm drift that propagates to every
+        // descendant bone (foot/head/hand all see the same offset).
+        // External BVHs (no `hipsRestY` provided) keep the legacy bbox raise
+        // so accidentally-grounded sources are still corrected.
+        if (options && typeof options.hipsRestY === 'number') {
+            rootBone.position.y = options.hipsRestY;
+            rootBone.updateWorldMatrix(false, true);
+        } else {
+            const boundingBox = createSkeletonBoundingBox(skeleton);
+            if (boundingBox.min.y < 0) {
+                rootBone.position.y -= boundingBox.min.y;
+            }
         }
         // export as a gltf
         const exporter = new GLTFExporter();
