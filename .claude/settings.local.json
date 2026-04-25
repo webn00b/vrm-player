@@ -8,7 +8,9 @@
       "Bash(awk '{print $2}')",
       "Bash(node -e \"const k = require\\('kalidokit'\\); console.log\\(Object.keys\\(k\\)\\)\")",
       "Bash(node -e \"import\\('kalidokit'\\).then\\(k => console.log\\(Object.keys\\(k.default ?? k\\)\\)\\).catch\\(e => console.log\\('err:', e.message\\)\\)\")",
-      "Bash(node --test tests/regression/bvhRoundtripMath.test.mjs)"
+      "Bash(node --test tests/regression/bvhRoundtripMath.test.mjs)",
+      "Bash(git -C .claude/worktrees/angry-goodall-007238 status --short)",
+      "Bash(git -C .claude/worktrees/clever-goldwasser-8f4272 status --short)"
     ]
   }
 }
