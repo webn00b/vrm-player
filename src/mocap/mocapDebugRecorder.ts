@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import type { PoseFrame } from './poseDetector';
 import type { MocapCalibration } from './mocapCalibration';
+import type { MocapDebugTargets } from './mocapDiagnostics';
 
 // Compact types for minimal file size
 type V3 = [number, number, number];
@@ -97,15 +98,10 @@ export class MocapDebugRecorder {
    */
   capture(
     frame: PoseFrame,
-    ikTargets: {
-
-      leftWristTarget:  THREE.Vector3;
-      rightWristTarget: THREE.Vector3;
-      leftAnkleTarget:  THREE.Vector3;
-      rightAnkleTarget: THREE.Vector3;
-      hasArm: boolean;
-      hasLeg: boolean;
-    },
+    ikTargets: Pick<
+      MocapDebugTargets,
+      'leftWristTarget' | 'rightWristTarget' | 'leftAnkleTarget' | 'rightAnkleTarget' | 'hasArm' | 'hasLeg'
+    >,
     calib: MocapCalibration,
   ): void {
     if (!this._active) return;
@@ -200,4 +196,3 @@ export class MocapDebugRecorder {
     console.groupEnd();
   }
 }
-

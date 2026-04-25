@@ -21,6 +21,7 @@
 - [docs/troubleshooting.md](/Users/fedor/projects/personal/vrm-player/docs/troubleshooting.md) - практическая диагностика: что смотреть в `Skeleton Info` и как разбирать типовые баги
 - [docs/mocap-pipeline.md](/Users/fedor/projects/personal/vrm-player/docs/mocap-pipeline.md) - техническая документация по пайплайну, solver-у и порядку слоев
 - [docs/architecture.md](/Users/fedor/projects/personal/vrm-player/docs/architecture.md) - карта модулей проекта, зависимостей и потока данных
+- [docs/roadmap.md](/Users/fedor/projects/personal/vrm-player/docs/roadmap.md) - backlog улучшений, спринты и текущий статус выполнения
 
 ## Что умеет проект
 
@@ -302,6 +303,7 @@ animations/
 - [docs/troubleshooting.md](/Users/fedor/projects/personal/vrm-player/docs/troubleshooting.md) - symptom-oriented отладка и чтение `Skeleton Info`
 - [docs/mocap-pipeline.md](/Users/fedor/projects/personal/vrm-player/docs/mocap-pipeline.md) - технический разбор мокап-пайплайна и solver-а
 - [docs/architecture.md](/Users/fedor/projects/personal/vrm-player/docs/architecture.md) - верхнеуровневая архитектура приложения
+- [docs/roadmap.md](/Users/fedor/projects/personal/vrm-player/docs/roadmap.md) - план следующих улучшений и статус их выполнения
 
 ## Разработка
 

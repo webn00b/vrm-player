@@ -1,5 +1,3 @@
-import * as THREE from 'three';
-import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import { createScene } from './scene';
 import { loadVRM } from './vrmLoader';
 import { loadBVH, parseBVH } from './bvhLoader';
@@ -16,6 +14,9 @@ import { MocapDebugViz } from './mocap/mocapDebugViz';
 import { MocapDebugRecorder } from './mocap/mocapDebugRecorder';
 import { SkeletonVisualizer } from './skeletonVisualizer';
 import { BoneValidator } from './validation/boneValidator';
+import { startRenderLoop } from './renderLoop';
+import { mountTransport } from './transport';
+import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 
 const vrmModules = import.meta.glob('/models/*.vrm', {
   query: '?url',
@@ -37,46 +38,20 @@ function resolveVrmUrl(): string {
 }
 
 interface AnimationEntry { name: string; url: string; }
+type CleanupFn = () => void;
+const GLOBAL_CLEANUP_KEY = '__vrmPlayerCleanup';
 
-const LIVE_MOCAP_HAND_BONE_SUFFIXES = [
-  'ThumbMetacarpal',
-  'ThumbProximal',
-  'ThumbDistal',
-  'IndexProximal',
-  'IndexIntermediate',
-  'IndexDistal',
-  'MiddleProximal',
-  'MiddleIntermediate',
-  'MiddleDistal',
-  'RingProximal',
-  'RingIntermediate',
-  'RingDistal',
-  'LittleProximal',
-  'LittleIntermediate',
-  'LittleDistal',
-] as const;
-
-const LIVE_MOCAP_VALIDATION_EXCLUDED_BONES = new Set<VRMHumanBoneName>([
-  VRMHumanBoneName.LeftShoulder,
-  VRMHumanBoneName.LeftUpperArm,
-  VRMHumanBoneName.LeftLowerArm,
-  VRMHumanBoneName.LeftHand,
-  VRMHumanBoneName.LeftUpperLeg,
-  VRMHumanBoneName.LeftLowerLeg,
-  VRMHumanBoneName.LeftFoot,
-  VRMHumanBoneName.RightShoulder,
-  VRMHumanBoneName.RightUpperArm,
-  VRMHumanBoneName.RightLowerArm,
-  VRMHumanBoneName.RightHand,
-  VRMHumanBoneName.RightUpperLeg,
-  VRMHumanBoneName.RightLowerLeg,
-  VRMHumanBoneName.RightFoot,
-  ...(['Left', 'Right'] as const).flatMap((side) =>
-    LIVE_MOCAP_HAND_BONE_SUFFIXES.map(
-      (suffix) => VRMHumanBoneName[`${side}${suffix}` as keyof typeof VRMHumanBoneName],
-    ),
-  ),
-]);
+function installGlobalCleanup(cleanup: CleanupFn): void {
+  let disposed = false;
+  const wrapped = (): void => {
+    if (disposed) return;
+    disposed = true;
+    cleanup();
+    if ((window as any)[GLOBAL_CLEANUP_KEY] === wrapped) delete (window as any)[GLOBAL_CLEANUP_KEY];
+  };
+  (window as any)[GLOBAL_CLEANUP_KEY] = wrapped;
+  import.meta.hot?.dispose(() => wrapped());
+}
 
 function resolveAnimations(): AnimationEntry[] {
   return Object.entries(bvhModules)
@@ -88,6 +63,8 @@ function resolveAnimations(): AnimationEntry[] {
 }
 
 async function main() {
+  const previousCleanup = (window as any)[GLOBAL_CLEANUP_KEY] as CleanupFn | undefined;
+  previousCleanup?.();
   const container = document.getElementById('app');
   if (!container) throw new Error('#app not found');
   const ctx = createScene(container);
@@ -132,12 +109,38 @@ async function main() {
   const videoEl = document.getElementById('mocap-video') as HTMLVideoElement;
   const mocap   = new MocapController(vrm, videoEl);
 
+  const mocapSys: MocapSystems = { mocap, debugViz: mocapDebugViz, dbgRecorder };
+
+  const cleanupFns: CleanupFn[] = [];
+  const registerCleanup = (...fns: Array<CleanupFn | undefined>): void => {
+    for (const fn of fns) if (fn) cleanupFns.push(fn);
+  };
+  const cleanup = (): void => {
+    for (let i = cleanupFns.length - 1; i >= 0; i--) cleanupFns[i]();
+    cleanupFns.length = 0;
+    if ((window as any).__mocapDbg === dbgRecorder) delete (window as any).__mocapDbg;
+  };
+  registerCleanup(
+    () => mocap.dispose(),
+    () => mocapDebugViz.dispose(),
+    () => skelViz.dispose(),
+    () => {
+      vrm.scene.parent?.remove(vrm.scene);
+      ctx.dispose();
+    },
+  );
+
   const entries = resolveAnimations();
   if (entries.length === 0) {
     setStatus('no .bvh files — idle mode active');
     vrm.scene.visible = false;
-    mountDebugPanel(micro, idleLoop, pa, () => null, () => mocap, skelViz, validator, mocapDebugViz, dbgRecorder, (v) => { vrm.scene.visible = v; });
-    startRenderLoop(ctx, null, vrm, pa, micro, idleLoop, skelViz, validator, mocap, bonePanel, mocapDebugViz, dbgRecorder);
+    const playback: PlaybackSystems = { controller: null, pa, micro, idle: idleLoop };
+    const tooling: ToolingSystems   = { skelViz, validator, bonePanel };
+    registerCleanup(
+      mountDebugPanel(playback, mocapSys, tooling, (v) => { vrm.scene.visible = v; }),
+      startRenderLoop(ctx, vrm, playback, mocapSys, tooling),
+    );
+    installGlobalCleanup(cleanup);
     return;
   }
 
@@ -152,12 +155,17 @@ async function main() {
 
   setStatus('drag animations from Library → Queue to play');
 
+  const playback: PlaybackSystems = { controller, pa, micro, idle: idleLoop };
+  const tooling: ToolingSystems   = { skelViz, validator, bonePanel };
+
   // ── Transport bar ─────────────────────────────────────────────────────────
-  mountTransport(controller);
+  registerCleanup(mountTransport(controller));
 
   // ── Debug panel ────────────────────────────────────────────────────────────
   vrm.scene.visible = false;
-  mountDebugPanel(micro, idleLoop, pa, () => controller, () => mocap, skelViz, validator, mocapDebugViz, dbgRecorder, (v) => { vrm.scene.visible = v; });
+  registerCleanup(
+    mountDebugPanel(playback, mocapSys, tooling, (v) => { vrm.scene.visible = v; }),
+  );
 
   // ── Library (source) ───────────────────────────────────────────────────────
   const names = entries.map((e) => e.name);
@@ -176,12 +184,49 @@ async function main() {
     },
   });
 
-  mountLibrary({
-    names,
-    onDragToQueue: (itemIdx) => {
-      controller.addToQueue(itemIdx);
-      queue.push(names[itemIdx]);
-    },
+  const addLibraryItemToQueue = (itemIdx: number): void => {
+    controller.addToQueue(itemIdx);
+    queue.push(names[itemIdx]);
+  };
+  const refreshLibrary = (): void => mountLibrary({ names, onDragToQueue: addLibraryItemToQueue });
+
+  refreshLibrary();
+
+  // ── File-system BVH drop ───────────────────────────────────────────────────
+  const handleDroppedBvhFile = async (file: File): Promise<void> => {
+    const name = file.name.replace(/\.bvh$/i, '');
+    setStatus(`loading ${name}…`);
+    try {
+      const text = await file.text();
+      const bvh  = parseBVH(text);
+      const clip = await retargetBvhToVrm(vrm, bvh, name);
+      controller.register(name, clip);
+      names.push(name);
+      refreshLibrary();
+      addLibraryItemToQueue(names.length - 1);
+      setStatus(`▶ ${name}`);
+    } catch (e) {
+      setStatus(`load failed: ${(e as Error).message}`);
+    }
+  };
+
+  const onWindowDragOver = (e: DragEvent): void => {
+    if (Array.from(e.dataTransfer?.items ?? []).some((it) => it.kind === 'file')) {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = 'copy';
+    }
+  };
+  const onWindowDrop = (e: DragEvent): void => {
+    const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => /\.bvh$/i.test(f.name));
+    if (!files.length) return;
+    e.preventDefault();
+    files.forEach((f) => void handleDroppedBvhFile(f));
+  };
+  window.addEventListener('dragover', onWindowDragOver);
+  window.addEventListener('drop', onWindowDrop);
+  registerCleanup(() => {
+    window.removeEventListener('dragover', onWindowDragOver);
+    window.removeEventListener('drop', onWindowDrop);
   });
 
   // ── Mocap → auto-replay recorded BVH ───────────────────────────────────────
@@ -194,9 +239,8 @@ async function main() {
       const clip = await retargetBvhToVrm(vrm, bvh, name);
       controller.register(name, clip);
       names.push(name);
-      const idx = names.length - 1;
-      controller.addToQueue(idx);
-      queue.push(name);
+      refreshLibrary();
+      addLibraryItemToQueue(names.length - 1);
       setStatus(`▶ replaying ${name}`);
     } catch (e) {
       setStatus(`replay failed: ${(e as Error).message}`);
@@ -208,171 +252,10 @@ async function main() {
     setStatus(`${queuePos + 1}/${controller.queueLength} · ${item.name} · ${item.duration.toFixed(1)}s`);
   });
 
-  startRenderLoop(ctx, controller, vrm, pa, micro, idleLoop, skelViz, validator, mocap, bonePanel, mocapDebugViz, dbgRecorder);
-}
-
-function startRenderLoop(
-  ctx: ReturnType<typeof createScene>,
-  controller: AnimationController | null,
-  vrm: Awaited<ReturnType<typeof loadVRM>>,
-  pa: PriorityAnimator,
-  micro: MicroAnimations,
-  idleLoop: IdleLoop,
-  skelViz: SkeletonVisualizer,
-  validator: BoneValidator,
-  mocap: MocapController,
-  bonePanel: BonePosePanel,
-  mocapDebugViz: MocapDebugViz,
-  dbgRecorder: MocapDebugRecorder,
-): void {
-  const tick = () => {
-    const delta = ctx.clock.getDelta();
-
-    // 1. BVH mixer
-    controller?.update(delta);
-
-    // 2. Idle priority poses — only when BVH mixer is muted or absent
-    if (!controller || controller.muted) {
-      idleLoop.update(vrm, pa);
-      pa.applyAll();
-    }
-
-    // 3. Mocap overlay — runs AFTER BVH mixer so it overwrites animation bones.
-    //    Face expressions also applied here (blendshapes don't conflict with BVH).
-    mocap.applyLatestFrame();
-
-    // 3b. Manual bone pose offsets (post-multiplied on top of mocap/animation).
-    bonePanel.apply();
-
-    // 3b2. Optional final wrist/finger overlay from hand tracking. This keeps
-    // tracked hands as the highest-priority authored layer even if another
-    // tool wrote hand bones earlier in the frame.
-    mocap.applyTrackedHandsOverlay();
-
-    // 3c. Clamp the final authored pose (BVH / idle / mocap / manual offsets)
-    // before debug capture and before micro-animations add their small deltas.
-    validator.clampAll(mocap.state === 'off' ? undefined : LIVE_MOCAP_VALIDATION_EXCLUDED_BONES);
-
-    // 3d. Debug recorder — snapshot landmarks + IK targets + final bone quaternions.
-    if (dbgRecorder.active) {
-      const frame = mocap.latestFrame;
-      if (frame) dbgRecorder.capture(frame, mocap.debugTargets, mocap.calibration);
-    }
-
-    // 3e. Debug skeleton — show performer landmarks mapped to avatar world space.
-    if (mocapDebugViz.visible) {
-      const frame = mocap.latestFrame;
-      if (frame) {
-        // Cache bone nodes + scratch vectors on first call to avoid lookups/allocations each frame.
-        const cache = (tick as any)._dbgVizCache ??= {
-          hipsNode:  vrm.humanoid.getNormalizedBoneNode('hips'      as any),
-          lhNode:    vrm.humanoid.getNormalizedBoneNode('leftHand'  as any),
-          rhNode:    vrm.humanoid.getNormalizedBoneNode('rightHand' as any),
-          lfNode:    vrm.humanoid.getNormalizedBoneNode('leftFoot'  as any),
-          rfNode:    vrm.humanoid.getNormalizedBoneNode('rightFoot' as any),
-          hipWorld:  new THREE.Vector3(),
-          actualBones: {
-            leftHand:  new THREE.Vector3(), rightHand: new THREE.Vector3(),
-            leftFoot:  new THREE.Vector3(), rightFoot: new THREE.Vector3(),
-          },
-        };
-        const hipWorld = cache.hipWorld;
-        cache.hipsNode?.getWorldPosition(hipWorld);
-        const actualBones = cache.actualBones;
-        cache.lhNode?.getWorldPosition(actualBones.leftHand);
-        cache.rhNode?.getWorldPosition(actualBones.rightHand);
-        cache.lfNode?.getWorldPosition(actualBones.leftFoot);
-        cache.rfNode?.getWorldPosition(actualBones.rightFoot);
-
-        const cal = mocap.calibration;
-        mocapDebugViz.update(
-          frame, hipWorld, cal.bodyScale(), mocap.hipsBaseWorld,
-          mocap.debugTargets, actualBones,
-          {
-            armL: cal.armScale('left'),
-            armR: cal.armScale('right'),
-            legL: cal.legScale(),
-            legR: cal.legScale(),
-          },
-        );
-      }
-    }
-
-    // 4. Micro-animations — always, delta-based
-    micro.update(vrm);
-
-    // 5. VRM systems
-    vrm.update(delta);
-
-    // 6. Skeleton overlay (after vrm.update so world matrices are fresh)
-    skelViz.update();
-
-    ctx.controls.update();
-    ctx.renderer.render(ctx.scene, ctx.camera);
-    requestAnimationFrame(tick);
-  };
-  tick();
-}
-
-function formatTime(sec: number): string {
-  if (!Number.isFinite(sec) || sec < 0) sec = 0;
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function mountTransport(controller: AnimationController): void {
-  const bar      = document.getElementById('transport');
-  const nameEl   = document.getElementById('tp-name');
-  const prevBtn  = document.getElementById('tp-prev');
-  const playBtn  = document.getElementById('tp-play');
-  const nextBtn  = document.getElementById('tp-next');
-  const timeline = document.getElementById('tp-timeline');
-  const progress = document.getElementById('tp-progress');
-  const timeEl   = document.getElementById('tp-time');
-  if (!bar || !nameEl || !prevBtn || !playBtn || !nextBtn || !timeline || !progress || !timeEl) return;
-
-  prevBtn.addEventListener('click', () => controller.prev());
-  nextBtn.addEventListener('click', () => controller.next());
-  playBtn.addEventListener('click', () => {
-    controller.togglePaused();
-    playBtn.textContent = controller.paused ? '▶' : '⏸';
-  });
-
-  const seekFromEvent = (ev: PointerEvent): void => {
-    const dur = controller.currentDuration;
-    if (dur <= 0) return;
-    const rect = timeline.getBoundingClientRect();
-    const frac = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
-    controller.seek(frac * dur);
-  };
-  timeline.addEventListener('pointerdown', (ev) => {
-    (ev.target as HTMLElement).setPointerCapture(ev.pointerId);
-    seekFromEvent(ev as PointerEvent);
-  });
-  timeline.addEventListener('pointermove', (ev) => {
-    if ((ev as PointerEvent).pressure > 0 || (ev.buttons & 1)) seekFromEvent(ev as PointerEvent);
-  });
-
-  // Refresh UI 10× per second
-  setInterval(() => {
-    const hasActive = controller.hasBvhActive;
-    bar.classList.toggle('empty', !hasActive);
-    if (!hasActive) {
-      nameEl.textContent   = '—';
-      timeEl.textContent   = '0:00 / 0:00';
-      (progress as HTMLElement).style.width = '0%';
-      playBtn.textContent  = '▶';
-      return;
-    }
-    const t    = controller.currentTime;
-    const dur  = controller.currentDuration;
-    const frac = dur > 0 ? Math.min(t / dur, 1) : 0;
-    nameEl.textContent   = formatLibraryName(controller.currentName);
-    timeEl.textContent   = `${formatTime(t)} / ${formatTime(dur)}`;
-    (progress as HTMLElement).style.width = `${frac * 100}%`;
-    playBtn.textContent  = controller.paused ? '▶' : '⏸';
-  }, 100);
+  registerCleanup(
+    startRenderLoop(ctx, vrm, playback, mocapSys, tooling),
+  );
+  installGlobalCleanup(cleanup);
 }
 
 main().catch((err) => {

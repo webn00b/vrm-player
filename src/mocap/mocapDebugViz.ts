@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { PoseFrame } from './poseDetector';
+import type { MocapDebugTargets } from './mocapDiagnostics';
 
 // Body connections to draw lines between joints
 const CONNECTIONS: [number, number][] = [
@@ -36,14 +37,10 @@ export const STAT_LANDMARKS: { idx: number; label: string }[] = [
   { idx: 32, label: 'R.Toe'      },
 ];
 
-type IkTargets = {
-  leftWristTarget:  THREE.Vector3;
-  rightWristTarget: THREE.Vector3;
-  leftAnkleTarget:  THREE.Vector3;
-  rightAnkleTarget: THREE.Vector3;
-  hasArm: boolean;
-  hasLeg: boolean;
-};
+type IkTargets = Pick<
+  MocapDebugTargets,
+  'leftWristTarget' | 'rightWristTarget' | 'leftAnkleTarget' | 'rightAnkleTarget' | 'hasArm' | 'hasLeg'
+>;
 
 type ActualBones = {
   leftHand:  THREE.Vector3;

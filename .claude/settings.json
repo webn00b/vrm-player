@@ -6,7 +6,17 @@
       "Bash(node -e ' *)",
       "Bash(npm list *)",
       "Bash(python3 -)",
-      "Bash(python3 /tmp/analyze_mocap.py)"
+      "Bash(python3 /tmp/analyze_mocap.py)",
+      "Bash(node --input-type=module)",
+      "Bash(grep -v \"^+$\\\\|^-$\")",
+      "Bash(grep -v \"^+import\\\\|^-import\\\\|^+\\\\/\\\\/\\\\|^-\\\\/\\\\/\\\\|^+$\\\\|^-$\")",
+      "Bash(node -e \"const p = require\\('/Users/fedor/projects/personal/vrm-player/node_modules/three/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(git -C /Users/fedor/projects/personal/vrm-player log --oneline -20 -- src/mocap/bvhRecorder.ts src/retarget.ts src/humanoidRestPose.ts src/bvh2vrma/convertBVHToVRMAnimation.js)",
+      "Bash(git -C /Users/fedor/projects/personal/vrm-player show 5a94bcb --stat)",
+      "Bash(git -C /Users/fedor/projects/personal/vrm-player show 8a712db --stat)",
+      "Bash(git -C /Users/fedor/projects/personal/vrm-player show 5a94bcb -- src/bvh2vrma/convertBVHToVRMAnimation.js)",
+      "Bash(git -C /Users/fedor/projects/personal/vrm-player show 8a712db -- src/bvh2vrma/convertBVHToVRMAnimation.js)",
+      "Bash(python3 -c ' *)"
     ],
     "additionalDirectories": [
       "/Users/fedor/projects/personal/vrm-player/node_modules/@mediapipe/tasks-vision/wasm"

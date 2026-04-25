@@ -5,6 +5,8 @@ import { DirectPoseApplier } from './directPoseApplier';
 import { FaceApplier } from './faceApplier';
 import { BvhRecorder, downloadBvh } from './bvhRecorder';
 import { MocapCalibration, type CalibrationStatus } from './mocapCalibration';
+import { getCachedHumanoidRestAxes } from '../humanoidRestPose';
+import { captureSnapshot, type PoseSnapshot } from './bvhRoundtripVerifier';
 
 export type MocapState = 'off' | 'live' | 'recording';
 
@@ -19,12 +21,14 @@ export class MocapController {
   private detector: PoseDetector;
   private applier: DirectPoseApplier;
   private faceApplier: FaceApplier;
-  private recorder: BvhRecorder;
+  private liveRecorder: BvhRecorder;
+  private grabRecorder: BvhRecorder;
   private _calibration: MocapCalibration;
 
   private _state: MocapState = 'off';
   private _recordingIndex = 0;
   private _poseExportIndex = 0;
+  private _fileCaptureActive = false;
 
   // Latest detected frame — applied each render tick via applyLatestFrame()
   // so mocap overlays on top of the BVH mixer output rather than fighting it.
@@ -38,6 +42,13 @@ export class MocapController {
   onBvhReady:             ((bvh: string, name: string) => void) | null = null;
   onCalibrationChange:    ((s: CalibrationStatus) => void) | null = null;
 
+  // ── Round-trip verification (expected-side capture) ─────────────────────────
+  // When non-null, every time the live recorder accepts a new frame we also
+  // snapshot the full normalized-bone state. Pairs with a deterministic replay
+  // in bvhRoundtripVerifier to detect record↔playback divergence.
+  private _verifySnapshots: PoseSnapshot[] | null = null;
+  private _verifyLastFrameCount = 0;
+
   private _vrm: VRM;
 
   constructor(vrm: VRM, videoEl: HTMLVideoElement) {
@@ -46,7 +57,8 @@ export class MocapController {
     this._calibration = new MocapCalibration(vrm);
     this.applier      = new DirectPoseApplier(vrm, this._calibration);
     this.faceApplier  = new FaceApplier(vrm);
-    this.recorder     = new BvhRecorder();
+    this.liveRecorder = this._createRecorder();
+    this.grabRecorder = this._createRecorder();
 
     this._calibration.onStatusChange = (s) => this.onCalibrationChange?.(s);
 
@@ -66,16 +78,69 @@ export class MocapController {
     };
   }
 
-  get state():       MocapState        { return this._state; }
-  get frameCount():  number            { return this.recorder.frameCount; }
-  get currentTime(): number            { return this.detector.currentTime; }
-  get duration():    number            { return this.detector.duration; }
-  get isPaused():    boolean           { return this.detector.isPaused; }
-  get latestFrame(): PoseFrame | null  { return this._latestFrame; }
+  get state():              MocapState        { return this._state; }
+  get frameCount():         number            { return this.liveRecorder.frameCount; }
+  get recordingFrameCount(): number           { return this.liveRecorder.frameCount; }
+  get grabbedFrameCount():   number           { return this.grabRecorder.frameCount; }
+  get currentTime():        number            { return this.detector.currentTime; }
+  get duration():           number            { return this.detector.duration; }
+  get isPaused():           boolean           { return this.detector.isPaused; }
+  get latestFrame():        PoseFrame | null  { return this._latestFrame; }
 
   /** Attach / detach the preview canvas. Call after startLive(). */
   setCanvas(canvas: HTMLCanvasElement | null): void {
     this.detector.setCanvas(canvas);
+  }
+
+  private _createRecorder(): BvhRecorder {
+    const correctionInvMap = this._buildCorrectionInvMap();
+    // VRM 0.x avatars use a flipped (left-handed-ish) coordinate system.
+    // `@pixiv/three-vrm-animation/createVRMAnimationClip` automatically negates
+    // x/z components on load when target avatar is 0.x; pre-flip here to make
+    // the round-trip cancel.
+    const flipForVrm0 = this._vrm.meta.metaVersion === '0';
+    return new BvhRecorder({
+      getJointOffset: (name) => this._getBvhJointOffset(name),
+      getRestCorrectionInv: (name) => correctionInvMap.get(name) ?? null,
+      flipForVrm0,
+    });
+  }
+
+  private _buildCorrectionInvMap(): Map<string, [number, number, number, number]> {
+    const map = new Map<string, [number, number, number, number]>();
+    // Prime the rest-axes cache while the avatar is in (near-)bind pose so the
+    // loader sees the same snapshot at replay time. See note on
+    // `getCachedHumanoidRestAxes` in humanoidRestPose.ts.
+    const restAxes = getCachedHumanoidRestAxes(this._vrm);
+    const _q = new THREE.Quaternion();
+    for (const [bone, info] of restAxes) {
+      // correction = setFromUnitVectors(rawAxis, normalizedAxis)
+      // correctionInv rotates normalizedAxis back to rawAxis direction;
+      // pre-multiplying by corrInv maps rawAxis-convention q to T-pose-relative q.
+      _q.copy(info.correction).invert();
+      map.set(bone, [_q.x, _q.y, _q.z, _q.w]);
+    }
+    return map;
+  }
+
+  private _getBvhJointOffset(name: string): [number, number, number] | null {
+    if (name === 'hips') return [0, 0, 0];
+    const node = this._vrm.humanoid.getNormalizedBoneNode(name as any);
+    if (!node) return null;
+    return [node.position.x, node.position.y, node.position.z];
+  }
+
+  private _getBvhHipsPosition(): [number, number, number] | null {
+    // Write LOCAL position (relative to hips' parent), not world. AnimationMixer
+    // on playback writes back into `bone.position` which is local — so for a
+    // bit-exact round-trip the value we record must be the same field.
+    // Reading world here would silently bake the parent transform into the BVH
+    // and re-apply it on playback, producing a constant offset (~9cm in our
+    // verifier on rigs where the normalized hips has any parent transform).
+    const hips = this._vrm.humanoid.getNormalizedBoneNode('hips' as any);
+    if (!hips) return null;
+    const p = hips.position;
+    return [p.x, p.y, p.z];
   }
 
   // ── Debug knobs ────────────────────────────────────────────────────────────
@@ -134,17 +199,140 @@ export class MocapController {
    * Apply the latest detected pose frame to the VRM.
    * Call this from the main render loop AFTER the BVH mixer update so that
    * mocap overlays on top of the animation rather than being overwritten by it.
+   *
+   * Recording is intentionally NOT done here — call `captureRecordedFrame()`
+   * after the render-loop pipeline finishes (post-clamp, post-overlays, but
+   * pre-vrm.update) so the BVH stores exactly what the user saw on screen.
    */
   applyLatestFrame(): void {
     if (!this._latestFrame || this._state === 'off') return;
     this.applier.apply(this._latestFrame);
     this.faceApplier.apply(this._latestFrame.faceLandmarks);
+  }
 
-    // Record AFTER apply so getQuaternion reads the freshly computed rotations.
-    if (this._state === 'recording' && !this._frameRecorded) {
-      this.recorder.addFrame((name) => this.applier.getQuaternion(name));
-      this._frameRecorded = true;
+  /**
+   * Snapshot the current normalized-bone state into the live recorder when in
+   * 'recording' state. Reads bone.quaternion *now* — meant to run after the
+   * render loop's clamp + overlay stages so what we record matches what is
+   * about to be drawn. Rate-limited to 30 Hz inside the recorder.
+   */
+  captureRecordedFrame(): void {
+    if (this._state !== 'recording') return;
+    if (!this._latestFrame || this._frameRecorded) return;
+
+    this.liveRecorder.addFrame(
+      (name) => this.applier.getQuaternion(name),
+      () => this._getBvhHipsPosition(),
+    );
+    this._frameRecorded = true;
+
+    // Round-trip verification: snapshot a full pose only when the recorder
+    // actually accepted a new frame (rate-limited to 30 Hz) so expected[i]
+    // aligns 1:1 with the BVH frame i written to file.
+    if (this._verifySnapshots !== null) {
+      const fc = this.liveRecorder.frameCount;
+      if (fc > this._verifyLastFrameCount) {
+        this._verifySnapshots.push(captureSnapshot(this._vrm, fc - 1));
+        this._verifyLastFrameCount = fc;
+      }
     }
+  }
+
+  // ── Round-trip verification API ────────────────────────────────────────────
+
+  /** Begin collecting expected-side pose snapshots alongside the live recorder. */
+  startVerifyCapture(): void {
+    this._verifySnapshots = [];
+    this._verifyLastFrameCount = this.liveRecorder.frameCount;
+  }
+
+  /** Stop collecting and return the captured snapshots (one per BVH frame). */
+  stopVerifyCapture(): PoseSnapshot[] {
+    const out = this._verifySnapshots ?? [];
+    this._verifySnapshots = null;
+    this._verifyLastFrameCount = 0;
+    return out;
+  }
+
+  get verifyCapturing(): boolean { return this._verifySnapshots !== null; }
+  get verifyCapturedCount(): number { return this._verifySnapshots?.length ?? 0; }
+
+  /** VRM handle — needed by the verifier to run deterministic replay. */
+  get vrm(): VRM { return this._vrm; }
+
+  /**
+   * Start a recording buffer specifically for verification. Unlike
+   * `startRecording()`, this does NOT transition state to 'recording' and so
+   * does not enable the normal record-side effects (auto-replay on stop,
+   * BVH download). The caller must also call `startVerifyCapture()` to collect
+   * the expected-side snapshots, and must pair with `stopVerifyRecording()`.
+   *
+   * Requires mocap state === 'live'.
+   */
+  startVerifyRecording(): void {
+    if (this._state !== 'live') return;
+    this.liveRecorder.start();
+    this._setState('recording');
+  }
+
+  /** Stop a verification recording and return the BVH text; no download, no onBvhReady. */
+  stopVerifyRecording(): string {
+    if (this._state !== 'recording') return '';
+    const bvhText = this.liveRecorder.stop();
+    this._setState('live');
+    return bvhText;
+  }
+
+  /**
+   * Process a video file end-to-end for round-trip verification. Same pipeline
+   * as `startFromFile` but returns the BVH text + expected-side snapshots
+   * without triggering download or the auto-replay `onBvhReady` hook.
+   * Resolves when the video finishes; rejects on error.
+   */
+  async startVerifyFromFile(
+    file: File,
+    onProgress?: (frames: number) => void,
+  ): Promise<{ bvh: string; expected: PoseSnapshot[] }> {
+    if (this._state !== 'off') {
+      throw new Error(`startVerifyFromFile requires state 'off'; current '${this._state}'`);
+    }
+    this._latestFrame = null;
+    this._frameRecorded = false;
+    this._teardownFileCapture();
+
+    this.applier.setHighQualityMode(true);
+    this._fileCaptureActive = true;
+
+    this.startVerifyCapture();
+
+    const tickInterval = onProgress
+      ? window.setInterval(() => onProgress(this.verifyCapturedCount), 150)
+      : 0;
+
+    return new Promise<{ bvh: string; expected: PoseSnapshot[] }>((resolve, reject) => {
+      this.detector.onEnd = () => {
+        const bvhText = this.liveRecorder.stop();
+        const expected = this.stopVerifyCapture();
+        if (tickInterval) clearInterval(tickInterval);
+        this._teardownFileCapture();
+        this._setState('off');
+        resolve({ bvh: bvhText, expected });
+      };
+
+      this.detector.startFromFile(file).then(
+        () => {
+          this.liveRecorder.start();
+          this._setState('recording');
+        },
+        (err) => {
+          if (tickInterval) clearInterval(tickInterval);
+          this.stopVerifyCapture();
+          this.detector.stop();
+          this._teardownFileCapture();
+          reject(err);
+        },
+      );
+    });
   }
 
   /**
@@ -404,7 +592,10 @@ export class MocapController {
    * independent of the live "recording" auto-append.
    */
   grabFrame(): void {
-    this.recorder.captureFrame((name) => this.applier.getQuaternion(name));
+    this.grabRecorder.captureFrame(
+      (name) => this.applier.getQuaternion(name),
+      () => this._getBvhHipsPosition(),
+    );
   }
 
   /**
@@ -412,8 +603,8 @@ export class MocapController {
    * Used to finalise a frame-by-frame session without needing state transitions.
    */
   flushGrabbed(): void {
-    if (this.recorder.frameCount === 0) return;
-    const bvhText = this.recorder.stop();
+    if (this.grabRecorder.frameCount === 0) return;
+    const bvhText = this.grabRecorder.stop();
     const name    = `mocap_${++this._recordingIndex}`;
     downloadBvh(bvhText, `${name}.bvh`);
     this.onBvhReady?.(bvhText, name);
@@ -424,12 +615,78 @@ export class MocapController {
    * live recorder buffer. Safe to call during live preview or active recording.
    */
   exportCurrentPoseBvh(): string {
-    const poseRecorder = new BvhRecorder();
-    poseRecorder.captureFrame((name) => this.applier.getQuaternion(name));
+    const poseRecorder = this._createRecorder();
+    poseRecorder.captureFrame(
+      (name) => this.applier.getQuaternion(name),
+      () => this._getBvhHipsPosition(),
+    );
     const bvhText = poseRecorder.stop();
     const name = `pose_${++this._poseExportIndex}`;
     downloadBvh(bvhText, `${name}.bvh`);
     return name;
+  }
+
+  /**
+   * Returns a multi-section diagnostic string covering:
+   * - VRM normalized bone offsets (used as BVH OFFSET values)
+   * - Humanoid rest-axis corrections (rawAxis vs normalizedAxis per bone)
+   * - Current-pose 1-frame BVH text
+   * Intended for the debug diagnostic modal.
+   */
+  getBvhDiagnosticText(): string {
+    const lines: string[] = ['=== BVH Diagnostic ===', `Timestamp: ${new Date().toISOString()}`, ''];
+
+    // ── Joint offsets ────────────────────────────────────────────────────────
+    lines.push('--- Joint offsets (BVH HIERARCHY OFFSET, metres) ---');
+    const boneNames = Object.keys(this._vrm.humanoid.humanBones);
+    for (const name of boneNames) {
+      const offset = this._getBvhJointOffset(name);
+      if (offset) {
+        lines.push(`  ${name.padEnd(30)} [${offset.map((v) => v.toFixed(5)).join(', ')}]`);
+      } else {
+        lines.push(`  ${name.padEnd(30)} (not in humanoid)`);
+      }
+    }
+
+    // ── Applier rest axes (what the mocap pipeline actually uses) ────────────
+    lines.push('', '--- Applier restLocalAxis + per-bone BVH correction ---');
+    lines.push('  applier uses rawAxis; BVH export pre-multiplies by corrInv to produce T-pose-relative output');
+    const axes = getCachedHumanoidRestAxes(this._vrm);
+    for (const [bone, info] of axes) {
+      const corrAngleDeg = THREE.MathUtils.radToDeg(2 * Math.acos(Math.min(1, Math.abs(info.correction.w))));
+      const na = info.normalizedAxis;
+      const ra = info.rawAxis;
+      const applierAxis = this.applier.getRestAxis(bone);
+      const matchesRaw = applierAxis
+        ? Math.abs(applierAxis.dot(ra) - 1) < 0.001
+        : false;
+      lines.push(`  ${bone.padEnd(20)} restAxis=[${(applierAxis?.x ?? NaN).toFixed(4)}, ${(applierAxis?.y ?? NaN).toFixed(4)}, ${(applierAxis?.z ?? NaN).toFixed(4)}]  normAxis=[${na.x.toFixed(4)}, ${na.y.toFixed(4)}, ${na.z.toFixed(4)}]  rawAxis=[${ra.x.toFixed(4)}, ${ra.y.toFixed(4)}, ${ra.z.toFixed(4)}]  corrAngle=${corrAngleDeg.toFixed(1)}°  useRaw=${matchesRaw}`);
+    }
+
+    // ── Current pose BVH (1 frame) ───────────────────────────────────────────
+    lines.push('', `--- Current pose BVH (1 frame) [mocap state: ${this._state}] ---`);
+    lines.push('  NOTE: bone values here reflect CURRENT node.quaternion (idle anim when camera off).');
+    lines.push('  To verify BVH fix: enable camera, stand in T-pose, then re-open this modal.');
+    try {
+      const recorder = this._createRecorder();
+      recorder.captureFrame(
+        (name) => this.applier.getQuaternion(name),
+        () => this._getBvhHipsPosition(),
+      );
+      lines.push(recorder.stop());
+    } catch (e) {
+      lines.push(`ERROR: ${(e as Error).message}`);
+    }
+
+    return lines.join('\n');
+  }
+
+  private _teardownFileCapture(): void {
+    if (this._fileCaptureActive) {
+      this.applier.setHighQualityMode(false);
+      this._fileCaptureActive = false;
+    }
+    this.detector.onEnd = null;
   }
 
   // ── State transitions ──────────────────────────────────────────────────────
@@ -437,6 +694,7 @@ export class MocapController {
   /** Start camera + live pose preview. */
   async startLive(): Promise<void> {
     if (this._state !== 'off') return;
+    this._teardownFileCapture();
     this._latestFrame = null;
     this._frameRecorded = false;
     await this.detector.start();
@@ -446,7 +704,7 @@ export class MocapController {
   /** Begin recording (must be in 'live' state first). */
   startRecording(): void {
     if (this._state !== 'live') return;
-    this.recorder.start();
+    this.liveRecorder.start();
     this._setState('recording');
   }
 
@@ -456,7 +714,11 @@ export class MocapController {
    */
   stopRecording(): void {
     if (this._state !== 'recording') return;
-    const bvhText = this.recorder.stop();
+    if (this._fileCaptureActive) {
+      this.stop();
+      return;
+    }
+    const bvhText = this.liveRecorder.stop();
     const name    = `mocap_${++this._recordingIndex}`;
     downloadBvh(bvhText, `${name}.bvh`);
     this.onBvhReady?.(bvhText, name);
@@ -471,33 +733,51 @@ export class MocapController {
     if (this._state !== 'off') return;
     this._latestFrame = null;
     this._frameRecorded = false;
+    this._teardownFileCapture();
 
     // Recording from file: snap directly to detected pose, no torso dampening,
     // so the output BVH matches the source video instead of the smoothed preview.
     this.applier.setHighQualityMode(true);
+    this._fileCaptureActive = true;
 
     this.detector.onEnd = () => {
-      const bvhText = this.recorder.stop();
+      const bvhText = this.liveRecorder.stop();
       const name    = `mocap_${++this._recordingIndex}`;
       downloadBvh(bvhText, `${name}.bvh`);
       this.onBvhReady?.(bvhText, name);
-      this.applier.setHighQualityMode(false); // restore smoothing for next session
+      this._teardownFileCapture();
       this._setState('off');
     };
 
-    await this.detector.startFromFile(file);
-    this.recorder.start();
-    this._setState('recording');
+    try {
+      await this.detector.startFromFile(file);
+      this.liveRecorder.start();
+      this._setState('recording');
+    } catch (err) {
+      this.detector.stop();
+      this._teardownFileCapture();
+      throw err;
+    }
   }
 
   /** Stop everything, close camera. */
   stop(): void {
-    if (this._state === 'recording') this.recorder.stop(); // discard
+    if (this._state === 'recording' && this.liveRecorder.recording) this.liveRecorder.stop(); // discard
     this.detector.stop();
+    this._teardownFileCapture();
     this.applier.resetHipBaseline();
     this.applier.resetFootLock();
     this.faceApplier.reset();
     this._setState('off');
+  }
+
+  dispose(): void {
+    this.stop();
+    this.detector.dispose();
+    this.onStateChange = null;
+    this.onError = null;
+    this.onBvhReady = null;
+    this.onCalibrationChange = null;
   }
 
   private _setState(s: MocapState): void {

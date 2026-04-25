@@ -7,6 +7,7 @@ export interface SceneContext {
   renderer: THREE.WebGLRenderer;
   controls: OrbitControls;
   clock: THREE.Clock;
+  dispose: () => void;
 }
 
 export function createScene(container: HTMLElement): SceneContext {
@@ -38,11 +39,24 @@ export function createScene(container: HTMLElement): SceneContext {
   (grid.material as THREE.Material).opacity = 0.5;
   scene.add(grid);
 
-  window.addEventListener('resize', () => {
+  const onResize = (): void => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+  };
+  window.addEventListener('resize', onResize);
 
-  return { scene, camera, renderer, controls, clock: new THREE.Clock() };
+  return {
+    scene,
+    camera,
+    renderer,
+    controls,
+    clock: new THREE.Clock(),
+    dispose: () => {
+      window.removeEventListener('resize', onResize);
+      controls.dispose();
+      renderer.dispose();
+      renderer.domElement.remove();
+    },
+  };
 }

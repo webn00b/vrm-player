@@ -6,26 +6,80 @@
     <title>VRM BVH Player</title>
     <style>
       *, *::before, *::after { box-sizing: border-box; }
-      html, body { margin: 0; padding: 0; height: 100%; background: #111; overflow: hidden; font-family: system-ui, sans-serif; color: #e0e0e0; }
+      html, body { margin: 0; padding: 0; height: 100%; background: #111; overflow: hidden; font-family: ui-monospace, monospace; color: #e0e0e0; }
       #app { position: fixed; inset: 0; }
       canvas { display: block; }
 
+      /* ── UI overlay grid ── */
+      #ui-overlay {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        grid-template-columns: 240px 1fr 260px;
+        grid-template-rows: 1fr auto;
+        gap: 8px;
+        padding: 8px;
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      /* ── Columns ── */
+      #left-col {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 0;
+        overflow-y: auto;
+        pointer-events: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,.1) transparent;
+      }
+
+      #center-col {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        pointer-events: none;
+        min-height: 0;
+      }
+
+      #right-col {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 0;
+        overflow-y: auto;
+        pointer-events: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,.1) transparent;
+      }
+
+      /* ── Bottom bar ── */
+      #bottom-bar {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        pointer-events: auto;
+        padding: 0 2px;
+      }
+
       /* ── Shared panel ── */
       .panel {
-        position: absolute;
+        position: relative;
         background: rgba(16, 16, 16, 0.92);
         backdrop-filter: blur(8px);
         border: 1px solid rgba(255,255,255,0.07);
-        border-radius: 10px;
-        padding: 12px 14px;
-        transition: padding 160ms ease, min-height 160ms ease;
+        border-radius: 8px;
+        padding: 10px 12px;
+        transition: padding 160ms ease;
       }
       .panel-title {
-        font-size: 10px;
-        font-weight: 600;
+        font-size: 9px;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
-        opacity: 0.55;
+        letter-spacing: 0.12em;
+        opacity: 0.4;
         margin: 0 0 8px;
         display: flex;
         align-items: center;
@@ -34,76 +88,60 @@
         cursor: pointer;
         user-select: none;
       }
-      .panel-title:hover { opacity: 0.85; }
+      .panel-title:hover { opacity: 0.7; }
       .panel-title::after {
         content: '▾';
-        font-size: 10px;
+        font-size: 9px;
         opacity: 0.6;
         transform: rotate(0deg);
         transition: transform 160ms ease;
       }
 
-      /* Collapsed state — hide everything except the title, shrink padding. */
-      .panel.collapsed { padding: 8px 14px; }
+      /* Collapsed state */
+      .panel.collapsed { padding: 7px 12px; }
       .panel.collapsed > .panel-title { margin: 0; }
       .panel.collapsed > .panel-title::after { transform: rotate(-90deg); }
       .panel.collapsed > *:not(.panel-title) { display: none !important; }
 
-      /* ── Right column: library + queue ── */
-      #right-col {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        width: 230px;
-        max-height: calc(100vh - 24px);
-      }
-
       /* ── Library ── */
-      #library-panel { flex-shrink: 0; max-height: 45vh; overflow-y: auto; }
+      #library-panel { flex-shrink: 0; max-height: 35vh; overflow-y: auto; }
 
       #library-list {
         list-style: none;
         margin: 0; padding: 0;
-        display: flex; flex-direction: column; gap: 2px;
+        display: flex; flex-direction: column; gap: 1px;
       }
       .lib-item {
-        font-size: 12px;
+        font-size: 11px;
         font-family: ui-monospace, monospace;
-        padding: 5px 8px;
-        border-radius: 5px;
+        padding: 4px 7px;
+        border-radius: 4px;
         cursor: grab;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         border: 1px solid transparent;
         transition: background 100ms, border-color 100ms;
-        /* flex children default to min-width:auto (= content size); force 0
-           so overflow:hidden + text-overflow:ellipsis actually truncates
-           long hash-filenames inside the 230px column. */
         min-width: 0;
         max-width: 100%;
-        box-sizing: border-box;
       }
-      .lib-item:hover     { background: #222; border-color: rgba(255,255,255,0.08); }
+      .lib-item:hover     { background: #1c1c1c; border-color: rgba(255,255,255,0.07); }
       .lib-item.dragging  { opacity: 0.4; cursor: grabbing; }
 
       /* ── Queue ── */
-      #queue-panel { flex: 1 1 0; overflow: hidden; display: flex; flex-direction: column; }
+      #queue-panel { flex: 1 1 0; overflow: hidden; display: flex; flex-direction: column; min-height: 80px; }
 
       #queue-list-wrap {
         flex: 1 1 0;
         overflow-y: auto;
         position: relative;
-        min-height: 80px;
+        min-height: 60px;
       }
 
       #queue-list {
         list-style: none;
         margin: 0; padding: 0;
-        display: flex; flex-direction: column; gap: 2px;
+        display: flex; flex-direction: column; gap: 1px;
         min-height: 100%;
       }
 
@@ -116,122 +154,114 @@
         gap: 8px;
         position: absolute;
         inset: 0;
-        border: 2px dashed rgba(255,255,255,0.18);
-        border-radius: 8px;
-        color: rgba(255,255,255,0.5);
-        font-size: 11px;
+        border: 1px dashed rgba(255,255,255,0.12);
+        border-radius: 6px;
+        color: rgba(255,255,255,0.3);
+        font-size: 10px;
         font-weight: 500;
         text-align: center;
         pointer-events: auto;
         transition: border-color 150ms, color 150ms, background 150ms;
-        background: rgba(255,255,255,0.015);
       }
       #queue-empty:hover {
-        border-color: rgba(255,255,255,0.28);
-        color: rgba(255,255,255,0.7);
+        border-color: rgba(255,255,255,0.22);
+        color: rgba(255,255,255,0.5);
       }
       #queue-empty.drag-over {
-        border-color: rgba(59, 91, 219, 0.8);
-        color: rgba(147, 180, 255, 0.95);
-        background: rgba(59, 91, 219, 0.08);
+        border-color: rgba(59, 91, 219, 0.7);
+        color: rgba(147, 180, 255, 0.9);
+        background: rgba(59, 91, 219, 0.06);
       }
-      #queue-empty svg { opacity: 0.55; }
+      #queue-empty svg { opacity: 0.4; }
 
       /* Calibration readiness indicator */
       .cal-r-row {
         display: grid;
-        grid-template-columns: 70px 1fr 30px;
+        grid-template-columns: 60px 1fr 28px;
         align-items: center;
-        gap: 6px;
+        gap: 5px;
         font-size: 10px;
         font-family: ui-monospace, monospace;
       }
-      .cal-r-label { opacity: 0.55; }
+      .cal-r-label { opacity: 0.45; }
       .cal-r-bar {
-        height: 4px;
+        height: 3px;
         background: rgba(255,255,255,0.07);
         border-radius: 2px;
         overflow: hidden;
       }
       .cal-r-fill {
         height: 100%;
-        background: #475569;  /* grey: not ready */
+        background: #475569;
         border-radius: 2px;
         transition: width 200ms ease, background 200ms ease;
       }
-      .cal-r-fill.partial { background: #eab308; }   /* amber */
-      .cal-r-fill.ready   { background: #22c55e; }   /* green */
-      .cal-r-value { opacity: 0.7; text-align: right; font-variant-numeric: tabular-nums; }
+      .cal-r-fill.partial { background: #eab308; }
+      .cal-r-fill.ready   { background: #22c55e; }
+      .cal-r-value { opacity: 0.6; text-align: right; font-variant-numeric: tabular-nums; }
 
       /* Webkit scrollbars */
-      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
       ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
-      ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 2px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
 
       /* Queue items */
       .q-item {
         display: flex;
         align-items: center;
-        gap: 6px;
-        font-size: 12px;
+        gap: 5px;
+        font-size: 11px;
         font-family: ui-monospace, monospace;
-        padding: 5px 6px 5px 8px;
-        border-radius: 5px;
+        padding: 4px 5px 4px 7px;
+        border-radius: 4px;
         cursor: grab;
         border: 1px solid transparent;
         transition: background 100ms;
       }
-      .q-item:hover { background: #222; }
+      .q-item:hover { background: #1c1c1c; }
       .q-item.active { background: #1e3a8a; border-color: #3b5bdb; color: #fff; }
       .q-item.dragging { opacity: 0.35; cursor: grabbing; }
       .q-item.drop-before { box-shadow: 0 -2px 0 #3b5bdb; }
       .q-item.drop-after  { box-shadow: 0  2px 0 #3b5bdb; }
 
-      .q-num   { opacity: 0.4; flex-shrink: 0; width: 22px; }
+      .q-num   { opacity: 0.35; flex-shrink: 0; width: 18px; }
       .q-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .q-remove {
         flex-shrink: 0;
         background: none;
         border: none;
-        color: rgba(255,255,255,0.25);
+        color: rgba(255,255,255,0.2);
         cursor: pointer;
-        font-size: 10px;
-        padding: 2px 4px;
+        font-size: 9px;
+        padding: 2px 3px;
         border-radius: 3px;
         line-height: 1;
         transition: color 100ms, background 100ms;
       }
-      .q-remove:hover { color: #f87171; background: rgba(248,113,113,0.12); }
+      .q-remove:hover { color: #f87171; background: rgba(248,113,113,0.1); }
 
       /* ── Debug / Layers panel (left) ── */
       #debug-panel {
-        position: absolute;
-        top: 12px;
-        left: 12px;
-        width: 220px;
-        max-height: calc(100vh - 24px);
-        overflow: hidden;
+        flex-shrink: 0;
       }
 
-      .dbg-section { display: flex; flex-direction: column; gap: 5px; }
+      .dbg-section { display: flex; flex-direction: column; gap: 4px; }
       .dbg-row {
-        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        display: flex; align-items: center; justify-content: space-between; gap: 6px;
       }
-      .dbg-label { font-size: 12px; }
+      .dbg-label { font-size: 11px; }
       .dbg-toggle {
-        font-size: 10px; font-weight: 700;
-        padding: 3px 9px; border-radius: 999px; border: 1px solid transparent;
+        font-size: 9px; font-weight: 700;
+        padding: 2px 8px; border-radius: 999px; border: 1px solid transparent;
         cursor: pointer; background: #166534; color: #fff;
-        letter-spacing: 0.04em; min-width: 38px;
+        letter-spacing: 0.04em; min-width: 34px;
         transition: background 120ms, border-color 120ms, transform 80ms;
       }
       .dbg-toggle:hover { transform: translateY(-1px); }
       .dbg-toggle:active { transform: translateY(0); }
       .dbg-toggle.off { background: #7f1d1d; }
 
-      /* Mode-group (three-way choose: one active, others dim).
-         Containers flex with gap of 3px — we can style via siblings. */
       .dbg-row > div[style*="gap:3px"] .dbg-toggle.off {
         background: rgba(255,255,255,0.06);
         color: rgba(255,255,255,0.55);
@@ -244,162 +274,131 @@
       /* ── Sliders ── */
       input[type="range"] {
         -webkit-appearance: none; appearance: none;
-        height: 3px; background: rgba(255,255,255,0.12);
+        height: 2px; background: rgba(255,255,255,0.1);
         border-radius: 2px; outline: none; cursor: pointer;
       }
       input[type="range"]::-webkit-slider-thumb {
         -webkit-appearance: none; appearance: none;
-        width: 12px; height: 12px; border-radius: 50%;
+        width: 10px; height: 10px; border-radius: 50%;
         background: #3b5bdb; border: 2px solid #0b1020;
         cursor: grab;
-        box-shadow: 0 0 0 2px rgba(59,91,219,0.25);
+        box-shadow: 0 0 0 2px rgba(59,91,219,0.2);
         transition: transform 80ms, box-shadow 120ms;
       }
-      input[type="range"]::-webkit-slider-thumb:hover   { transform: scale(1.15); }
-      input[type="range"]::-webkit-slider-thumb:active  { cursor: grabbing; box-shadow: 0 0 0 4px rgba(59,91,219,0.35); }
+      input[type="range"]::-webkit-slider-thumb:hover   { transform: scale(1.2); }
+      input[type="range"]::-webkit-slider-thumb:active  { cursor: grabbing; box-shadow: 0 0 0 3px rgba(59,91,219,0.3); }
       input[type="range"]::-moz-range-thumb {
-        width: 12px; height: 12px; border-radius: 50%;
+        width: 10px; height: 10px; border-radius: 50%;
         background: #3b5bdb; border: 2px solid #0b1020; cursor: grab;
       }
       .dbg-hint {
-        font-size: 10px; opacity: 0.4; line-height: 1.4; margin-top: 1px; padding-left: 1px;
+        font-size: 9px; opacity: 0.35; line-height: 1.4; margin-top: 1px; padding-left: 1px;
       }
-      .dbg-divider { height: 1px; background: rgba(255,255,255,0.07); margin: 6px 0; }
-      .dbg-levels  { display: flex; flex-direction: column; gap: 6px; }
+      .dbg-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 5px 0; }
+      .dbg-levels  { display: flex; flex-direction: column; gap: 5px; }
       .dbg-level-row { display: flex; flex-direction: column; gap: 2px; }
-      .dbg-lv-label { font-size: 10px; opacity: 0.45; }
+      .dbg-lv-label { font-size: 9px; opacity: 0.4; }
       .dbg-bar-wrap {
-        height: 5px; background: rgba(255,255,255,0.07);
-        border-radius: 3px; overflow: hidden;
+        height: 4px; background: rgba(255,255,255,0.06);
+        border-radius: 2px; overflow: hidden;
       }
-      .dbg-bar { height: 100%; width: 0%; border-radius: 3px; transition: width 200ms ease, opacity 200ms; }
+      .dbg-bar { height: 100%; width: 0%; border-radius: 2px; transition: width 200ms ease, opacity 200ms; }
       #dbg-bar-1 { background: #0d9488; }
       #dbg-bar-2 { background: #3b5bdb; }
       #dbg-bar-5 { background: #e76f51; }
-      .dbg-stat  { font-size: 10px; opacity: 0.35; margin-top: 6px; font-family: ui-monospace, monospace; }
+      .dbg-stat  { font-size: 9px; opacity: 0.3; margin-top: 4px; font-family: ui-monospace, monospace; }
 
       .dbg-tabs {
-        display: flex; gap: 2px; margin-bottom: 10px;
-        border-bottom: 1px solid rgba(255,255,255,0.07);
+        display: flex; gap: 2px; margin-bottom: 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
       }
       .dbg-tab {
         flex: 1; background: transparent; color: #fff;
-        font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
-        padding: 6px 10px; border: none; border-bottom: 2px solid transparent;
-        cursor: pointer; opacity: 0.45; transition: opacity 120ms, border-color 120ms;
-      }
-      .dbg-tab:hover { opacity: 0.75; }
-      .dbg-tab.active { opacity: 1; border-bottom-color: #3b5bdb; }
-      .dbg-tab-panel { display: none; }
-      .dbg-tab-panel.active {
-        display: block;
-        /* 24px outer margin + ~32px dbg-tabs header + 8px slack */
-        max-height: calc(100vh - 64px);
-        overflow-y: auto;
-        padding-right: 4px;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255,255,255,.12) transparent;
-      }
-
-      /* ── Mocap tuning panel — sits between bone-panel and library/queue ── */
-      #mocap-tuning-panel {
-        position: absolute;
-        top: 12px;
-        right: 254px;          /* 12 + 230 + 12 — left of right-col */
-        width: 230px;
-        max-height: calc(100vh - 24px);
-        overflow-y: auto;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255,255,255,.12) transparent;
-      }
-
-      /* ── Bone pose panel (further left, beyond mocap-tuning) ── */
-      #bone-panel {
-        position: absolute;
-        top: 12px;
-        right: 496px;          /* 254 + 230 + 12 */
-        width: 210px;
-        max-height: calc(100vh - 24px);
-        overflow-y: auto;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255,255,255,.12) transparent;
-      }
-
-      /* ── Status bar ── */
-      #status {
-        position: absolute;
-        bottom: 12px; left: 12px;
-        font-size: 11px; opacity: 0.5;
+        font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+        padding: 5px 8px; border: none; border-bottom: 2px solid transparent;
+        cursor: pointer; opacity: 0.4; transition: opacity 120ms, border-color 120ms;
         font-family: ui-monospace, monospace;
       }
+      .dbg-tab:hover { opacity: 0.7; }
+      .dbg-tab.active { opacity: 1; border-bottom-color: #3b5bdb; }
+      .dbg-tab-panel { display: none; }
+      .dbg-tab-panel.active { display: block; }
 
-      /* ── Transport bar (bottom-centre) ── */
+      /* ── Bone pose panel (right col) ── */
+      #bone-panel { flex-shrink: 0; }
+
+      /* ── Mocap tuning panel (right col) ── */
+      #mocap-tuning-panel { flex-shrink: 0; }
+
+      /* ── Mocap preview (left col, small window) ── */
+      #mocap-preview-panel {
+        pointer-events: auto;
+        flex-shrink: 0;
+        padding: 6px;
+      }
+
+      /* ── Status ── */
+      #status {
+        font-size: 10px;
+        opacity: 0.4;
+        font-family: ui-monospace, monospace;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      /* ── Transport bar ── */
       #transport {
-        position: absolute;
-        bottom: 14px;
-        left: 50%;
-        transform: translateX(-50%);
+        flex: 1;
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 10px 16px;
-        min-width: 380px;
-        max-width: min(720px, calc(100vw - 760px));
+        gap: 10px;
+        padding: 8px 14px;
         background: rgba(16, 16, 16, 0.92);
         border: 1px solid rgba(255,255,255,0.07);
-        border-radius: 12px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        border-radius: 8px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.35);
         font-family: ui-monospace, monospace;
         backdrop-filter: blur(8px);
         transition: opacity 160ms;
       }
-      #transport.empty { opacity: 0.35; pointer-events: none; }
+      #transport.empty { opacity: 0.3; pointer-events: none; }
       .tp-btn {
         background: transparent; border: none; color: #fff;
-        font-size: 15px; cursor: pointer; padding: 4px 8px;
-        border-radius: 6px;
+        font-size: 14px; cursor: pointer; padding: 3px 7px;
+        border-radius: 5px;
         transition: background 120ms, transform 80ms;
-        min-width: 30px;
+        min-width: 26px;
       }
-      .tp-btn:hover  { background: rgba(255,255,255,0.1); }
+      .tp-btn:hover  { background: rgba(255,255,255,0.08); }
       .tp-btn:active { transform: scale(0.92); }
       #tp-play {
-        background: rgba(59, 91, 219, 0.2);
+        background: rgba(59, 91, 219, 0.18);
         color: #93b4ff;
       }
-      #tp-play:hover { background: rgba(59, 91, 219, 0.35); }
+      #tp-play:hover { background: rgba(59, 91, 219, 0.3); }
       #tp-timeline {
-        flex: 1 1 0; height: 5px;
-        background: rgba(255,255,255,0.12);
-        border-radius: 3px; cursor: pointer; position: relative;
+        flex: 1 1 0; height: 4px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 2px; cursor: pointer; position: relative;
         transition: height 120ms;
       }
-      #tp-timeline:hover { height: 7px; }
+      #tp-timeline:hover { height: 6px; }
       #tp-progress {
         height: 100%; width: 0%;
         background: linear-gradient(90deg, #3b5bdb, #6186ff);
-        border-radius: 3px;
+        border-radius: 2px;
         pointer-events: none; transition: width 80ms linear;
-        box-shadow: 0 0 6px rgba(59,91,219,0.4);
+        box-shadow: 0 0 5px rgba(59,91,219,0.35);
       }
       #tp-time {
-        font-size: 10px; opacity: 0.7;
-        min-width: 78px; text-align: right;
+        font-size: 9px; opacity: 0.6;
+        min-width: 72px; text-align: right;
         font-variant-numeric: tabular-nums;
       }
       #tp-name {
-        font-size: 11px; opacity: 0.75; font-weight: 500;
-        max-width: 160px; white-space: nowrap;
+        font-size: 10px; opacity: 0.7; font-weight: 500;
+        max-width: 140px; white-space: nowrap;
         overflow: hidden; text-overflow: ellipsis;
-      }
-
-      /* Status bar — elevate slightly */
-      #status {
-        background: rgba(16, 16, 16, 0.7);
-        padding: 4px 10px;
-        border-radius: 6px;
-        border: 1px solid rgba(255,255,255,0.06);
-        backdrop-filter: blur(6px);
       }
 
       /* ── Skeleton info modal ── */
@@ -417,13 +416,13 @@
       #skel-modal {
         background: #131313;
         border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 14px;
-        padding: 20px 22px 18px;
+        border-radius: 12px;
+        padding: 18px 20px 16px;
         width: 540px;
         max-height: 82vh;
         overflow-y: auto;
         font-family: ui-monospace, monospace;
-        font-size: 12px;
+        font-size: 11px;
         color: #e0e0e0;
         box-shadow: 0 8px 40px rgba(0,0,0,0.6);
         scrollbar-width: thin;
@@ -433,26 +432,27 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 16px;
+        margin-bottom: 14px;
       }
       #skel-modal-title {
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 700;
         letter-spacing: 0.03em;
         opacity: 0.9;
       }
       .skel-close {
         background: none;
-        border: 1px solid rgba(255,255,255,0.12);
-        color: rgba(255,255,255,0.5);
-        font-size: 13px;
+        border: 1px solid rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.45);
+        font-size: 11px;
         cursor: pointer;
         padding: 2px 8px;
-        border-radius: 6px;
+        border-radius: 5px;
         line-height: 1.4;
+        font-family: ui-monospace, monospace;
         transition: color 100ms, background 100ms;
       }
-      .skel-close:hover { color: #fff; background: rgba(255,255,255,0.08); }
+      .skel-close:hover { color: #fff; background: rgba(255,255,255,0.07); }
       #skel-modal-copy { margin-right: 6px; }
       #skel-modal-copy.copied { color: #4ade80; border-color: rgba(74,222,128,0.35); }
       .skel-cols {
@@ -461,11 +461,11 @@
         gap: 20px;
       }
       .skel-section h4 {
-        font-size: 9px;
+        font-size: 8px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.12em;
-        opacity: 0.4;
+        opacity: 0.35;
         margin: 0 0 8px;
       }
       .skel-row {
@@ -475,83 +475,77 @@
         gap: 8px;
         padding: 3px 0;
         border-bottom: 1px solid rgba(255,255,255,0.04);
-        font-size: 11px;
+        font-size: 10px;
       }
       .skel-row:last-child { border-bottom: none; }
-      .skel-row-label { opacity: 0.5; white-space: nowrap; }
+      .skel-row-label { opacity: 0.45; white-space: nowrap; }
       .skel-row-value { font-variant-numeric: tabular-nums; text-align: right; }
-      .skel-divider { height: 1px; background: rgba(255,255,255,0.07); margin: 14px 0; }
+      .skel-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 12px 0; }
       .skel-cal { color: #4ade80; }
       .skel-uncal { color: #f87171; }
       .skel-amber { color: #fbbf24; }
     </style>
   </head>
   <body>
+    <!-- Three.js canvas fills entire background -->
     <div id="app"></div>
 
-    <!-- Left: layers / debug -->
-    <div id="debug-panel" class="panel"><!-- populated by debugPanel.ts --></div>
+    <!-- Grid overlay -->
+    <div id="ui-overlay">
 
-    <!-- Video preview: appears to the right of debug-panel when mocap is active -->
-    <div id="mocap-preview-panel" class="panel" style="
-      display: none;
-      position: absolute;
-      top: 12px;
-      left: 244px;
-      width: 220px;
-      padding: 8px;
-    ">
-      <canvas id="mocap-canvas" style="display:block;width:100%;border-radius:4px;background:#000"></canvas>
-    </div>
-
-    <!-- Right column -->
-    <div id="right-col">
-
-      <!-- Library -->
-      <div id="library-panel" class="panel">
-        <p class="panel-title">Library</p>
-        <ul id="library-list"></ul>
+      <!-- ── Left column: layers + library + queue ── -->
+      <div id="left-col">
+        <div id="debug-panel" class="panel"><!-- populated by debugPanel.ts --></div>
+        <div id="mocap-preview-panel" class="panel" style="display:none">
+          <canvas id="mocap-canvas" style="display:block;width:100%;border-radius:3px;background:#000"></canvas>
+        </div>
+        <div id="library-panel" class="panel">
+          <p class="panel-title">Library</p>
+          <ul id="library-list"></ul>
+        </div>
+        <div id="queue-panel" class="panel">
+          <p class="panel-title">Queue</p>
+          <div id="queue-list-wrap">
+            <ul id="queue-list"></ul>
+            <div id="queue-empty">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M12 5v14M5 12l7-7 7 7"/>
+              </svg>
+              Drag animations here
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- Queue -->
-      <div id="queue-panel" class="panel">
-        <p class="panel-title">Queue</p>
-        <div id="queue-list-wrap">
-          <ul id="queue-list"></ul>
-          <div id="queue-empty">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M12 5v14M5 12l7-7 7 7"/>
-            </svg>
-            Drag animations here
-          </div>
+      <!-- ── Center column: transparent, canvas visible ── -->
+      <div id="center-col"></div>
+
+      <!-- ── Right column: bones + tuning ── -->
+      <div id="right-col">
+        <div id="bone-panel" class="panel"><!-- populated by bonePosePanel.ts --></div>
+        <div id="mocap-tuning-panel" class="panel"><!-- populated by debugPanel.ts --></div>
+      </div>
+
+      <!-- ── Bottom bar: status + transport ── -->
+      <div id="bottom-bar">
+        <div id="status">booting…</div>
+        <div id="transport" class="empty">
+          <span id="tp-name">—</span>
+          <button class="tp-btn" id="tp-prev"  title="Previous">⏮</button>
+          <button class="tp-btn" id="tp-play"  title="Play / Pause">▶</button>
+          <button class="tp-btn" id="tp-next"  title="Next">⏭</button>
+          <div id="tp-timeline"><div id="tp-progress"></div></div>
+          <span id="tp-time">0:00 / 0:00</span>
         </div>
       </div>
 
     </div>
 
-    <!-- Bone pose panel (right side) -->
-    <div id="bone-panel" class="panel"><!-- populated by bonePosePanel.ts --></div>
-
-    <!-- Mocap tuning: sliders + advanced params -->
-    <div id="mocap-tuning-panel" class="panel"><!-- populated by debugPanel.ts --></div>
-
     <!-- Hidden video element for mocap webcam feed -->
     <video id="mocap-video" playsinline style="display:none"></video>
 
-    <div id="status">booting…</div>
-
-    <!-- Transport bar -->
-    <div id="transport" class="empty">
-      <span id="tp-name">—</span>
-      <button class="tp-btn" id="tp-prev"  title="Previous">⏮</button>
-      <button class="tp-btn" id="tp-play"  title="Play / Pause">▶</button>
-      <button class="tp-btn" id="tp-next"  title="Next">⏭</button>
-      <div id="tp-timeline"><div id="tp-progress"></div></div>
-      <span id="tp-time">0:00 / 0:00</span>
-    </div>
     <script>
       // Collapsible panels: clicking .panel-title toggles .collapsed on ancestor .panel.
-      // Persists state in localStorage per panel id.
       (function () {
         const KEY = 'vrm-player.panel-collapsed';
         let state = {};
@@ -577,11 +571,8 @@
           });
         }
 
-        // Bind existing titles
         document.querySelectorAll('.panel-title').forEach(bind);
 
-        // Some panels are populated dynamically (bone-panel, mocap-tuning-panel).
-        // Watch for added titles and bind them on appearance.
         const mo = new MutationObserver((mutations) => {
           for (const m of mutations) {
             for (const n of m.addedNodes) {
@@ -594,6 +585,7 @@
         mo.observe(document.body, { childList: true, subtree: true });
       })();
     </script>
+
     <!-- Skeleton info modal -->
     <div id="skel-modal-overlay">
       <div id="skel-modal">
@@ -605,6 +597,35 @@
           </span>
         </div>
         <div id="skel-modal-body"></div>
+      </div>
+    </div>
+
+    <!-- BVH diagnostic modal -->
+    <div id="bvh-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1001;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+      <div id="bvh-modal" style="background:#131313;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:18px 20px 16px;width:660px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0">
+          <span style="font-size:12px;font-weight:700;letter-spacing:0.03em;opacity:0.9;font-family:ui-monospace,monospace">🔬 BVH диагностика</span>
+          <span style="display:flex;gap:6px">
+            <button class="skel-close" id="bvh-modal-copy">📋 copy</button>
+            <button class="skel-close" id="bvh-modal-refresh">🔄 refresh</button>
+            <button class="skel-close" id="bvh-modal-close">✕ close</button>
+          </span>
+        </div>
+        <pre id="bvh-modal-body" style="margin:0;overflow-y:auto;font-family:ui-monospace,monospace;font-size:10px;color:#e0e0e0;white-space:pre;line-height:1.55;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent;flex:1;min-height:0"></pre>
+      </div>
+    </div>
+
+    <!-- BVH round-trip verification modal -->
+    <div id="bvh-verify-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1002;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+      <div id="bvh-verify-modal" style="background:#131313;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:18px 20px 16px;width:680px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0">
+          <span style="font-size:12px;font-weight:700;letter-spacing:0.03em;opacity:0.9;font-family:ui-monospace,monospace">🧪 BVH round-trip verification</span>
+          <span style="display:flex;gap:6px">
+            <button class="skel-close" id="bvh-verify-modal-copy">📋 copy</button>
+            <button class="skel-close" id="bvh-verify-modal-close">✕ close</button>
+          </span>
+        </div>
+        <pre id="bvh-verify-modal-body" style="margin:0;overflow-y:auto;font-family:ui-monospace,monospace;font-size:10px;color:#e0e0e0;white-space:pre;line-height:1.55;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent;flex:1;min-height:0"></pre>
       </div>
     </div>
 

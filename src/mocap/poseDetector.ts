@@ -229,6 +229,17 @@ export class PoseDetector {
     this._fHandWorld.Left.reset(); this._fHandWorld.Right.reset();
   }
 
+  dispose(): void {
+    this.stop();
+    this.onFrame = null;
+    this.onError = null;
+    this.onEnd = null;
+    this.holistic?.close();
+    this.holistic = null;
+    this._ctx = null;
+    this._canvas = null;
+  }
+
   private _tick = (): void => {
     if (!this._running) return;
     this._rafId = requestAnimationFrame(this._tick);

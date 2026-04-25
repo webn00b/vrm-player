@@ -1,0 +1,114 @@
+{
+  "adaptiveLateralGain": [
+    {
+      "name": "small lean keeps base gain",
+      "args": { "baseScale": 0.35, "maxScale": 0.8, "lateralLeanAbs": 0.05 },
+      "expected": 0.35,
+      "tolerance": 0.000001
+    },
+    {
+      "name": "large lean ramps toward max gain",
+      "args": { "baseScale": 0.35, "maxScale": 0.8, "lateralLeanAbs": 0.5 },
+      "expected": 0.8,
+      "tolerance": 0.000001
+    }
+  ],
+  "armScaleCap": [
+    {
+      "name": "overscaled arm gets capped by live segment lengths",
+      "args": { "rawScale": 1.4, "avatarArmLen": 0.44, "perfSegmentLen": 0.50 },
+      "expectedEffectiveScale": 0.924,
+      "expectedCap": 0.924,
+      "tolerance": 0.000001
+    },
+    {
+      "name": "normal scale stays untouched",
+      "args": { "rawScale": 0.92, "avatarArmLen": 0.44, "perfSegmentLen": 0.50 },
+      "expectedEffectiveScale": 0.92,
+      "expectedCap": null,
+      "tolerance": 0.000001
+    }
+  ],
+  "midpointBlend": [
+    {
+      "name": "crossing centerline forces midpoint anchor",
+      "args": { "shoulderCenterOffset": 0.18, "wristCenterOffset": -0.01 },
+      "expected": 1,
+      "tolerance": 0.000001
+    },
+    {
+      "name": "same-side wrist far from center keeps shoulder anchor",
+      "args": { "shoulderCenterOffset": 0.18, "wristCenterOffset": 0.18 },
+      "expected": 0,
+      "tolerance": 0.000001
+    }
+  ],
+  "handsTogetherBlend": [
+    {
+      "name": "close wrists on same level trigger folded-hands blend",
+      "args": { "shoulderSpan": 0.30, "wristGap": 0.09, "wristLevelDelta": 0.01 },
+      "expected": 0.8333333333,
+      "tolerance": 0.000001
+    },
+    {
+      "name": "big wrist height difference disables folded-hands branch",
+      "args": { "shoulderSpan": 0.30, "wristGap": 0.06, "wristLevelDelta": 0.10 },
+      "expected": 0,
+      "tolerance": 0.000001
+    }
+  ],
+  "prayerBlend": [
+    {
+      "name": "prayer needs bent arms and lowered wrists",
+      "args": { "handsTogetherBlend": 0.9, "armBendRatio": 0.32, "wristBelowShoulders": 0.8 },
+      "expected": 0.72,
+      "tolerance": 0.000001
+    },
+    {
+      "name": "straight arms do not activate prayer",
+      "args": { "handsTogetherBlend": 1, "armBendRatio": 0.08, "wristBelowShoulders": 1 },
+      "expected": 0,
+      "tolerance": 0.000001
+    }
+  ],
+  "frontPoseBlendBase": [
+    {
+      "name": "strong prayer suppresses midpoint/front bias",
+      "args": { "midpointBlend": 0.8, "handsTogetherBlend": 0.9, "chestPrayerBlend": 0.95 },
+      "expected": 0.17325,
+      "tolerance": 0.000001
+    }
+  ],
+  "faceNearBlend": [
+    {
+      "name": "fingers near the mouth enable face-near branch",
+      "args": {
+        "handsTogetherBlend": 1,
+        "shoulderSpan2D": 0.30,
+        "tipX": 0.50,
+        "tipY": 0.42,
+        "mouthX": 0.51,
+        "mouthY": 0.43,
+        "mouthSpan2D": 0.04,
+        "wristNormY": 0.50
+      },
+      "expected": 0.4563492063,
+      "tolerance": 0.000001
+    },
+    {
+      "name": "fingers far from the mouth keep face-near at zero",
+      "args": {
+        "handsTogetherBlend": 1,
+        "shoulderSpan2D": 0.30,
+        "tipX": 0.75,
+        "tipY": 0.70,
+        "mouthX": 0.51,
+        "mouthY": 0.43,
+        "mouthSpan2D": 0.04,
+        "wristNormY": 0.50
+      },
+      "expected": 0,
+      "tolerance": 0.000001
+    }
+  ]
+}

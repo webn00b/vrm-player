@@ -11,6 +11,11 @@ import { validateClip, clampClip } from './validation/clipValidator';
 export interface RetargetOptions {
   /** If true, keyframes outside anatomical ROM are clamped in-place. Default false (log only). */
   clampOutOfRange?: boolean;
+  /**
+   * Skip the rest-pose correction step entirely. Rarely useful; mainly for
+   * debugging.
+   */
+  skipRestCorrection?: boolean;
 }
 
 /**
@@ -23,8 +28,17 @@ export async function retargetBvhToVrm(
   name: string,
   opts: RetargetOptions = {},
 ): Promise<THREE.AnimationClip> {
-  // Step 1: convert BVH to VRMA ArrayBuffer
-  const vrmaBuffer: ArrayBuffer = await convertBVHToVRMAnimation(bvh);
+  // Step 1: convert BVH to VRMA ArrayBuffer.
+  //
+  // We force the source skeleton's hips world Y to equal the target VRM's
+  // normalizedRestPose.hips.position.y. The loader (`@pixiv/three-vrm-animation`)
+  // reads `restHipsPosition` from `hips.getWorldPosition()` and computes
+  // `scale = humanoidY / animationY` — passing matching values gives scale = 1
+  // and the hips translation track becomes a bit-exact round-trip. Without it
+  // we hit the bbox-derived skeleton depth (~0.78 m) instead of true bind
+  // height (~0.86 m) and every hips keyframe drifts by ~9 cm.
+  const hipsRestY = (vrm.humanoid as any).normalizedRestPose?.hips?.position?.[1];
+  const vrmaBuffer: ArrayBuffer = await convertBVHToVRMAnimation(bvh, { hipsRestY });
 
   // Step 2: load the VRMA via GLTFLoader + VRMAnimationLoaderPlugin
   const loader = new GLTFLoader();
@@ -38,9 +52,11 @@ export async function retargetBvhToVrm(
     if (!vrmAnimations?.length) throw new Error('No VRM animations in exported VRMA');
     clip = createVRMAnimationClip(vrmAnimations[0], vrm);
     clip.name = name;
-    const correctedTracks = applyHumanoidRestCorrectionsToClip(clip, vrm);
-    if (correctedTracks > 0) {
-      console.info(`[retarget] applied rest-pose correction to ${correctedTracks} quaternion track(s) in "${name}"`);
+    if (!opts.skipRestCorrection) {
+      const correctedTracks = applyHumanoidRestCorrectionsToClip(clip, vrm);
+      if (correctedTracks > 0) {
+        console.info(`[retarget] applied rest-pose correction to ${correctedTracks} quaternion track(s) in "${name}"`);
+      }
     }
   } finally {
     URL.revokeObjectURL(url);
