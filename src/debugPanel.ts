@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { MocapState } from './mocap/mocapController';
 import { STAT_LANDMARKS } from './mocap/mocapDebugViz';
 import { buildMainPanelHtml, buildTuningPanelHtml } from './debugPanelHtml';
@@ -590,6 +591,58 @@ export function mountDebugPanel(
     if (!m) return;
     m.recalibrate();
   });
+
+  // ── Hips = shoulders width override ────────────────────────────────────────
+  // Translates leftUpperLeg / rightUpperLeg roots in their parent (hips) frame
+  // so |leg.x| == shoulderWidth/2. Original positions are stashed once per VRM
+  // so toggling OFF restores the rig untouched. Recalibration is triggered
+  // afterwards because hip width is one of the calibration references.
+  {
+    const hipEqualBtn = document.querySelector<HTMLButtonElement>('#rig-hip-equal-btn')!;
+    let active = false;
+    let stashed: { lx: number; rx: number } | null = null;
+
+    hipEqualBtn.addEventListener('click', () => {
+      const m = getMocap();
+      if (!m) return;
+      const vrm = m.vrm;
+      const hL = vrm.humanoid.getNormalizedBoneNode('leftUpperLeg' as any);
+      const hR = vrm.humanoid.getNormalizedBoneNode('rightUpperLeg' as any);
+      const sL = vrm.humanoid.getNormalizedBoneNode('leftUpperArm' as any);
+      const sR = vrm.humanoid.getNormalizedBoneNode('rightUpperArm' as any);
+      if (!hL || !hR || !sL || !sR) {
+        const missing = [
+          !hL && 'leftUpperLeg', !hR && 'rightUpperLeg',
+          !sL && 'leftUpperArm', !sR && 'rightUpperArm',
+        ].filter(Boolean).join(', ');
+        console.warn(`[hip-equal] missing humanoid bone(s): ${missing}`);
+        hipEqualBtn.title = `Disabled — VRM missing: ${missing}`;
+        hipEqualBtn.disabled = true;
+        return;
+      }
+
+      active = !active;
+      if (active) {
+        if (!stashed) stashed = { lx: hL.position.x, rx: hR.position.x };
+        vrm.scene.updateMatrixWorld(true);
+        const wL = sL.getWorldPosition(new THREE.Vector3());
+        const wR = sR.getWorldPosition(new THREE.Vector3());
+        const halfW = wL.distanceTo(wR) / 2;
+        const lSign = Math.sign(hL.position.x) || 1;
+        const rSign = Math.sign(hR.position.x) || -1;
+        hL.position.x = lSign * halfW;
+        hR.position.x = rSign * halfW;
+      } else if (stashed) {
+        hL.position.x = stashed.lx;
+        hR.position.x = stashed.rx;
+      }
+      vrm.scene.updateMatrixWorld(true);
+      m.recalibrate();
+
+      hipEqualBtn.textContent = active ? 'ON' : 'OFF';
+      hipEqualBtn.classList.toggle('off', !active);
+    });
+  }
 
   // Dump skeleton button — also exposed as window.dumpSkeleton() for console use.
   {

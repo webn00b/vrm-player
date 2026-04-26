@@ -185,15 +185,16 @@ export function buildTuningPanelHtml(): string {
 
         <button id="capture-stop-cam-btn" class="dbg-toggle off" style="display:none;width:100%">Stop camera</button>
 
+        <div class="dbg-row" id="mocap-playback-row" style="display:none;gap:3px;justify-content:flex-start;margin-top:4px">
+          <button class="dbg-toggle" id="mocap-pause-btn" title="Pause / resume">⏸</button>
+          <button class="dbg-toggle off" id="mocap-step-back-btn" title="Step -1 frame">⏮</button>
+          <button class="dbg-toggle off" id="mocap-step-fwd-btn"  title="Step +1 frame">⏭</button>
+          <button class="dbg-toggle off" id="mocap-grab-btn"      title="Grab current pose">💾</button>
+          <button class="dbg-toggle off" id="mocap-flush-btn"     title="Download captured BVH">⬇</button>
+        </div>
+
         <details class="capture-advanced">
           <summary>Advanced…</summary>
-          <div class="dbg-row" id="mocap-playback-row" style="display:none;gap:3px">
-            <button class="dbg-toggle" id="mocap-pause-btn">⏸</button>
-            <button class="dbg-toggle off" id="mocap-step-back-btn" title="Step -1 frame">⏮</button>
-            <button class="dbg-toggle off" id="mocap-step-fwd-btn"  title="Step +1 frame">⏭</button>
-            <button class="dbg-toggle off" id="mocap-grab-btn"      title="Grab current pose">💾</button>
-            <button class="dbg-toggle off" id="mocap-flush-btn"     title="Download captured BVH">⬇</button>
-          </div>
           <div class="dbg-row">
             <span class="dbg-label">📤 Single pose</span>
             <button class="dbg-toggle off" id="mocap-export-pose-btn" title="Download current avatar pose as a 1-frame BVH">Export .bvh</button>
@@ -236,6 +237,10 @@ export function buildTuningPanelHtml(): string {
         <div class="dbg-stat" id="mocap-calib-stat">—</div>
 
         <div id="cal-readiness" style="margin-top:8px;display:flex;flex-direction:column;gap:3px"></div>
+        <div class="dbg-row">
+          <span class="dbg-label">🦴 Hips = shoulders</span>
+          <button class="dbg-toggle off" id="rig-hip-equal-btn" title="Move upper-leg roots so hip width equals shoulder width">OFF</button>
+        </div>
         <div class="dbg-row">
           <span class="dbg-label">🔗 Unify arm max</span>
           <button class="dbg-toggle off" id="cal-unify-btn" title="Share performer arm max between L/R">OFF</button>
