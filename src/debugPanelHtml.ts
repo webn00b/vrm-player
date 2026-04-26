@@ -167,39 +167,50 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
 
 export function buildTuningPanelHtml(): string {
   return `
-      <p class="panel-title"><span>Mocap tuning</span></p>
+      <p class="panel-title"><span>Capture</span></p>
 
       <div class="dbg-section">
+        <div class="capture-source">
+          <button class="capture-src-btn" data-source="camera" aria-pressed="true">📷 Camera</button>
+          <button class="capture-src-btn" data-source="video"  aria-pressed="false">📁 Video</button>
+        </div>
+
+        <button id="capture-primary-btn" class="capture-primary">Start camera</button>
+        <input type="file" id="mocap-file-input" accept="video/*" hidden>
+
+        <div class="capture-status">
+          <span id="mocap-status-label">📷 Camera off</span>
+          <span id="mocap-frames" style="opacity:.55"></span>
+        </div>
+
+        <button id="capture-stop-cam-btn" class="dbg-toggle off" style="display:none;width:100%">Stop camera</button>
+
+        <details class="capture-advanced">
+          <summary>Advanced…</summary>
+          <div class="dbg-row" id="mocap-playback-row" style="display:none;gap:3px">
+            <button class="dbg-toggle" id="mocap-pause-btn">⏸</button>
+            <button class="dbg-toggle off" id="mocap-step-back-btn" title="Step -1 frame">⏮</button>
+            <button class="dbg-toggle off" id="mocap-step-fwd-btn"  title="Step +1 frame">⏭</button>
+            <button class="dbg-toggle off" id="mocap-grab-btn"      title="Grab current pose">💾</button>
+            <button class="dbg-toggle off" id="mocap-flush-btn"     title="Download captured BVH">⬇</button>
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">📤 Single pose</span>
+            <button class="dbg-toggle off" id="mocap-export-pose-btn" title="Download current avatar pose as a 1-frame BVH">Export .bvh</button>
+          </div>
+        </details>
+      </div>
+
+      <div class="dbg-divider"></div>
+
+      <div class="dbg-section">
+        <p class="panel-title"><span>🧪 Round-trip verify <span id="bvh-verify-state" style="opacity:.5"></span></span></p>
         <div class="dbg-row">
-          <span class="dbg-label" id="mocap-status-label">📷 Camera off</span>
-          <button class="dbg-toggle off" id="mocap-cam-btn">Start</button>
-        </div>
-        <div class="dbg-row" id="mocap-rec-row" style="display:none">
-          <span class="dbg-label" id="mocap-frames">0 frames</span>
-          <button class="dbg-toggle" id="mocap-rec-btn">⏺ Rec</button>
-        </div>
-        <div class="dbg-row" id="mocap-playback-row" style="display:none;gap:3px">
-          <button class="dbg-toggle" id="mocap-pause-btn">⏸</button>
-          <button class="dbg-toggle off" id="mocap-step-back-btn" title="Step -1 frame">⏮</button>
-          <button class="dbg-toggle off" id="mocap-step-fwd-btn"  title="Step +1 frame">⏭</button>
-          <button class="dbg-toggle off" id="mocap-grab-btn"      title="Grab current pose">💾</button>
-          <button class="dbg-toggle off" id="mocap-flush-btn"     title="Download captured BVH">⬇</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">📁 From video</span>
-          <label class="dbg-toggle off" id="mocap-file-label" style="cursor:pointer">Load</label>
-          <input type="file" id="mocap-file-input" accept="video/*" style="display:none">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">📤 Current pose</span>
-          <button class="dbg-toggle off" id="mocap-export-pose-btn" title="Download current avatar pose as a 1-frame BVH">Export .bvh</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🧪 BVH round-trip <span id="bvh-verify-state" style="opacity:.5"></span></span>
+          <span class="dbg-label">Source</span>
           <div style="display:flex;gap:3px">
-            <button class="dbg-toggle off" id="bvh-verify-btn" title="Live camera: record 3s → replay the BVH → diff each frame">Live</button>
+            <button class="dbg-toggle off" id="bvh-verify-btn"      title="Live camera: record 3s → replay the BVH → diff each frame">Live (3s)</button>
             <button class="dbg-toggle off" id="bvh-verify-file-btn" title="Video file: process → replay BVH → diff each frame">Video…</button>
-            <input type="file" id="bvh-verify-file-input" accept="video/*" style="display:none">
+            <input type="file" id="bvh-verify-file-input" accept="video/*" hidden>
           </div>
         </div>
         <div class="dbg-row">

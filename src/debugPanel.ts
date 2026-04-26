@@ -114,9 +114,8 @@ export function mountDebugPanel(
 
   // Camera/record/playback/file/export rows live in the right tuning panel now,
   // not inside #debug-panel — query from document so they resolve in either host.
-  const camBtn      = document.querySelector<HTMLButtonElement>('#mocap-cam-btn')!;
-  const recBtn      = document.querySelector<HTMLButtonElement>('#mocap-rec-btn')!;
-  const recRow      = document.querySelector<HTMLElement>('#mocap-rec-row')!;
+  const primaryBtn  = document.querySelector<HTMLButtonElement>('#capture-primary-btn')!;
+  const stopCamBtn  = document.querySelector<HTMLButtonElement>('#capture-stop-cam-btn')!;
   const playRow     = document.querySelector<HTMLElement>('#mocap-playback-row')!;
   const pauseBtn    = document.querySelector<HTMLButtonElement>('#mocap-pause-btn')!;
   const stepBackBtn = document.querySelector<HTMLButtonElement>('#mocap-step-back-btn')!;
@@ -129,7 +128,21 @@ export function mountDebugPanel(
   const previewPanel = document.getElementById('mocap-preview-panel')!;
   const previewCvs   = document.getElementById('mocap-canvas') as HTMLCanvasElement;
   const fileInput    = document.querySelector<HTMLInputElement>('#mocap-file-input')!;
-  const fileLabel    = document.querySelector<HTMLElement>('#mocap-file-label')!;
+  const sourceBtns   = Array.from(document.querySelectorAll<HTMLButtonElement>('.capture-src-btn'));
+
+  // Source: 'camera' or 'video'. Persisted across reloads.
+  const SOURCE_KEY = 'vrm-player.capture-source';
+  type CaptureSource = 'camera' | 'video';
+  let currentSource: CaptureSource =
+    (localStorage.getItem(SOURCE_KEY) as CaptureSource | null) === 'video' ? 'video' : 'camera';
+
+  function paintSourceBtns(): void {
+    for (const b of sourceBtns) {
+      const active = b.dataset.source === currentSource;
+      b.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+  }
+  paintSourceBtns();
 
   // Set canvas intrinsic resolution (4:3 at 2× panel width for sharpness)
   previewCvs.width  = 440;
@@ -140,39 +153,40 @@ export function mountDebugPanel(
   function updateMocapUI(state: MocapState): void {
     clearInterval(framesTimer);
     const mocap = getMocap();
+    framesLbl.textContent = '';
+    primaryBtn.classList.remove('recording');
+    primaryBtn.disabled = false;
+
     if (state === 'off') {
       const hasFrozenFrame = !!mocap?.latestFrame;
-      statusLbl.textContent     = hasFrozenFrame ? '📷 Camera off (last frame)' : '📷 Camera off';
-      camBtn.textContent        = 'Start';
-      camBtn.classList.add('off');
-      camBtn.disabled           = false;
-      fileLabel.classList.add('off');
-      recRow.style.display      = 'none';
-      playRow.style.display     = 'none';
-      previewPanel.style.display  = hasFrozenFrame ? 'block' : 'none';
+      if (currentSource === 'camera') {
+        statusLbl.textContent  = hasFrozenFrame ? '📷 Camera off (last frame)' : '📷 Camera off';
+        primaryBtn.textContent = 'Start camera';
+      } else {
+        statusLbl.textContent  = '📁 Pick a video to process';
+        primaryBtn.textContent = 'Choose video…';
+      }
+      stopCamBtn.style.display   = 'none';
+      playRow.style.display      = 'none';
+      previewPanel.style.display = hasFrozenFrame ? 'block' : 'none';
       mocap?.setCanvas(null);
       // Auto-stop debug recorder when file processing completes
       if (dbgRecorder.active) dbgRecorder.stop();
     } else if (state === 'live') {
-      statusLbl.textContent     = '📷 Live';
-      camBtn.textContent        = 'Stop';
-      camBtn.classList.remove('off');
-      fileLabel.classList.add('off');
-      recRow.style.display      = 'flex';
-      playRow.style.display     = 'flex';
-      recBtn.textContent        = '⏺ Rec';
-      recBtn.classList.remove('off');
-      previewPanel.style.display  = 'block';
+      statusLbl.textContent      = '📷 Live preview';
+      primaryBtn.textContent     = '⏺ Record';
+      stopCamBtn.style.display   = 'block';
+      playRow.style.display      = 'flex';
+      previewPanel.style.display = 'block';
       mocap?.setCanvas(previewCvs);
     } else if (state === 'recording') {
       const isFile = (mocap?.duration ?? 0) > 0;
-      statusLbl.textContent     = isFile ? '🎬 Processing…' : '📷 Recording…';
-      recBtn.textContent        = '⏹ Stop';
-      recBtn.classList.add('off');
-      camBtn.disabled           = isFile; // disable Stop during file processing
-      fileLabel.classList.add('off');
-      playRow.style.display     = 'flex';
-      previewPanel.style.display  = 'block';
+      statusLbl.textContent      = isFile ? '🎬 Processing video…' : '📷 Recording…';
+      primaryBtn.textContent     = isFile ? '⏹ Cancel' : '⏹ Stop';
+      primaryBtn.classList.add('recording');
+      stopCamBtn.style.display   = 'none';
+      playRow.style.display      = 'flex';
+      previewPanel.style.display = 'block';
       mocap?.setCanvas(previewCvs);
       framesTimer = rememberInterval(() => {
         const m = getMocap();
@@ -185,35 +199,64 @@ export function mountDebugPanel(
     }
   }
 
-  camBtn.addEventListener('click', async () => {
+  async function handlePrimaryClick(): Promise<void> {
     const mocap = getMocap();
     if (!mocap) return;
-    if (mocap.state === 'off') {
-      camBtn.textContent = '…';
-      camBtn.disabled    = true;
-      try {
-        await mocap.startLive();
-      } catch (e) {
-        camBtn.disabled   = false;
-        statusLbl.textContent = '❌ Camera error';
-      }
-      camBtn.disabled = false;
-    } else {
-      if (mocap.state === 'recording') mocap.stopRecording();
-      mocap.stop();
+
+    if (mocap.state === 'recording') {
+      // Both camera-recording and file-processing exit through this branch.
+      const isFile = mocap.duration > 0;
+      if (isFile) mocap.stop();
+      else        mocap.stopRecording();
+      return;
     }
+
+    if (currentSource === 'camera') {
+      if (mocap.state === 'off') {
+        primaryBtn.textContent = '…';
+        primaryBtn.disabled = true;
+        try { await mocap.startLive(); }
+        catch { statusLbl.textContent = '❌ Camera error'; }
+        finally { primaryBtn.disabled = false; }
+      } else if (mocap.state === 'live') {
+        mocap.startRecording();
+      }
+    } else {
+      // Video source — open file picker
+      if (mocap.state === 'off') fileInput.click();
+    }
+  }
+
+  primaryBtn.addEventListener('click', () => { void handlePrimaryClick(); });
+
+  stopCamBtn.addEventListener('click', () => {
+    const mocap = getMocap();
+    if (!mocap) return;
+    if (mocap.state === 'recording') mocap.stopRecording();
+    mocap.stop();
   });
 
-  recBtn.addEventListener('click', () => {
-    const mocap = getMocap();
-    if (!mocap) return;
-    if (mocap.state === 'live')      mocap.startRecording();
-    else if (mocap.state === 'recording') mocap.stopRecording();
-  });
+  // ── Source segmented control ─────────────────────────────────────────────────
+
+  for (const b of sourceBtns) {
+    b.addEventListener('click', () => {
+      const next = b.dataset.source as CaptureSource | undefined;
+      if (next !== 'camera' && next !== 'video') return;
+      if (next === currentSource) return;
+      const mocap = getMocap();
+      // Stop any active session before switching
+      if (mocap && mocap.state !== 'off') {
+        if (mocap.state === 'recording') mocap.stopRecording();
+        mocap.stop();
+      }
+      currentSource = next;
+      try { localStorage.setItem(SOURCE_KEY, currentSource); } catch { /* quota */ }
+      paintSourceBtns();
+      updateMocapUI(getMocap()?.state ?? 'off');
+    });
+  }
 
   // ── File video input ─────────────────────────────────────────────────────────
-
-  fileLabel.addEventListener('click', () => fileInput.click());
 
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0];

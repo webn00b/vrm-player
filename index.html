@@ -292,6 +292,52 @@
         box-shadow: 0 0 0 1px rgba(255,255,255,0.15) inset;
       }
 
+      /* ── Unified Capture card ── */
+      .capture-source {
+        display: flex; gap: 0;
+        margin-bottom: 8px;
+        border: 1px solid #2a2a2a;
+        border-radius: 5px;
+        overflow: hidden;
+      }
+      .capture-src-btn {
+        flex: 1; padding: 6px;
+        background: transparent; color: #ccc;
+        border: none; border-right: 1px solid #2a2a2a;
+        font-size: 11px; font-family: inherit; cursor: pointer;
+        transition: background 100ms, color 100ms;
+      }
+      .capture-src-btn:last-child { border-right: none; }
+      .capture-src-btn[aria-pressed="true"] { background: #2a3550; color: #fff; }
+      .capture-src-btn:hover { background: #1c1c1c; }
+      .capture-src-btn[aria-pressed="true"]:hover { background: #34406b; }
+
+      .capture-primary {
+        width: 100%; padding: 10px;
+        background: #3b5bdb; color: #fff;
+        border: none; border-radius: 5px;
+        font-size: 13px; font-family: inherit; font-weight: 600;
+        cursor: pointer; margin-bottom: 6px;
+        transition: background 100ms;
+      }
+      .capture-primary:hover { background: #4c6ce8; }
+      .capture-primary:disabled { background: #333; color: #777; cursor: not-allowed; }
+      .capture-primary.recording { background: #c92a2a; }
+      .capture-primary.recording:hover { background: #d93030; }
+
+      .capture-status {
+        display: flex; justify-content: space-between;
+        font-size: 11px; opacity: 0.85; margin-bottom: 6px; gap: 8px;
+      }
+
+      .capture-advanced { margin-top: 10px; }
+      .capture-advanced summary {
+        cursor: pointer; font-size: 11px; opacity: 0.6;
+        padding: 4px 0; user-select: none;
+      }
+      .capture-advanced summary:hover { opacity: 0.9; }
+      .capture-advanced[open] summary { opacity: 0.9; margin-bottom: 4px; }
+
       /* ── Sliders ── */
       input[type="range"] {
         -webkit-appearance: none; appearance: none;
