@@ -94,6 +94,51 @@ const BONES: BoneDef[] = [
       { axis: 'z', min: -30, max: 30, label: 'Twist'   },
     ],
   },
+  // Ranges below mirror src/validation/boneConstraints.ts so the visible slider
+  // travel matches what the ROM clamp will actually accept — otherwise the
+  // user dials past a limit and sees nothing change.
+  {
+    vrm: 'leftUpperLeg', label: 'L Upper leg',
+    axes: [
+      { axis: 'y', min: -30, max: 90,  label: 'Fwd/Back' },
+      { axis: 'z', min: -30, max: 45,  label: 'Spread'   },
+      { axis: 'x', min: -30, max: 30,  label: 'Twist'    },
+    ],
+  },
+  {
+    vrm: 'rightUpperLeg', label: 'R Upper leg',
+    axes: [
+      { axis: 'y', min: -30, max: 90,  label: 'Fwd/Back' },
+      { axis: 'z', min: -30, max: 45,  label: 'Spread'   },
+      { axis: 'x', min: -30, max: 30,  label: 'Twist'    },
+    ],
+  },
+  {
+    vrm: 'leftLowerLeg', label: 'L Knee',
+    axes: [
+      { axis: 'x', min: 0, max: 140, label: 'Bend' },
+    ],
+  },
+  {
+    vrm: 'rightLowerLeg', label: 'R Knee',
+    axes: [
+      { axis: 'x', min: 0, max: 140, label: 'Bend' },
+    ],
+  },
+  {
+    vrm: 'leftFoot', label: 'L Foot',
+    axes: [
+      { axis: 'x', min: -50, max: 30, label: 'Up/Down' },
+      { axis: 'z', min: -35, max: 15, label: 'Roll'    },
+    ],
+  },
+  {
+    vrm: 'rightFoot', label: 'R Foot',
+    axes: [
+      { axis: 'x', min: -50, max: 30, label: 'Up/Down' },
+      { axis: 'z', min: -35, max: 15, label: 'Roll'    },
+    ],
+  },
 ];
 
 // Storage: boneName → { x, y, z } offsets in degrees
