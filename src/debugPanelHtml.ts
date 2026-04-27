@@ -52,27 +52,27 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
       <div class="dbg-section">
         <div class="dbg-row">
           <span class="dbg-label">💃 Idle poses</span>
-          <button class="dbg-toggle" data-key="idle">ON</button>
+          <button class="dbg-toggle off" data-key="idle">OFF</button>
         </div>
         <div class="dbg-row">
           <span class="dbg-label">🫁 Breathing</span>
-          <button class="dbg-toggle" data-key="breathing">ON</button>
+          <button class="dbg-toggle off" data-key="breathing">OFF</button>
         </div>
         <div class="dbg-row">
           <span class="dbg-label">🌊 Head sway</span>
-          <button class="dbg-toggle" data-key="headSway">ON</button>
+          <button class="dbg-toggle off" data-key="headSway">OFF</button>
         </div>
         <div class="dbg-row">
           <span class="dbg-label">👁 Eye saccades</span>
-          <button class="dbg-toggle" data-key="eyeSaccades">ON</button>
+          <button class="dbg-toggle off" data-key="eyeSaccades">OFF</button>
         </div>
         <div class="dbg-row">
           <span class="dbg-label">😑 Blink</span>
-          <button class="dbg-toggle" data-key="blink">ON</button>
+          <button class="dbg-toggle off" data-key="blink">OFF</button>
         </div>
         <div class="dbg-row">
           <span class="dbg-label">⚖️ Weight shift</span>
-          <button class="dbg-toggle" data-key="weightShift">ON</button>
+          <button class="dbg-toggle off" data-key="weightShift">OFF</button>
         </div>
       </div>
     </details>
@@ -202,6 +202,9 @@ export function buildTuningPanelHtml(): string {
           <span id="mocap-status-label">📷 Camera off</span>
           <span id="mocap-frames" style="opacity:.55"></span>
         </div>
+        <div class="capture-status" style="margin-top:-2px">
+          <span id="mocap-source-info" style="opacity:.45;font-size:10px"></span>
+        </div>
 
         <button id="capture-stop-cam-btn" class="dbg-toggle off" style="display:none;width:100%">Stop camera</button>
 
@@ -243,7 +246,10 @@ export function buildTuningPanelHtml(): string {
         <div class="dbg-section">
           <div class="dbg-row">
             <span class="dbg-label">🦴 Hips = shoulders</span>
-            <button class="dbg-toggle off" id="rig-hip-equal-btn" title="Move upper-leg roots so hip width equals shoulder width">OFF</button>
+            <div style="display:flex;gap:3px">
+              <button class="dbg-toggle off" id="rig-hip-equal-btn" title="Move upper-leg roots so hip width equals shoulder width">OFF</button>
+              <button class="dbg-toggle off" id="hip-diag-btn" title="Dump rig + mocap state for the leg/hip pipeline">🔬 Diag</button>
+            </div>
           </div>
           <div class="dbg-row">
             <span class="dbg-label">🔗 Unify arm max</span>
@@ -274,6 +280,10 @@ export function buildTuningPanelHtml(): string {
           <div class="dbg-row">
             <span class="dbg-label">🦾 R arm × <span id="cal-ra-val">1.00</span></span>
             <input type="range" id="cal-ra-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px">
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">🦵 Leg spread × <span id="mocap-legspread-val">1.00</span></span>
+            <input type="range" id="mocap-legspread-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px" title="Fan feet outward — compensates avatars whose rest hips are wider than the performer's projected hips">
           </div>
           <div class="dbg-row">
             <span class="dbg-label">🔍 Dump to console</span>

@@ -79,6 +79,7 @@ export class DirectPoseApplier {
   // Shoulder spread: Z-axis rotation applied to leftShoulder / rightShoulder every
   // frame. Positive = shoulders droop outward (broader silhouette). Range ±20°.
   private _shoulderSpreadDeg = 0;
+  private _legSpreadX = 1.0;
 
   // Default hips world-rotation at load time. The VRM often ships with a
   // non-identity hips orientation (e.g. 180° around Y) to face the camera.
@@ -219,6 +220,11 @@ export class DirectPoseApplier {
   /** Shoulder spread in degrees. Positive = shoulders droop outward (wider silhouette). */
   setShoulderSpread(deg: number): void { this._shoulderSpreadDeg = Math.max(-20, Math.min(20, deg)); }
   get shoulderSpread(): number { return this._shoulderSpreadDeg; }
+
+  /** Multiplier on the X-component of the foot IK target offset from hip.
+   *  1.0 = no change. >1 fans feet outward, <1 pulls them inward. */
+  setLegSpreadX(v: number): void { this._legSpreadX = Math.max(0.5, Math.min(2.0, v)); }
+  get legSpreadX(): number { return this._legSpreadX; }
 
   /** Limb (arm/leg) smoothing lerp factor (0 = frozen, 1 = instant). */
   setBodySmoothing(v: number): void { this._bodyLerp = Math.max(0.01, Math.min(1, v)); }
@@ -836,6 +842,7 @@ export class DirectPoseApplier {
       ankle: pa,
       hipWorld,
       legScale: calib.legScale(),
+      legSpreadX: this._legSpreadX,
       groundY: this._groundY,
       poleAlpha: this._poleAlpha,
       footLockEnabled: this._footLockEnabled,

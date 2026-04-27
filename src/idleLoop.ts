@@ -53,7 +53,7 @@ function randomItem<T>(arr: T[]): T {
 export class IdleLoop {
   private clips: AnimData[] = [];
   private boneNames: string[] = [];
-  enabled = true;
+  enabled = false;
 
   // Stats for debug UI
   lastLevel1Frame = 0;

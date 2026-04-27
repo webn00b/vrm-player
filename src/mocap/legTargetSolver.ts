@@ -15,6 +15,10 @@ export interface LegTargetSolverInput {
   ankle: Landmark3D;
   hipWorld: THREE.Vector3;
   legScale: number;
+  /** Multiplier on the X-component of the foot offset from hip. 1.0 = no
+   *  change. >1 fans feet outward (compensates avatars whose rest hips are
+   *  wider than the performer's projected hip width in MediaPipe metres). */
+  legSpreadX: number;
   groundY: number;
   poleAlpha: number;
   footLockEnabled: boolean;
@@ -41,6 +45,7 @@ export function solveLegTarget(input: LegTargetSolverInput): LegTargetSolverResu
     ankle,
     hipWorld,
     legScale,
+    legSpreadX,
     groundY,
     poleAlpha,
     footLockEnabled,
@@ -52,6 +57,10 @@ export function solveLegTarget(input: LegTargetSolverInput): LegTargetSolverResu
 
   mpDeltaToVrm(mirrorX, ankle.x - hip.x, ankle.y - hip.y, ankle.z - hip.z, _v1);
   _v1.multiplyScalar(legScale);
+  // Avatar rest hips are typically wider than the performer's projected hip
+  // width, so a length-only scale leaves the foot too close to the centerline.
+  // legSpreadX fans the feet outward without changing the leg length.
+  _v1.x *= legSpreadX;
   const target = _v2.copy(hipWorld).add(_v1);
   if (target.y < groundY) target.y = groundY;
 

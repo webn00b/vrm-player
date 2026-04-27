@@ -9,12 +9,12 @@ import type { VRM } from '@pixiv/three-vrm';
  * the AnimationMixer or PriorityAnimator has set — no conflict.
  */
 export class MicroAnimations {
-  // Toggles (all on by default)
-  breathing = true;
-  headSway = true;
-  eyeSaccades = true;
-  blink = true;
-  weightShift = true;
+  // Toggles (all off by default — opt-in via debug panel)
+  breathing = false;
+  headSway = false;
+  eyeSaccades = false;
+  blink = false;
+  weightShift = false;
 
   // ── Breathing ──────────────────────────────────────────────────────────────
   private _prevBreath = 0;

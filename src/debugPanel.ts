@@ -99,8 +99,8 @@ export function mountDebugPanel(
   // ── Layer toggles ─────────────────────────────────────────────────────────
 
   const states: Record<string, boolean> = {
-    idle: true, breathing: true, headSway: true,
-    eyeSaccades: true, blink: true, weightShift: true,
+    idle: false, breathing: false, headSway: false,
+    eyeSaccades: false, blink: false, weightShift: false,
   };
 
   root.querySelectorAll<HTMLButtonElement>('.dbg-toggle[data-key]').forEach((btn) => {
@@ -150,6 +150,31 @@ export function mountDebugPanel(
   const exportPoseBtn = document.querySelector<HTMLButtonElement>('#mocap-export-pose-btn')!;
   const statusLbl   = document.querySelector<HTMLElement>('#mocap-status-label')!;
   const framesLbl   = document.querySelector<HTMLElement>('#mocap-frames')!;
+  const sourceInfo  = document.querySelector<HTMLElement>('#mocap-source-info')!;
+
+  // Format video dimensions as "1920×1080 (16:9)" — readers want both raw size
+  // (proxy for detail per body part) and aspect (proxy for what fits in frame).
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  const formatSourceInfo = (w: number, h: number): string => {
+    if (!w || !h) return '';
+    const d = gcd(w, h);
+    const aw = w / d, ah = h / d;
+    // Common ratios get a clean label; weird ones fall back to W:H even if large.
+    const ratio = aw <= 32 && ah <= 32 ? `${aw}:${ah}` : (w / h).toFixed(2) + ':1';
+    return `📐 ${w}×${h} (${ratio})`;
+  };
+  const refreshSourceInfo = (): void => {
+    const m = getMocap();
+    if (!m) { sourceInfo.textContent = ''; return; }
+    sourceInfo.textContent = formatSourceInfo(m.videoElement.videoWidth, m.videoElement.videoHeight);
+  };
+  // The video element only knows its dimensions after metadata is loaded —
+  // a fresh getUserMedia stream / file load won't have width/height ready when
+  // we get the state-change event. Listen once and refresh from there.
+  const mocapInstance = getMocap();
+  if (mocapInstance) {
+    mocapInstance.videoElement.addEventListener('loadedmetadata', refreshSourceInfo);
+  }
   const previewPanel = document.getElementById('mocap-preview-panel')!;
   const previewCvs   = document.getElementById('mocap-canvas') as HTMLCanvasElement;
   const fileInput    = document.querySelector<HTMLInputElement>('#mocap-file-input')!;
@@ -181,6 +206,8 @@ export function mountDebugPanel(
     framesLbl.textContent = '';
     primaryBtn.classList.remove('recording');
     primaryBtn.disabled = false;
+    if (state === 'off') sourceInfo.textContent = '';
+    else refreshSourceInfo();
 
     if (state === 'off') {
       const hasFrozenFrame = !!mocap?.latestFrame;
@@ -617,28 +644,42 @@ export function mountDebugPanel(
   });
 
   // ── Hips = shoulders width override ────────────────────────────────────────
-  // Translates leftUpperLeg / rightUpperLeg roots in their parent (hips) frame
-  // so |leg.x| == shoulderWidth/2. Original positions are stashed once per VRM
-  // so toggling OFF restores the rig untouched. Recalibration is triggered
-  // afterwards because hip width is one of the calibration references.
+  // The straightforward approach (translating leftUpperLeg/rightUpperLeg roots
+  // on the normalized rig) DOES NOT WORK on @pixiv/three-vrm: the rendered
+  // mesh is skinned to the RAW bone hierarchy whose positions are fixed at
+  // load time. Modifying normalized positions widens the IK pivot but the raw
+  // upper-legs still pivot from their original (narrower) roots — applying
+  // the same rotations from a narrower pivot lands the feet inward of where
+  // IK intended, sometimes far enough to visually cross past the centerline.
+  //
+  // Instead this toggle now drives the same `legSpreadX` knob the slider
+  // exposes, with an auto-computed ratio = avatarShoulderWidth / avatarHipWidth.
+  // That fans the foot IK targets outward without touching any bone geometry,
+  // so the rendered mesh stays consistent with its rest pose.
   {
     const hipEqualBtn = document.querySelector<HTMLButtonElement>('#rig-hip-equal-btn')!;
+    const spreadSlider  = document.querySelector<HTMLInputElement>('#mocap-legspread-slider');
+    const spreadValEl   = document.querySelector<HTMLElement>('#mocap-legspread-val');
     let active = false;
-    let stashed: { lx: number; rx: number } | null = null;
+    let prevSpread: number | null = null;
+
+    const setSpread = (v: number): void => {
+      const m = getMocap();
+      m?.setLegSpreadX(v);
+      // Reflect into the slider/readout so the user can see what the toggle
+      // applied and tweak it from there if needed.
+      if (spreadSlider) spreadSlider.value = String(Math.max(0.5, Math.min(2, v)));
+      if (spreadValEl)  spreadValEl.textContent = v.toFixed(2);
+    };
 
     hipEqualBtn.addEventListener('click', () => {
       const m = getMocap();
       if (!m) return;
       const vrm = m.vrm;
-      const hL = vrm.humanoid.getNormalizedBoneNode('leftUpperLeg' as any);
-      const hR = vrm.humanoid.getNormalizedBoneNode('rightUpperLeg' as any);
       const sL = vrm.humanoid.getNormalizedBoneNode('leftUpperArm' as any);
       const sR = vrm.humanoid.getNormalizedBoneNode('rightUpperArm' as any);
-      if (!hL || !hR || !sL || !sR) {
-        const missing = [
-          !hL && 'leftUpperLeg', !hR && 'rightUpperLeg',
-          !sL && 'leftUpperArm', !sR && 'rightUpperArm',
-        ].filter(Boolean).join(', ');
+      if (!sL || !sR) {
+        const missing = [!sL && 'leftUpperArm', !sR && 'rightUpperArm'].filter(Boolean).join(', ');
         console.warn(`[hip-equal] missing humanoid bone(s): ${missing}`);
         hipEqualBtn.title = `Disabled — VRM missing: ${missing}`;
         hipEqualBtn.disabled = true;
@@ -647,24 +688,174 @@ export function mountDebugPanel(
 
       active = !active;
       if (active) {
-        if (!stashed) stashed = { lx: hL.position.x, rx: hR.position.x };
-        vrm.scene.updateMatrixWorld(true);
-        const wL = sL.getWorldPosition(new THREE.Vector3());
-        const wR = sR.getWorldPosition(new THREE.Vector3());
-        const halfW = wL.distanceTo(wR) / 2;
-        const lSign = Math.sign(hL.position.x) || 1;
-        const rSign = Math.sign(hR.position.x) || -1;
-        hL.position.x = lSign * halfW;
-        hR.position.x = rSign * halfW;
-      } else if (stashed) {
-        hL.position.x = stashed.lx;
-        hR.position.x = stashed.rx;
+        // Compensate for performer↔avatar hip-width mismatch. The leg solver
+        // computes target.x as `avatarHipRoot.x + (performerAnkle.x -
+        // performerHip.x) * legScale * legSpreadX`. legScale is a *length*
+        // ratio, so the X-offset is carried over in absolute MediaPipe metres.
+        // If performer's hip half-width is bigger than the avatar's, even a
+        // narrow performer stance overshoots the avatar's leg root past the
+        // centerline → legs cross. Scaling the offset by the hip-width ratio
+        // preserves "foot displacement relative to hip width" between rigs:
+        // performer narrow → avatar narrow on its own scale, never crossed.
+        const cal = m.calibration as any;
+        const performerHipWidth = cal.performerHipWidth as number;
+        const avatarHipWidth    = m.calibration.avatarHipWidth;
+        if (performerHipWidth < 1e-4 || avatarHipWidth < 1e-4) {
+          console.warn('[hip-equal] hip width measurement unavailable; skipping');
+          active = false;
+          return;
+        }
+        const ratio = avatarHipWidth / performerHipWidth;
+        prevSpread = m.legSpreadX;
+        setSpread(ratio);
+      } else if (prevSpread != null) {
+        setSpread(prevSpread);
+        prevSpread = null;
       }
-      vrm.scene.updateMatrixWorld(true);
-      m.recalibrate();
 
       hipEqualBtn.textContent = active ? 'ON' : 'OFF';
       hipEqualBtn.classList.toggle('off', !active);
+    });
+
+    // ── Hip / leg diagnostics modal ──────────────────────────────────────────
+    const diagBtn       = document.querySelector<HTMLButtonElement>('#hip-diag-btn')!;
+    const diagOverlay   = document.getElementById('hip-diag-modal-overlay')!;
+    const diagBody      = document.getElementById('hip-diag-modal-body')!;
+    const diagCopyBtn   = document.getElementById('hip-diag-modal-copy')!;
+    const diagRefreshBtn = document.getElementById('hip-diag-modal-refresh')!;
+    const diagCloseBtn  = document.getElementById('hip-diag-modal-close')!;
+
+    const r3 = (n: number): number => Math.round(n * 1000) / 1000;
+    const vec3 = (v: THREE.Vector3): { x: number; y: number; z: number } => ({ x: r3(v.x), y: r3(v.y), z: r3(v.z) });
+    const lm = (l: { x: number; y: number; z: number; visibility?: number } | undefined) =>
+      l ? { x: r3(l.x), y: r3(l.y), z: r3(l.z), vis: l.visibility != null ? r3(l.visibility) : undefined } : null;
+
+    const buildDiag = (): string => {
+      const m = getMocap();
+      if (!m) return '(mocap not initialised)';
+      const vrm = m.vrm;
+      const get = (n: string) => vrm.humanoid.getNormalizedBoneNode(n as any);
+      const getRaw = (n: string) => vrm.humanoid.getRawBoneNode(n as any);
+      vrm.scene.updateMatrixWorld(true);
+
+      const boneRow = (name: string) => {
+        const norm = get(name);
+        const raw = getRaw(name);
+        if (!norm) return { name, missing: true };
+        const wp = norm.getWorldPosition(new THREE.Vector3());
+        return {
+          name,
+          parent: norm.parent?.name || '(none)',
+          localPos: vec3(norm.position),
+          localQuat: { x: r3(norm.quaternion.x), y: r3(norm.quaternion.y), z: r3(norm.quaternion.z), w: r3(norm.quaternion.w) },
+          worldPos: vec3(wp),
+          rawSameAsNorm: raw === norm,
+          rawWorldPos: raw && raw !== norm ? vec3(raw.getWorldPosition(new THREE.Vector3())) : null,
+        };
+      };
+
+      const cal = m.calibration as any;
+      const frame = m.latestFrame;
+      const dt = m.debugTargets as any;
+
+      const data = {
+        timestamp: new Date().toISOString(),
+        rig: {
+          leftUpperLeg:   boneRow('leftUpperLeg'),
+          rightUpperLeg:  boneRow('rightUpperLeg'),
+          leftLowerLeg:   boneRow('leftLowerLeg'),
+          rightLowerLeg:  boneRow('rightLowerLeg'),
+          leftFoot:       boneRow('leftFoot'),
+          rightFoot:      boneRow('rightFoot'),
+          leftUpperArm:   boneRow('leftUpperArm'),
+          rightUpperArm:  boneRow('rightUpperArm'),
+          hips:           boneRow('hips'),
+          spine:          boneRow('spine'),
+          chest:          boneRow('chest'),
+          upperChest:     boneRow('upperChest'),
+        },
+        hipsEqualsShoulders: {
+          buttonState: hipEqualBtn.textContent,
+          prevSpreadBeforeToggle: prevSpread,
+        },
+        calibration: {
+          calibrated:           cal._calibrated ?? null,
+          avatarHipWidth:       r3(cal.avatarHipWidth ?? NaN),
+          avatarLeftUpperArm:   r3(cal.avatarLeftUpperArm ?? NaN),
+          avatarLeftUpperLeg:   r3(cal.avatarLeftUpperLeg ?? NaN),
+          avatarLeftLowerLeg:   r3(cal.avatarLeftLowerLeg ?? NaN),
+          avatarRightUpperLeg:  r3(cal.avatarRightUpperLeg ?? NaN),
+          avatarRightLowerLeg:  r3(cal.avatarRightLowerLeg ?? NaN),
+          performerHipWidth:    r3(cal.performerHipWidth ?? NaN),
+          performerShoulderWidth: r3(cal.performerShoulderWidth ?? NaN),
+          performerLegLen:      r3(cal.performerLegLen ?? NaN),
+          bodyScale:             r3(m.calibration.bodyScale()),
+          legScale:              r3(m.calibration.legScale()),
+          armScaleL:             r3(m.calibration.armScale('left')),
+          armScaleR:             r3(m.calibration.armScale('right')),
+          scaleRef:              m.calibration.scaleRef,
+          hipVisGate:            r3(m.calibration.hipVisGate),
+          readiness:             m.calibration.readiness(),
+        },
+        applier: {
+          mirrorX:        (m as any).applier?._mirrorX ?? null,
+          legSpreadX:     r3(m.legSpreadX),
+          shoulderSpread: r3(m.shoulderSpread),
+        },
+        latestFrame: frame ? {
+          // MediaPipe BlazePose landmark indices: 23=LH, 24=RH, 25=LK, 26=RK, 27=LA, 28=RA
+          // Note: MediaPipe is camera-side ("their LEFT is on viewer's RIGHT") — we mirror in mpDeltaToVrm.
+          worldLandmarks: {
+            leftHip:    lm(frame.worldLandmarks[23]),
+            rightHip:   lm(frame.worldLandmarks[24]),
+            leftKnee:   lm(frame.worldLandmarks[25]),
+            rightKnee:  lm(frame.worldLandmarks[26]),
+            leftAnkle:  lm(frame.worldLandmarks[27]),
+            rightAnkle: lm(frame.worldLandmarks[28]),
+            leftShoulder:  lm(frame.worldLandmarks[11]),
+            rightShoulder: lm(frame.worldLandmarks[12]),
+          },
+          normLandmarks: {
+            leftHip:    lm(frame.landmarks[23]),
+            rightHip:   lm(frame.landmarks[24]),
+            leftAnkle:  lm(frame.landmarks[27]),
+            rightAnkle: lm(frame.landmarks[28]),
+          },
+        } : null,
+        ikDebugTargets: {
+          leftFootTarget:  dt?.leftFootTarget  ? vec3(dt.leftFootTarget)  : null,
+          rightFootTarget: dt?.rightFootTarget ? vec3(dt.rightFootTarget) : null,
+          leftKneeTarget:  dt?.leftKneeTarget  ? vec3(dt.leftKneeTarget)  : null,
+          rightKneeTarget: dt?.rightKneeTarget ? vec3(dt.rightKneeTarget) : null,
+          leftFootLocked:  dt?.leftFootLocked  ?? null,
+          rightFootLocked: dt?.rightFootLocked ?? null,
+        },
+      };
+
+      return JSON.stringify(data, null, 2);
+    };
+
+    const refreshDiag = (): void => { diagBody.textContent = buildDiag(); };
+    diagBtn.addEventListener('click', () => {
+      refreshDiag();
+      diagOverlay.style.display = 'flex';
+    });
+    diagRefreshBtn.addEventListener('click', refreshDiag);
+    diagCloseBtn.addEventListener('click', () => { diagOverlay.style.display = 'none'; });
+    diagOverlay.addEventListener('click', (e) => {
+      if (e.target === diagOverlay) diagOverlay.style.display = 'none';
+    });
+    let diagCopyResetId = 0;
+    diagCopyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(diagBody.textContent ?? '').then(() => {
+        diagCopyBtn.textContent = '✓ copied!';
+        diagCopyBtn.classList.add('copied');
+        clearTimeout(diagCopyResetId);
+        diagCopyResetId = rememberTimeout(() => {
+          diagCopyBtn.textContent = '📋 copy';
+          diagCopyBtn.classList.remove('copied');
+        }, 2000);
+      });
     });
   }
 
@@ -794,6 +985,7 @@ export function mountDebugPanel(
   wirePlainSlider('#mocap-pole-slider',   '#mocap-pole-val',   2, (m, v) => m.setPoleSmoothing(v));
   wirePlainSlider('#mocap-polez-slider',  '#mocap-polez-val',  2, (m, v) => m.setArmPoleZ(v));
   wirePlainSlider('#mocap-vis-slider',    '#mocap-vis-val',    2, (m, v) => m.setVisibilityThreshold(v));
+  wirePlainSlider('#mocap-legspread-slider', '#mocap-legspread-val', 2, (m, v) => m.setLegSpreadX(v));
 
   const resetSliders = document.querySelector<HTMLButtonElement>('#cal-reset-btn')!;
   resetSliders.addEventListener('click', () => {
@@ -808,6 +1000,15 @@ export function mountDebugPanel(
       s.value = '1';
       v.textContent = '1.00';
       getMocap()?.calibration.setOverride(kind, 1);
+    }
+    // Reset leg spread too — sits next to the calibration multipliers in the
+    // UI and resets feel like one logical action.
+    const ls = document.querySelector<HTMLInputElement>('#mocap-legspread-slider');
+    const lv = document.querySelector<HTMLElement>('#mocap-legspread-val');
+    if (ls && lv) {
+      ls.value = '1';
+      lv.textContent = '1.00';
+      getMocap()?.setLegSpreadX(1);
     }
   });
 

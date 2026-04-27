@@ -86,6 +86,7 @@ export class MocapController {
   get duration():           number            { return this.detector.duration; }
   get isPaused():           boolean           { return this.detector.isPaused; }
   get latestFrame():        PoseFrame | null  { return this._latestFrame; }
+  get videoElement():       HTMLVideoElement  { return this.detector.video; }
 
   /** Attach / detach the preview canvas. Call after startLive(). */
   setCanvas(canvas: HTMLCanvasElement | null): void {
@@ -159,6 +160,9 @@ export class MocapController {
 
   setShoulderSpread(deg: number): void { this.applier.setShoulderSpread(deg); }
   get shoulderSpread(): number { return this.applier.shoulderSpread; }
+
+  setLegSpreadX(v: number): void { this.applier.setLegSpreadX(v); }
+  get legSpreadX(): number { return this.applier.legSpreadX; }
 
   setMirrorX(v: boolean): void { this.applier.setMirrorX(v); }
   get mirrorX(): boolean { return this.applier.mirrorX; }
