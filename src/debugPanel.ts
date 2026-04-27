@@ -15,7 +15,7 @@ export function mountDebugPanel(
 ): () => void {
   const { pa, micro, idle, controller } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
-  const { skelViz, validator } = tooling;
+  const { skelViz, validator, boneDrag } = tooling;
   const getController = () => controller;
   const getMocap = () => mocap;
   const root = document.getElementById('debug-panel');
@@ -41,6 +41,30 @@ export function mountDebugPanel(
   const tuningRoot = document.getElementById('mocap-tuning-panel');
   if (tuningRoot) {
     tuningRoot.innerHTML = buildTuningPanelHtml();
+  }
+
+  // ── Persist <details class="dbg-fold"> open/closed state ─────────────────
+  // Same pattern as the panel-title collapse mechanism in index.html, but per
+  // foldable subgroup. Hidden by default — only opens if the user previously
+  // expanded that group.
+  {
+    const FOLD_KEY = 'vrm-player.dbg-fold';
+    let foldState: Record<string, boolean> = {};
+    try { foldState = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {}; } catch { /* ignore */ }
+    const saveFolds = (): void => {
+      try { localStorage.setItem(FOLD_KEY, JSON.stringify(foldState)); } catch { /* ignore */ }
+    };
+    const folds = [
+      ...root.querySelectorAll<HTMLDetailsElement>('details.dbg-fold[id]'),
+      ...(tuningRoot?.querySelectorAll<HTMLDetailsElement>('details.dbg-fold[id]') ?? []),
+    ];
+    for (const d of folds) {
+      if (foldState[d.id]) d.open = true;
+      d.addEventListener('toggle', () => {
+        foldState[d.id] = d.open;
+        saveFolds();
+      });
+    }
   }
 
   // ── Tab switcher ─────────────────────────────────────────────────────────
@@ -874,6 +898,26 @@ export function mountDebugPanel(
     skelViz.setShowFingers(on);
     skelFingers.textContent = on ? 'ON' : 'OFF';
     skelFingers.classList.toggle('off', !on);
+  });
+
+  // ── Bone drag (in-scene rotation gizmo) ──────────────────────────────────
+  const dragToggle = root.querySelector<HTMLButtonElement>('#bone-drag-toggle')!;
+  const dragReset  = root.querySelector<HTMLButtonElement>('#bone-drag-reset')!;
+  dragToggle.addEventListener('click', () => {
+    const on = !boneDrag.enabled;
+    boneDrag.setEnabled(on);
+    dragToggle.textContent = on ? 'ON' : 'OFF';
+    dragToggle.classList.toggle('off', !on);
+    // Auto-show skeleton when enabling — there's nothing to grab otherwise.
+    if (on && !skelViz.visible) {
+      skelViz.setVisible(true);
+      skelToggle.textContent = 'ON';
+      skelToggle.classList.remove('off');
+      skelOptions.style.display = 'flex';
+    }
+  });
+  dragReset.addEventListener('click', () => {
+    boneDrag.resetAll();
   });
 
   // ── Debug recorder ────────────────────────────────────────────────────────

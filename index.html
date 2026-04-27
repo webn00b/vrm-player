@@ -103,52 +103,6 @@
       .panel.collapsed > .panel-title::after { transform: rotate(-90deg); }
       .panel.collapsed > *:not(.panel-title) { display: none !important; }
 
-      /* ── Library ── */
-      #library-panel { flex-shrink: 0; max-height: 35vh; overflow-y: auto; }
-
-      #library-list {
-        list-style: none;
-        margin: 0; padding: 0;
-        display: flex; flex-direction: column; gap: 1px;
-      }
-      .lib-item {
-        font-size: 11px;
-        font-family: ui-monospace, monospace;
-        padding: 4px 7px;
-        border-radius: 4px;
-        cursor: grab;
-        border: 1px solid transparent;
-        transition: background 100ms, border-color 100ms;
-        min-width: 0;
-        max-width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 6px;
-      }
-      .lib-item:hover     { background: #1c1c1c; border-color: rgba(255,255,255,0.07); }
-      .lib-item.dragging  { opacity: 0.4; cursor: grabbing; }
-      .lib-item-label {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        flex: 1 1 auto;
-        min-width: 0;
-      }
-      .lib-item-export {
-        flex: 0 0 auto;
-        background: transparent;
-        border: 1px solid #444;
-        color: #aaa;
-        border-radius: 3px;
-        padding: 0 6px;
-        font-size: 11px;
-        line-height: 16px;
-        cursor: pointer;
-        font-family: inherit;
-      }
-      .lib-item-export:hover { background: #2a3550; color: #fff; border-color: #3b5bdb; }
-
       /* ── Queue ── */
       #queue-panel { flex: 1 1 0; overflow: hidden; display: flex; flex-direction: column; min-height: 80px; }
 
@@ -261,6 +215,20 @@
         transition: color 100ms, background 100ms;
       }
       .q-remove:hover { color: #f87171; background: rgba(248,113,113,0.1); }
+
+      .q-export {
+        flex-shrink: 0;
+        background: transparent;
+        border: 1px solid #444;
+        color: #aaa;
+        border-radius: 3px;
+        padding: 0 6px;
+        font-size: 11px;
+        line-height: 16px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .q-export:hover { background: #2a3550; color: #fff; border-color: #3b5bdb; }
 
       /* ── Debug / Layers panel (left) ── */
       #debug-panel {
@@ -391,8 +359,37 @@
       .dbg-tab-panel { display: none; }
       .dbg-tab-panel.active { display: block; }
 
-      /* ── Bone pose panel (right col) ── */
-      #bone-panel { flex-shrink: 0; }
+      /* ── Foldable subgroup inside debug panels ── */
+      details.dbg-fold {
+        margin: 6px 0;
+      }
+      details.dbg-fold > summary {
+        list-style: none;
+        cursor: pointer;
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        opacity: 0.4;
+        padding: 4px 0;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        transition: opacity 120ms;
+      }
+      details.dbg-fold > summary:hover { opacity: 0.7; }
+      details.dbg-fold > summary::-webkit-details-marker { display: none; }
+      details.dbg-fold > summary::after {
+        content: '▾';
+        font-size: 9px;
+        opacity: 0.6;
+        transform: rotate(-90deg);
+        transition: transform 160ms ease;
+      }
+      details.dbg-fold[open] > summary { opacity: 0.85; margin-bottom: 4px; }
+      details.dbg-fold[open] > summary::after { transform: rotate(0deg); }
 
       /* ── Mocap tuning panel (right col) ── */
       #mocap-tuning-panel { flex-shrink: 0; }
@@ -560,15 +557,11 @@
     <!-- Grid overlay -->
     <div id="ui-overlay">
 
-      <!-- ── Left column: layers + library + queue ── -->
+      <!-- ── Left column: layers + queue ── -->
       <div id="left-col">
         <div id="debug-panel" class="panel"><!-- populated by debugPanel.ts --></div>
         <div id="mocap-preview-panel" class="panel" style="display:none">
           <canvas id="mocap-canvas" style="display:block;width:100%;border-radius:3px;background:#000"></canvas>
-        </div>
-        <div id="library-panel" class="panel">
-          <p class="panel-title">Library</p>
-          <ul id="library-list"></ul>
         </div>
         <div id="queue-panel" class="panel">
           <p class="panel-title">Queue</p>
@@ -587,9 +580,8 @@
       <!-- ── Center column: transparent, canvas visible ── -->
       <div id="center-col"></div>
 
-      <!-- ── Right column: bones + tuning ── -->
+      <!-- ── Right column: tuning ── -->
       <div id="right-col">
-        <div id="bone-panel" class="panel"><!-- populated by bonePosePanel.ts --></div>
         <div id="mocap-tuning-panel" class="panel"><!-- populated by debugPanel.ts --></div>
       </div>
 

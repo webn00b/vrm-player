@@ -16,7 +16,7 @@ export function startRenderLoop(
 ): CleanupFn {
   const { controller, pa, micro, idle } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
-  const { skelViz, validator, bonePanel } = tooling;
+  const { skelViz, validator, bonePanel, boneDrag } = tooling;
 
   let stopped = false;
   let rafId = 0;
@@ -50,6 +50,11 @@ export function startRenderLoop(
     // 3b. Manual bone pose offsets (post-multiplied on top of mocap/animation).
     if (!overlaysSuspended) {
       bonePanel.apply();
+      // In-scene rotation gizmo: reposition onto the selected joint, then
+      // post-multiply each stored delta. Same layering as bonePanel — sits
+      // on top of mocap/BVH, before validator clamp.
+      boneDrag.update();
+      boneDrag.apply();
     }
 
     // 3b2. Optional final wrist/finger overlay from hand tracking. This keeps

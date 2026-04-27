@@ -8,7 +8,6 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
     </div>
 
     <div class="dbg-tab-panel active" data-panel="main">
-    <h2>Layers</h2>
 
     <div class="dbg-section">
       <div class="dbg-row">
@@ -16,71 +15,6 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
         <button class="dbg-toggle" id="dbg-demo">OFF</button>
       </div>
       <div class="dbg-hint" id="dbg-hint">Mutes BVH — shows idle priority blending</div>
-    </div>
-
-    <div class="dbg-divider"></div>
-
-    <div class="dbg-section">
-      <div class="dbg-row">
-        <span class="dbg-label">💃 Idle poses</span>
-        <button class="dbg-toggle" data-key="idle">ON</button>
-      </div>
-      <div class="dbg-row">
-        <span class="dbg-label">🫁 Breathing</span>
-        <button class="dbg-toggle" data-key="breathing">ON</button>
-      </div>
-      <div class="dbg-row">
-        <span class="dbg-label">🌊 Head sway</span>
-        <button class="dbg-toggle" data-key="headSway">ON</button>
-      </div>
-      <div class="dbg-row">
-        <span class="dbg-label">👁 Eye saccades</span>
-        <button class="dbg-toggle" data-key="eyeSaccades">ON</button>
-      </div>
-      <div class="dbg-row">
-        <span class="dbg-label">😑 Blink</span>
-        <button class="dbg-toggle" data-key="blink">ON</button>
-      </div>
-      <div class="dbg-row">
-        <span class="dbg-label">⚖️ Weight shift</span>
-        <button class="dbg-toggle" data-key="weightShift">ON</button>
-      </div>
-    </div>
-
-    <div class="dbg-divider"></div>
-
-    <h2>Priority levels</h2>
-    <div class="dbg-levels">
-      <div class="dbg-level-row">
-        <span class="dbg-lv-label">Lv 1 – lower body</span>
-        <div class="dbg-bar-wrap"><div class="dbg-bar" id="dbg-bar-1"></div></div>
-      </div>
-      <div class="dbg-level-row">
-        <span class="dbg-lv-label">Lv 2 – upper body</span>
-        <div class="dbg-bar-wrap"><div class="dbg-bar" id="dbg-bar-2"></div></div>
-      </div>
-      <div class="dbg-level-row">
-        <span class="dbg-lv-label">Lv 5+ – gesture</span>
-        <div class="dbg-bar-wrap"><div class="dbg-bar" id="dbg-bar-5"></div></div>
-      </div>
-    </div>
-    <div class="dbg-stat" id="dbg-bones">Active bones: 0</div>
-    <div class="dbg-stat" id="dbg-clips">Idle clips: ${idle.clipCount}</div>
-
-    <div class="dbg-divider"></div>
-
-    <h2>Validation (ROM)</h2>
-    <div class="dbg-section">
-      <div class="dbg-row">
-        <span class="dbg-label">🦴 Clamp bone rotations</span>
-        <button class="dbg-toggle" id="val-toggle">ON</button>
-      </div>
-      <div class="dbg-stat" id="val-stat">clamped/frame: 0</div>
-      <div class="dbg-stat" id="val-worst">worst: —</div>
-      <div class="dbg-row">
-        <span class="dbg-label" style="opacity:.6;font-size:11px">dump defaults to console</span>
-        <button class="dbg-toggle off" id="val-dump">Dump</button>
-      </div>
     </div>
 
     <div class="dbg-divider"></div>
@@ -102,12 +36,89 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
           <button class="dbg-toggle" id="skel-fingers">ON</button>
         </div>
       </div>
+      <div class="dbg-row">
+        <span class="dbg-label">🎯 Drag bones</span>
+        <div style="display:flex;gap:3px">
+          <button class="dbg-toggle off" id="bone-drag-toggle" title="Click joints in 3D to attach a rotation gizmo">OFF</button>
+          <button class="dbg-toggle off" id="bone-drag-reset" title="Clear all drag offsets">Reset</button>
+        </div>
+      </div>
     </div>
+
+    <div class="dbg-divider"></div>
+
+    <details class="dbg-fold" id="fold-idle">
+      <summary>Idle poses</summary>
+      <div class="dbg-section">
+        <div class="dbg-row">
+          <span class="dbg-label">💃 Idle poses</span>
+          <button class="dbg-toggle" data-key="idle">ON</button>
+        </div>
+        <div class="dbg-row">
+          <span class="dbg-label">🫁 Breathing</span>
+          <button class="dbg-toggle" data-key="breathing">ON</button>
+        </div>
+        <div class="dbg-row">
+          <span class="dbg-label">🌊 Head sway</span>
+          <button class="dbg-toggle" data-key="headSway">ON</button>
+        </div>
+        <div class="dbg-row">
+          <span class="dbg-label">👁 Eye saccades</span>
+          <button class="dbg-toggle" data-key="eyeSaccades">ON</button>
+        </div>
+        <div class="dbg-row">
+          <span class="dbg-label">😑 Blink</span>
+          <button class="dbg-toggle" data-key="blink">ON</button>
+        </div>
+        <div class="dbg-row">
+          <span class="dbg-label">⚖️ Weight shift</span>
+          <button class="dbg-toggle" data-key="weightShift">ON</button>
+        </div>
+      </div>
+    </details>
+
+    <details class="dbg-fold" id="fold-validation">
+      <summary>Validation (ROM)</summary>
+      <div class="dbg-section">
+        <div class="dbg-row">
+          <span class="dbg-label">🦴 Clamp bone rotations</span>
+          <button class="dbg-toggle" id="val-toggle">ON</button>
+        </div>
+        <div class="dbg-stat" id="val-stat">clamped/frame: 0</div>
+        <div class="dbg-stat" id="val-worst">worst: —</div>
+        <div class="dbg-row">
+          <span class="dbg-label" style="opacity:.6;font-size:11px">dump defaults to console</span>
+          <button class="dbg-toggle off" id="val-dump">Dump</button>
+        </div>
+      </div>
+    </details>
+
+    <details class="dbg-fold" id="fold-diagnostics">
+      <summary>Diagnostics</summary>
+      <div class="dbg-section">
+        <div class="dbg-levels">
+          <div class="dbg-level-row">
+            <span class="dbg-lv-label">Lv 1 – lower body</span>
+            <div class="dbg-bar-wrap"><div class="dbg-bar" id="dbg-bar-1"></div></div>
+          </div>
+          <div class="dbg-level-row">
+            <span class="dbg-lv-label">Lv 2 – upper body</span>
+            <div class="dbg-bar-wrap"><div class="dbg-bar" id="dbg-bar-2"></div></div>
+          </div>
+          <div class="dbg-level-row">
+            <span class="dbg-lv-label">Lv 5+ – gesture</span>
+            <div class="dbg-bar-wrap"><div class="dbg-bar" id="dbg-bar-5"></div></div>
+          </div>
+        </div>
+        <div class="dbg-stat" id="dbg-bones">Active bones: 0</div>
+        <div class="dbg-stat" id="dbg-clips">Idle clips: ${idle.clipCount}</div>
+      </div>
+    </details>
 
     </div>
 
     <div class="dbg-tab-panel" data-panel="video">
-    <h2>Mocap</h2>
+
     <div class="dbg-section">
       <div class="dbg-row">
         <span class="dbg-label">🎯 Pose model</span>
@@ -130,24 +141,6 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
         <button class="dbg-toggle" id="mocap-hip-btn">ON</button>
       </div>
       <div class="dbg-row">
-        <span class="dbg-label">🌊 1€ smoothing</span>
-        <button class="dbg-toggle" id="mocap-filter-btn">ON</button>
-      </div>
-      <div class="dbg-row">
-        <label class="dbg-label" for="mocap-handprio-box">✋ Wrist + fingers priority</label>
-        <input type="checkbox" id="mocap-handprio-box" checked style="width:14px;height:14px;accent-color:#6ea8ff">
-      </div>
-      <div class="dbg-row">
-        <span class="dbg-label">🟢 Performer skeleton</span>
-        <button class="dbg-toggle off" id="mocap-dbgskel-btn">OFF</button>
-      </div>
-      <div class="dbg-row">
-        <span class="dbg-label">📊 Debug record <span id="dbgrec-frames" style="opacity:.5"></span></span>
-        <button class="dbg-toggle off" id="dbgrec-btn">⏺ Rec</button>
-      </div>
-      <div id="mocap-vis-stats" style="display:none;margin-top:4px"></div>
-      <div id="mocap-scalar-stats" style="display:none;margin-top:6px;font-size:10px;font-family:ui-monospace,monospace;opacity:.75;line-height:1.5"></div>
-      <div class="dbg-row">
         <span class="dbg-label">📐 Depth</span>
         <div style="display:flex;gap:3px">
           <button class="dbg-toggle off" data-depth="0">2D</button>
@@ -155,12 +148,39 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
           <button class="dbg-toggle"     data-depth="1">3D</button>
         </div>
       </div>
-      <div class="dbg-row">
-        <span class="dbg-label">🔬 BVH диагностика</span>
-        <button class="dbg-toggle off" id="bvh-diag-btn">Inspect</button>
-      </div>
-      <div class="dbg-hint">Detailed tuning sliders are in the panel on the right →</div>
     </div>
+
+    <div class="dbg-divider"></div>
+
+    <details class="dbg-fold" id="fold-mocap-advanced">
+      <summary>Mocap advanced</summary>
+      <div class="dbg-section">
+        <div class="dbg-row">
+          <span class="dbg-label">🌊 1€ smoothing</span>
+          <button class="dbg-toggle" id="mocap-filter-btn">ON</button>
+        </div>
+        <div class="dbg-row">
+          <label class="dbg-label" for="mocap-handprio-box">✋ Wrist + fingers priority</label>
+          <input type="checkbox" id="mocap-handprio-box" checked style="width:14px;height:14px;accent-color:#6ea8ff">
+        </div>
+        <div class="dbg-row">
+          <span class="dbg-label">🟢 Performer skeleton</span>
+          <button class="dbg-toggle off" id="mocap-dbgskel-btn">OFF</button>
+        </div>
+        <div class="dbg-row">
+          <span class="dbg-label">📊 Debug record <span id="dbgrec-frames" style="opacity:.5"></span></span>
+          <button class="dbg-toggle off" id="dbgrec-btn">⏺ Rec</button>
+        </div>
+        <div id="mocap-vis-stats" style="display:none;margin-top:4px"></div>
+        <div id="mocap-scalar-stats" style="display:none;margin-top:6px;font-size:10px;font-family:ui-monospace,monospace;opacity:.75;line-height:1.5"></div>
+        <div class="dbg-row">
+          <span class="dbg-label">🔬 BVH диагностика</span>
+          <button class="dbg-toggle off" id="bvh-diag-btn">Inspect</button>
+        </div>
+      </div>
+    </details>
+
+    <div class="dbg-hint">Detailed tuning sliders are in the panel on the right →</div>
     </div>
   `;
 }
@@ -205,27 +225,6 @@ export function buildTuningPanelHtml(): string {
       <div class="dbg-divider"></div>
 
       <div class="dbg-section">
-        <p class="panel-title"><span>🧪 Round-trip verify <span id="bvh-verify-state" style="opacity:.5"></span></span></p>
-        <div class="dbg-row">
-          <span class="dbg-label">Source</span>
-          <div style="display:flex;gap:3px">
-            <button class="dbg-toggle off" id="bvh-verify-btn"      title="Live camera: record 3s → replay the BVH → diff each frame">Live (3s)</button>
-            <button class="dbg-toggle off" id="bvh-verify-file-btn" title="Video file: process → replay BVH → diff each frame">Video…</button>
-            <input type="file" id="bvh-verify-file-input" accept="video/*" hidden>
-          </div>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label" style="opacity:.7;font-size:11px">↳ replay mode</span>
-          <div style="display:flex;gap:3px">
-            <button class="dbg-toggle"     data-verify-mode="prod" title="Play through the live render loop (validator.clampAll + vrm.update). Catches production-path divergence.">prod</button>
-            <button class="dbg-toggle off" data-verify-mode="iso"  title="Scratch mixer + synchronous replay. Isolates BVH encoding math.">iso</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="dbg-divider"></div>
-
-      <div class="dbg-section">
         <div class="dbg-row">
           <span class="dbg-label">📏 Calibration</span>
           <div style="display:flex;gap:3px">
@@ -237,89 +236,116 @@ export function buildTuningPanelHtml(): string {
         <div class="dbg-stat" id="mocap-calib-stat">—</div>
 
         <div id="cal-readiness" style="margin-top:8px;display:flex;flex-direction:column;gap:3px"></div>
-        <div class="dbg-row">
-          <span class="dbg-label">🦴 Hips = shoulders</span>
-          <button class="dbg-toggle off" id="rig-hip-equal-btn" title="Move upper-leg roots so hip width equals shoulder width">OFF</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🔗 Unify arm max</span>
-          <button class="dbg-toggle off" id="cal-unify-btn" title="Share performer arm max between L/R">OFF</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">📍 Scale ref</span>
-          <div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end">
-            <button class="dbg-toggle"     data-ref="auto">auto</button>
-            <button class="dbg-toggle off" data-ref="median">med</button>
-            <button class="dbg-toggle off" data-ref="head">head</button>
-            <button class="dbg-toggle off" data-ref="shoulders">shlds</button>
-            <button class="dbg-toggle off" data-ref="hips">hips</button>
+      </div>
+
+      <details class="dbg-fold" id="fold-cal-tuning">
+        <summary>Calibration tuning</summary>
+        <div class="dbg-section">
+          <div class="dbg-row">
+            <span class="dbg-label">🦴 Hips = shoulders</span>
+            <button class="dbg-toggle off" id="rig-hip-equal-btn" title="Move upper-leg roots so hip width equals shoulder width">OFF</button>
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">🔗 Unify arm max</span>
+            <button class="dbg-toggle off" id="cal-unify-btn" title="Share performer arm max between L/R">OFF</button>
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">📍 Scale ref</span>
+            <div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end">
+              <button class="dbg-toggle"     data-ref="auto">auto</button>
+              <button class="dbg-toggle off" data-ref="median">med</button>
+              <button class="dbg-toggle off" data-ref="head">head</button>
+              <button class="dbg-toggle off" data-ref="shoulders">shlds</button>
+              <button class="dbg-toggle off" data-ref="hips">hips</button>
+            </div>
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">🚪 Hip vis gate <span id="cal-hipgate-val">0.40</span></span>
+            <input type="range" id="cal-hipgate-slider" min="0.1" max="0.9" step="0.05" value="0.4" style="flex:1;margin-left:8px">
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">📐 Shoulder × <span id="cal-sh-val">1.00</span></span>
+            <input type="range" id="cal-sh-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px">
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">🦾 L arm × <span id="cal-la-val">1.00</span></span>
+            <input type="range" id="cal-la-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px">
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">🦾 R arm × <span id="cal-ra-val">1.00</span></span>
+            <input type="range" id="cal-ra-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px">
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">🔍 Dump to console</span>
+            <button class="dbg-toggle" id="cal-dump-btn" title="Log full performer+avatar skeleton comparison">Dump</button>
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">📊 Skeleton info</span>
+            <button class="dbg-toggle off" id="skel-info-btn">View</button>
           </div>
         </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🚪 Hip vis gate <span id="cal-hipgate-val">0.40</span></span>
-          <input type="range" id="cal-hipgate-slider" min="0.1" max="0.9" step="0.05" value="0.4" style="flex:1;margin-left:8px">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🔍 Dump to console</span>
-          <button class="dbg-toggle" id="cal-dump-btn" title="Log full performer+avatar skeleton comparison">Dump</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">📊 Skeleton info</span>
-          <button class="dbg-toggle off" id="skel-info-btn">View</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">📐 Shoulder × <span id="cal-sh-val">1.00</span></span>
-          <input type="range" id="cal-sh-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🦾 L arm × <span id="cal-la-val">1.00</span></span>
-          <input type="range" id="cal-la-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🦾 R arm × <span id="cal-ra-val">1.00</span></span>
-          <input type="range" id="cal-ra-slider" min="0.5" max="2" step="0.05" value="1" style="flex:1;margin-left:8px">
-        </div>
-      </div>
+      </details>
 
-      <div class="dbg-divider"></div>
+      <details class="dbg-fold" id="fold-smoothing">
+        <summary>Smoothing</summary>
+        <div class="dbg-section">
+          <div class="dbg-row">
+            <span class="dbg-label">🌀 Spine <span id="mocap-spine-val">0.25</span></span>
+            <input type="range" id="mocap-spine-slider" min="0.01" max="1" step="0.01" value="0.25" style="flex:1;margin-left:8px">
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">🫨 Limb <span id="mocap-smooth-val">0.70</span></span>
+            <input type="range" id="mocap-smooth-slider" min="0.01" max="1" step="0.01" value="0.7" style="flex:1;margin-left:8px">
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">🧲 Pole <span id="mocap-pole-val">0.60</span></span>
+            <input type="range" id="mocap-pole-slider" min="0.01" max="1" step="0.01" value="0.6" style="flex:1;margin-left:8px">
+          </div>
+        </div>
+      </details>
 
-      <h2>Smoothing</h2>
-      <div class="dbg-section">
-        <div class="dbg-row">
-          <span class="dbg-label">🌀 Spine <span id="mocap-spine-val">0.25</span></span>
-          <input type="range" id="mocap-spine-slider" min="0.01" max="1" step="0.01" value="0.25" style="flex:1;margin-left:8px">
+      <details class="dbg-fold" id="fold-depth">
+        <summary>Depth &amp; pose shape</summary>
+        <div class="dbg-section">
+          <div class="dbg-row">
+            <span class="dbg-label">🫙 Arm Z target <span id="mocap-armz-val">1.00</span></span>
+            <input type="range" id="mocap-armz-slider" min="0" max="1" step="0.01" value="1" style="flex:1;margin-left:8px">
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">🧭 Arm pole Z <span id="mocap-polez-val">0.50</span></span>
+            <input type="range" id="mocap-polez-slider" min="0" max="1" step="0.01" value="0.5" style="flex:1;margin-left:8px">
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">👁 Vis threshold <span id="mocap-vis-val">0.30</span></span>
+            <input type="range" id="mocap-vis-slider" min="0" max="1" step="0.01" value="0.3" style="flex:1;margin-left:8px">
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label">↔ Shoulder spread <span id="mocap-spread-val">0°</span></span>
+            <input type="range" id="mocap-spread-slider" min="-20" max="20" step="1" value="0" style="flex:1;margin-left:8px">
+          </div>
         </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🫨 Limb <span id="mocap-smooth-val">0.70</span></span>
-          <input type="range" id="mocap-smooth-slider" min="0.01" max="1" step="0.01" value="0.7" style="flex:1;margin-left:8px">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🧲 Pole <span id="mocap-pole-val">0.60</span></span>
-          <input type="range" id="mocap-pole-slider" min="0.01" max="1" step="0.01" value="0.6" style="flex:1;margin-left:8px">
-        </div>
-      </div>
+      </details>
 
-      <div class="dbg-divider"></div>
-
-      <h2>Depth &amp; pose shape</h2>
-      <div class="dbg-section">
-        <div class="dbg-row">
-          <span class="dbg-label">🫙 Arm Z target <span id="mocap-armz-val">1.00</span></span>
-          <input type="range" id="mocap-armz-slider" min="0" max="1" step="0.01" value="1" style="flex:1;margin-left:8px">
+      <details class="dbg-fold" id="fold-roundtrip">
+        <summary>Round-trip verify <span id="bvh-verify-state" style="opacity:.5;text-transform:none;letter-spacing:0"></span></summary>
+        <div class="dbg-section">
+          <div class="dbg-row">
+            <span class="dbg-label">Source</span>
+            <div style="display:flex;gap:3px">
+              <button class="dbg-toggle off" id="bvh-verify-btn"      title="Live camera: record 3s → replay the BVH → diff each frame">Live (3s)</button>
+              <button class="dbg-toggle off" id="bvh-verify-file-btn" title="Video file: process → replay BVH → diff each frame">Video…</button>
+              <input type="file" id="bvh-verify-file-input" accept="video/*" hidden>
+            </div>
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-label" style="opacity:.7;font-size:11px">↳ replay mode</span>
+            <div style="display:flex;gap:3px">
+              <button class="dbg-toggle"     data-verify-mode="prod" title="Play through the live render loop (validator.clampAll + vrm.update). Catches production-path divergence.">prod</button>
+              <button class="dbg-toggle off" data-verify-mode="iso"  title="Scratch mixer + synchronous replay. Isolates BVH encoding math.">iso</button>
+            </div>
+          </div>
         </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🧭 Arm pole Z <span id="mocap-polez-val">0.50</span></span>
-          <input type="range" id="mocap-polez-slider" min="0" max="1" step="0.01" value="0.5" style="flex:1;margin-left:8px">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">👁 Vis threshold <span id="mocap-vis-val">0.30</span></span>
-          <input type="range" id="mocap-vis-slider" min="0" max="1" step="0.01" value="0.3" style="flex:1;margin-left:8px">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">↔ Shoulder spread <span id="mocap-spread-val">0°</span></span>
-          <input type="range" id="mocap-spread-slider" min="-20" max="20" step="1" value="0" style="flex:1;margin-left:8px">
-        </div>
-      </div>
+      </details>
 
       <div class="dbg-hint">Recorded BVH auto-replays on the model for comparison</div>
     `;

@@ -574,6 +574,12 @@ export class MocapController {
     this._calibration.recalibrate();
     this.applier.resetHipBaseline();
     this.applier.resetFootLock();
+    // If the detector is paused (or just hasn't produced a new frame yet), the
+    // running EMAs we just zeroed would stay zero until playback resumes — and
+    // applier.apply() falls back to its un-calibrated branch in the meantime,
+    // visibly breaking the pose. Re-seed from the cached frame so calibration
+    // is usable on the very next render tick, even while paused.
+    if (this._latestFrame) this._calibration.feed(this._latestFrame);
   }
 
   // ── Playback controls (useful mainly for file-source mocap) ────────────────

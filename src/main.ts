@@ -1,15 +1,17 @@
+import type * as THREE from 'three';
 import { createScene } from './scene';
 import { loadVRM } from './vrmLoader';
-import { loadBVH, parseBVH } from './bvhLoader';
+import { parseBVH } from './bvhLoader';
 import { retargetBvhToVrm, exportBvhAsVrma } from './retarget';
 import type { ParsedBVH } from './bvhLoader';
 import { AnimationController } from './animationController';
 import { PriorityAnimator } from './priorityAnimator';
 import { MicroAnimations } from './microAnimations';
 import { IdleLoop } from './idleLoop';
-import { mountLibrary, mountQueue, setStatus, formatLibraryName } from './ui';
+import { mountQueue, setStatus } from './ui';
 import { mountDebugPanel } from './debugPanel';
 import { BonePosePanel } from './bonePosePanel';
+import { BoneDragController } from './boneDragController';
 import { MocapController } from './mocap/mocapController';
 import { MocapDebugViz } from './mocap/mocapDebugViz';
 import { MocapDebugRecorder } from './mocap/mocapDebugRecorder';
@@ -25,12 +27,6 @@ const vrmModules = import.meta.glob('/models/*.vrm', {
   eager: true,
 }) as Record<string, string>;
 
-const bvhModules = import.meta.glob('/animations/*.bvh', {
-  query: '?url',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
-
 function resolveVrmUrl(): string {
   const entries = Object.entries(vrmModules).sort(([a], [b]) => a.localeCompare(b));
   const first = entries[0];
@@ -38,7 +34,6 @@ function resolveVrmUrl(): string {
   return first[1];
 }
 
-interface AnimationEntry { name: string; url: string; }
 type CleanupFn = () => void;
 const GLOBAL_CLEANUP_KEY = '__vrmPlayerCleanup';
 
@@ -52,15 +47,6 @@ function installGlobalCleanup(cleanup: CleanupFn): void {
   };
   (window as any)[GLOBAL_CLEANUP_KEY] = wrapped;
   import.meta.hot?.dispose(() => wrapped());
-}
-
-function resolveAnimations(): AnimationEntry[] {
-  return Object.entries(bvhModules)
-    .map(([path, url]) => {
-      const file = path.split('/').pop() ?? path;
-      return { name: file.replace(/\.bvh$/i, ''), url };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function main() {
@@ -106,6 +92,11 @@ async function main() {
   const bonePanelEl = document.getElementById('bone-panel');
   if (bonePanelEl) bonePanel.mount(bonePanelEl);
 
+  // ── Bone drag controller (in-scene rotation gizmo) ─────────────────────────
+  const boneDrag = new BoneDragController(
+    vrm, ctx.scene, ctx.camera, ctx.renderer.domElement, ctx.controls,
+  );
+
   // ── Mocap ──────────────────────────────────────────────────────────────────
   const videoEl = document.getElementById('mocap-video') as HTMLVideoElement;
   const mocap   = new MocapController(vrm, videoEl);
@@ -125,90 +116,66 @@ async function main() {
     () => mocap.dispose(),
     () => mocapDebugViz.dispose(),
     () => skelViz.dispose(),
+    () => boneDrag.dispose(),
     () => {
       vrm.scene.parent?.remove(vrm.scene);
       ctx.dispose();
     },
   );
 
-  const entries = resolveAnimations();
-  if (entries.length === 0) {
-    setStatus('no .bvh files — idle mode active');
-    vrm.scene.visible = false;
-    const playback: PlaybackSystems = { controller: null, pa, micro, idle: idleLoop };
-    const tooling: ToolingSystems   = { skelViz, validator, bonePanel };
-    registerCleanup(
-      mountDebugPanel(playback, mocapSys, tooling, (v) => { vrm.scene.visible = v; }),
-      startRenderLoop(ctx, vrm, playback, mocapSys, tooling),
-    );
-    installGlobalCleanup(cleanup);
-    return;
-  }
-
-  setStatus(`loading ${entries.length} animation${entries.length === 1 ? '' : 's'}…`);
   const controller = new AnimationController(vrm);
 
-  // Per-library-item parsed BVH cache. Used by the ⬇ export-as-VRMA button so
-  // we can re-run convertBVHToVRMAnimation on demand without re-fetching/parsing.
+  // Per-item parsed BVH cache, keyed by library item index. Used by the ⬇
+  // export-as-VRMA button so we can re-run convertBVHToVRMAnimation on demand
+  // without re-fetching/parsing.
   const bvhByIndex = new Map<number, ParsedBVH>();
+  // Display names per library item index (controller already stores these
+  // internally, but we mirror locally so we can pass the user-facing alias to
+  // setStatus / queue.push without going through the controller).
+  const names: string[] = [];
 
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
-    const bvh  = await loadBVH(entry.url);
-    bvhByIndex.set(i, bvh);
-    const clip = await retargetBvhToVrm(vrm, bvh, entry.name);
-    controller.register(entry.name, clip);
-  }
-
-  setStatus('drag animations from Library → Queue to play');
+  setStatus('drop a .bvh file or record from mocap to start');
 
   const playback: PlaybackSystems = { controller, pa, micro, idle: idleLoop };
-  const tooling: ToolingSystems   = { skelViz, validator, bonePanel };
+  const tooling: ToolingSystems   = { skelViz, validator, bonePanel, boneDrag };
 
-  // ── Transport bar ─────────────────────────────────────────────────────────
-  registerCleanup(mountTransport(controller));
-
-  // ── Debug panel ────────────────────────────────────────────────────────────
   vrm.scene.visible = false;
-  registerCleanup(
-    mountDebugPanel(playback, mocapSys, tooling, (v) => { vrm.scene.visible = v; }),
-  );
-
-  // ── Library (source) ───────────────────────────────────────────────────────
-  const names = entries.map((e) => e.name);
 
   // ── Queue (playback) ───────────────────────────────────────────────────────
   const queue = mountQueue({
     onJump:    (qi)       => controller.jumpTo(qi),
     onReorder: (from, to) => controller.reorderQueue(from, to),
-    onAdd:     (itemIdx)  => {
-      controller.addToQueue(itemIdx);
-      queue.push(names[itemIdx]);
-    },
     onRemove:  (qi) => {
       controller.removeFromQueue(qi);
       queue.remove(qi);
     },
+    onExport: (qi) => {
+      const itemIdx = controller.getItemIndexAtQueuePos(qi);
+      const bvh = bvhByIndex.get(itemIdx);
+      const name = names[itemIdx];
+      if (!bvh || !name) { setStatus('no source BVH for this item'); return; }
+      exportBvhAsVrma(vrm, bvh, name)
+        .then(() => setStatus(`saved ${name}.vrma`))
+        .catch((e) => setStatus(`vrma export failed: ${(e as Error).message}`));
+    },
   });
 
-  const addLibraryItemToQueue = (itemIdx: number): void => {
+  const registerAndEnqueue = (name: string, bvh: ParsedBVH, clip: THREE.AnimationClip): void => {
+    controller.register(name, clip);
+    const itemIdx = names.length;
+    names.push(name);
+    bvhByIndex.set(itemIdx, bvh);
     controller.addToQueue(itemIdx);
-    queue.push(names[itemIdx]);
+    queue.push(name);
   };
-  const exportLibraryItemAsVrma = (itemIdx: number): void => {
-    const bvh = bvhByIndex.get(itemIdx);
-    if (!bvh) { setStatus(`no source BVH for ${names[itemIdx]}`); return; }
-    exportBvhAsVrma(vrm, bvh, names[itemIdx])
-      .then(() => setStatus(`saved ${names[itemIdx]}.vrma`))
-      .catch((e) => setStatus(`vrma export failed: ${(e as Error).message}`));
-  };
-  const refreshLibrary = (): void => mountLibrary({
-    names,
-    onDragToQueue: addLibraryItemToQueue,
-    onExport: exportLibraryItemAsVrma,
-  });
 
-  refreshLibrary();
+  // ── Transport bar ─────────────────────────────────────────────────────────
+  registerCleanup(mountTransport(controller));
+
+  // ── Debug panel ────────────────────────────────────────────────────────────
+  registerCleanup(
+    mountDebugPanel(playback, mocapSys, tooling, (v) => { vrm.scene.visible = v; }),
+  );
 
   // ── File-system BVH drop ───────────────────────────────────────────────────
   const handleDroppedBvhFile = async (file: File): Promise<void> => {
@@ -218,11 +185,7 @@ async function main() {
       const text = await file.text();
       const bvh  = parseBVH(text);
       const clip = await retargetBvhToVrm(vrm, bvh, name);
-      controller.register(name, clip);
-      names.push(name);
-      bvhByIndex.set(names.length - 1, bvh);
-      refreshLibrary();
-      addLibraryItemToQueue(names.length - 1);
+      registerAndEnqueue(name, bvh, clip);
       setStatus(`▶ ${name}`);
     } catch (e) {
       setStatus(`load failed: ${(e as Error).message}`);
@@ -256,11 +219,7 @@ async function main() {
     try {
       const bvh  = parseBVH(bvhText);
       const clip = await retargetBvhToVrm(vrm, bvh, name);
-      controller.register(name, clip);
-      names.push(name);
-      bvhByIndex.set(names.length - 1, bvh);
-      refreshLibrary();
-      addLibraryItemToQueue(names.length - 1);
+      registerAndEnqueue(name, bvh, clip);
       setStatus(`▶ replaying ${name}`);
     } catch (e) {
       setStatus(`replay failed: ${(e as Error).message}`);

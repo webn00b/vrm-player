@@ -8,6 +8,7 @@ import type { MocapDebugRecorder } from './mocap/mocapDebugRecorder';
 import type { SkeletonVisualizer } from './skeletonVisualizer';
 import type { BoneValidator } from './validation/boneValidator';
 import type { BonePosePanel } from './bonePosePanel';
+import type { BoneDragController } from './boneDragController';
 
 export interface PlaybackSystems {
   controller: AnimationController | null;
@@ -26,4 +27,5 @@ export interface ToolingSystems {
   skelViz: SkeletonVisualizer;
   validator: BoneValidator;
   bonePanel: BonePosePanel;
+  boneDrag: BoneDragController;
 }

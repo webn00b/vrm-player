@@ -124,6 +124,12 @@ export class AnimationController {
   get queueLength(): number { return this.queue.length; }
   get currentQueuePos(): number { return this.queuePos; }
 
+  /** Map a queue position to its underlying library item index, or -1. */
+  getItemIndexAtQueuePos(queueIndex: number): number {
+    if (queueIndex < 0 || queueIndex >= this.queue.length) return -1;
+    return this.queue[queueIndex];
+  }
+
   /** Jump to a position in the queue. */
   jumpTo(queueIndex: number): void {
     if (queueIndex < 0 || queueIndex >= this.queue.length) return;
@@ -212,6 +218,10 @@ export class AnimationController {
     this.mixer.update(delta);
 
     if (this.queuePos < 0 || this.queue.length === 0) return;
+    // When paused, freeze time tracking and auto-advance — the mixer is already
+    // frozen via timeScale, but timeInCurrent must not drift forward either or
+    // we'd silently skip to the next clip while the user expects a hold.
+    if (this.paused) return;
 
     // Auto-advance when current clip is about to end
     this.timeInCurrent += delta;
