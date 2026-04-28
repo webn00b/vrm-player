@@ -39,8 +39,15 @@ export interface QueueOptions {
   onJump?:    (queueIndex: number) => void;
   onReorder?: (fromIndex: number, toIndex: number) => void;
   onRemove?:  (queueIndex: number) => void;
-  /** If provided, render a per-item ⬇ download button. */
+  /** If provided, render a per-item ⬇ download button (VRMA). */
   onExport?:  (queueIndex: number) => void;
+  /**
+   * If provided, render a per-item ⬇BVH button. Distinct from onExport so
+   * the two can be wired independently — VRMA export only makes sense for
+   * items whose source was BVH, while BVH export works for anything that
+   * plays through the render loop.
+   */
+  onExportBvh?: (queueIndex: number) => void;
   /** If provided, double-click on the label opens an inline rename input. */
   onRename?:  (queueIndex: number, newDisplayName: string) => void;
 }
@@ -106,6 +113,14 @@ export function mountQueue(opts: QueueOptions): QueueHandle {
     label.title = name;
     li.appendChild(label);
 
+    if (opts.onExportBvh) {
+      const exportBvhBtn = document.createElement('button');
+      exportBvhBtn.className = 'q-export-bvh';
+      exportBvhBtn.textContent = '⬇bvh';
+      exportBvhBtn.title = 'Record this clip as BVH (live playback)';
+      exportBvhBtn.setAttribute('draggable', 'false');
+      li.appendChild(exportBvhBtn);
+    }
     if (opts.onExport) {
       const exportBtn = document.createElement('button');
       exportBtn.className = 'q-export';
@@ -129,7 +144,9 @@ export function mountQueue(opts: QueueOptions): QueueHandle {
 
     li.addEventListener('click', (e) => {
       const t = e.target as HTMLElement;
-      if (t.classList.contains('q-remove') || t.classList.contains('q-export')) return;
+      if (t.classList.contains('q-remove')
+       || t.classList.contains('q-export')
+       || t.classList.contains('q-export-bvh')) return;
       if (draggedIndex < 0) opts.onJump?.(getIndex());
     });
 
@@ -141,6 +158,11 @@ export function mountQueue(opts: QueueOptions): QueueHandle {
     li.querySelector('.q-export')?.addEventListener('click', (e) => {
       e.stopPropagation();
       opts.onExport?.(getIndex());
+    });
+
+    li.querySelector('.q-export-bvh')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      opts.onExportBvh?.(getIndex());
     });
 
     if (opts.onRename) {

@@ -136,6 +136,9 @@ export function startRenderLoop(
 
     // 5b. Verifier hook — runs after bones have their final production values.
     renderLoopHooks.onAfterVrmUpdate?.(delta);
+    // 5c. BVH-export sink — same timing, separate slot so the verifier and the
+    // export recorder don't have to share a single callback.
+    renderLoopHooks.poseCaptureSink?.(delta);
 
     // 6. Skeleton overlay (after vrm.update so world matrices are fresh)
     skelViz.update();

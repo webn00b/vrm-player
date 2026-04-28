@@ -26,9 +26,18 @@ export const renderLoopHooks: {
   suspendValidatorClamp: boolean;
   /** Fires once per tick after vrm.update(delta). */
   onAfterVrmUpdate: ((delta: number) => void) | null;
+  /**
+   * Per-frame capture sink — fires after vrm.update so world matrices and
+   * normalized bone quaternions reflect the final on-screen pose. Used by
+   * the BVH-export recorder to grab live frames while a clip plays through
+   * the standard render path. Distinct from onAfterVrmUpdate so the verifier
+   * and the export recorder can coexist.
+   */
+  poseCaptureSink: ((delta: number) => void) | null;
 } = {
   suspendOverlays: false,
   extraMixer: null,
   suspendValidatorClamp: false,
   onAfterVrmUpdate: null,
+  poseCaptureSink: null,
 };

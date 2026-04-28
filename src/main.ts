@@ -4,6 +4,8 @@ import { loadVRM } from './vrmLoader';
 import { parseBVH } from './bvhLoader';
 import { retargetBvhToVrm, exportBvhAsVrma } from './retarget';
 import type { ParsedBVH } from './bvhLoader';
+import { loadAnimationFile, isSupportedAnimationFile } from './animationImport';
+import { exportClipAsBvh } from './bvhExportRecorder';
 import { AnimationController } from './animationController';
 import { PriorityAnimator } from './priorityAnimator';
 import { MicroAnimations } from './microAnimations';
@@ -153,20 +155,44 @@ async function main() {
       const itemIdx = controller.getItemIndexAtQueuePos(qi);
       const bvh = bvhByIndex.get(itemIdx);
       const name = names[itemIdx];
-      if (!bvh || !name) { setStatus('no source BVH for this item'); return; }
+      if (!bvh || !name) { setStatus('no source BVH for this item — use ⬇bvh instead'); return; }
       exportBvhAsVrma(vrm, bvh, name)
         .then(() => setStatus(`saved ${name}.vrma`))
         .catch((e) => setStatus(`vrma export failed: ${(e as Error).message}`));
     },
+    onExportBvh: (qi) => {
+      setStatus('recording BVH…');
+      exportClipAsBvh(qi, controller, vrm)
+        .then((filename) => setStatus(`saved ${filename}`))
+        .catch((e) => setStatus(`bvh export failed: ${(e as Error).message}`));
+    },
   });
 
-  const registerAndEnqueue = (name: string, bvh: ParsedBVH, clip: THREE.AnimationClip): void => {
+  const registerAndEnqueue = (
+    name: string,
+    bvh: ParsedBVH | null,
+    clip: THREE.AnimationClip,
+  ): void => {
     controller.register(name, clip);
     const itemIdx = names.length;
     names.push(name);
-    bvhByIndex.set(itemIdx, bvh);
+    if (bvh) bvhByIndex.set(itemIdx, bvh);
     controller.addToQueue(itemIdx);
     queue.push(name);
+  };
+
+  // Single import path used by both Capture-panel file picker and window-drop.
+  // Auto-plays via existing addToQueue → activate-first-item logic.
+  const handleAnimationFile = async (file: File): Promise<void> => {
+    const baseName = file.name;
+    setStatus(`loading ${baseName}…`);
+    try {
+      const loaded = await loadAnimationFile(file, vrm);
+      registerAndEnqueue(loaded.name, loaded.parsedBvh, loaded.clip);
+      setStatus(`▶ ${loaded.name}`);
+    } catch (e) {
+      setStatus(`load failed: ${(e as Error).message}`);
+    }
   };
 
   // ── Transport bar ─────────────────────────────────────────────────────────
@@ -174,24 +200,16 @@ async function main() {
 
   // ── Debug panel ────────────────────────────────────────────────────────────
   registerCleanup(
-    mountDebugPanel(playback, mocapSys, tooling, (v) => { vrm.scene.visible = v; }),
+    mountDebugPanel(
+      playback,
+      mocapSys,
+      tooling,
+      (v) => { vrm.scene.visible = v; },
+      handleAnimationFile,
+    ),
   );
 
-  // ── File-system BVH drop ───────────────────────────────────────────────────
-  const handleDroppedBvhFile = async (file: File): Promise<void> => {
-    const name = file.name.replace(/\.bvh$/i, '');
-    setStatus(`loading ${name}…`);
-    try {
-      const text = await file.text();
-      const bvh  = parseBVH(text);
-      const clip = await retargetBvhToVrm(vrm, bvh, name);
-      registerAndEnqueue(name, bvh, clip);
-      setStatus(`▶ ${name}`);
-    } catch (e) {
-      setStatus(`load failed: ${(e as Error).message}`);
-    }
-  };
-
+  // ── Window-drop import (BVH / VRMA / FBX) ─────────────────────────────────
   const onWindowDragOver = (e: DragEvent): void => {
     if (Array.from(e.dataTransfer?.items ?? []).some((it) => it.kind === 'file')) {
       e.preventDefault();
@@ -199,10 +217,10 @@ async function main() {
     }
   };
   const onWindowDrop = (e: DragEvent): void => {
-    const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => /\.bvh$/i.test(f.name));
+    const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => isSupportedAnimationFile(f.name));
     if (!files.length) return;
     e.preventDefault();
-    files.forEach((f) => void handleDroppedBvhFile(f));
+    files.forEach((f) => void handleAnimationFile(f));
   };
   window.addEventListener('dragover', onWindowDragOver);
   window.addEventListener('drop', onWindowDrop);

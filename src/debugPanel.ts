@@ -12,6 +12,7 @@ export function mountDebugPanel(
   mocapSys: MocapSystems,
   tooling: ToolingSystems,
   setModelVisible: (v: boolean) => void,
+  onAnimFile?: (file: File) => Promise<void> | void,
 ): () => void {
   const { pa, micro, idle, controller } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
@@ -178,13 +179,15 @@ export function mountDebugPanel(
   const previewPanel = document.getElementById('mocap-preview-panel')!;
   const previewCvs   = document.getElementById('mocap-canvas') as HTMLCanvasElement;
   const fileInput    = document.querySelector<HTMLInputElement>('#mocap-file-input')!;
+  const animFileInput = document.querySelector<HTMLInputElement>('#anim-file-input')!;
   const sourceBtns   = Array.from(document.querySelectorAll<HTMLButtonElement>('.capture-src-btn'));
 
-  // Source: 'camera' or 'video'. Persisted across reloads.
+  // Source persisted across reloads.
   const SOURCE_KEY = 'vrm-player.capture-source';
-  type CaptureSource = 'camera' | 'video';
-  let currentSource: CaptureSource =
-    (localStorage.getItem(SOURCE_KEY) as CaptureSource | null) === 'video' ? 'video' : 'camera';
+  type CaptureSource = 'camera' | 'video' | 'animfile';
+  const validSource = (s: string | null): CaptureSource =>
+    s === 'video' || s === 'animfile' ? s : 'camera';
+  let currentSource: CaptureSource = validSource(localStorage.getItem(SOURCE_KEY));
 
   function paintSourceBtns(): void {
     for (const b of sourceBtns) {
@@ -214,9 +217,12 @@ export function mountDebugPanel(
       if (currentSource === 'camera') {
         statusLbl.textContent  = hasFrozenFrame ? '📷 Camera off (last frame)' : '📷 Camera off';
         primaryBtn.textContent = 'Start camera';
-      } else {
+      } else if (currentSource === 'video') {
         statusLbl.textContent  = '📁 Pick a video to process';
         primaryBtn.textContent = 'Choose video…';
+      } else {
+        statusLbl.textContent  = '🎬 Pick a .bvh / .vrma / .fbx';
+        primaryBtn.textContent = 'Choose animation…';
       }
       stopCamBtn.style.display   = 'none';
       playRow.style.display      = 'none';
@@ -273,9 +279,12 @@ export function mountDebugPanel(
       } else if (mocap.state === 'live') {
         mocap.startRecording();
       }
-    } else {
-      // Video source — open file picker
+    } else if (currentSource === 'video') {
       if (mocap.state === 'off') fileInput.click();
+    } else {
+      // Anim file — open the BVH/VRMA/FBX picker. Mocap state is irrelevant
+      // here (the picker writes into the queue, not into mocap pipeline).
+      animFileInput.click();
     }
   }
 
@@ -293,10 +302,11 @@ export function mountDebugPanel(
   for (const b of sourceBtns) {
     b.addEventListener('click', () => {
       const next = b.dataset.source as CaptureSource | undefined;
-      if (next !== 'camera' && next !== 'video') return;
+      if (next !== 'camera' && next !== 'video' && next !== 'animfile') return;
       if (next === currentSource) return;
       const mocap = getMocap();
-      // Stop any active session before switching
+      // Stop any active mocap session before switching — anim-file source
+      // doesn't run mocap, so leaving it active would be misleading.
       if (mocap && mocap.state !== 'off') {
         if (mocap.state === 'recording') mocap.stopRecording();
         mocap.stop();
@@ -307,6 +317,25 @@ export function mountDebugPanel(
       updateMocapUI(getMocap()?.state ?? 'off');
     });
   }
+
+  // ── Anim file input (.bvh / .vrma / .fbx) ──────────────────────────────────
+
+  animFileInput.addEventListener('change', async () => {
+    const file = animFileInput.files?.[0];
+    animFileInput.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    if (!onAnimFile) {
+      statusLbl.textContent = '❌ animation import not wired';
+      return;
+    }
+    statusLbl.textContent = `🎬 loading ${file.name}…`;
+    try {
+      await onAnimFile(file);
+    } catch (e) {
+      const msg = (e instanceof Error ? e.message : String(e)) || 'unknown error';
+      statusLbl.textContent = `❌ ${msg.slice(0, 60)}`;
+    }
+  });
 
   // ── File video input ─────────────────────────────────────────────────────────
 

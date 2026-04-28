@@ -216,7 +216,7 @@
       }
       .q-remove:hover { color: #f87171; background: rgba(248,113,113,0.1); }
 
-      .q-export {
+      .q-export, .q-export-bvh {
         flex-shrink: 0;
         background: transparent;
         border: 1px solid #444;
@@ -228,7 +228,10 @@
         cursor: pointer;
         font-family: inherit;
       }
-      .q-export:hover { background: #2a3550; color: #fff; border-color: #3b5bdb; }
+      .q-export:hover, .q-export-bvh:hover {
+        background: #2a3550; color: #fff; border-color: #3b5bdb;
+      }
+      .q-export-bvh { font-size: 9px; padding: 0 4px; letter-spacing: 0.05em; }
 
       /* ── Debug / Layers panel (left) ── */
       #debug-panel {

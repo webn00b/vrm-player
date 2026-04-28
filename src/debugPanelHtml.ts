@@ -191,12 +191,14 @@ export function buildTuningPanelHtml(): string {
 
       <div class="dbg-section">
         <div class="capture-source">
-          <button class="capture-src-btn" data-source="camera" aria-pressed="true">📷 Camera</button>
-          <button class="capture-src-btn" data-source="video"  aria-pressed="false">📁 Video</button>
+          <button class="capture-src-btn" data-source="camera"   aria-pressed="true">📷 Camera</button>
+          <button class="capture-src-btn" data-source="video"    aria-pressed="false">📁 Video</button>
+          <button class="capture-src-btn" data-source="animfile" aria-pressed="false">🎬 Anim</button>
         </div>
 
         <button id="capture-primary-btn" class="capture-primary">Start camera</button>
         <input type="file" id="mocap-file-input" accept="video/*" hidden>
+        <input type="file" id="anim-file-input" accept=".bvh,.vrma,.fbx" hidden>
 
         <div class="capture-status">
           <span id="mocap-status-label">📷 Camera off</span>
