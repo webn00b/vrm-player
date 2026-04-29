@@ -6,6 +6,7 @@ import { mountSkelModal } from './debugPanelSkelModal';
 import { mountBvhModal } from './debugPanelBvhModal';
 import { mountBvhVerifyModal } from './debugPanelBvhVerifyModal';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
+import { exportClipAsBvh, type BvhExportHandle } from './bvhExportRecorder';
 
 export function mountDebugPanel(
   playback: PlaybackSystems,
@@ -203,6 +204,96 @@ export function mountDebugPanel(
 
   let framesTimer = 0;
 
+  // ── Anim-file Record/Stop state ────────────────────────────────────────
+  // Independent of MocapState — anim-file source doesn't touch the mocap
+  // pipeline. Active during a queue-clip BVH-export started from the Capture
+  // panel. Source-switch cancels (saves partial). updateAnimUI() repaints
+  // primary CTA + status during recording / when queue changes.
+  let animExportHandle: BvhExportHandle | null = null;
+  let animProgressTimer = 0;
+
+  function updateAnimUI(): void {
+    if (currentSource !== 'animfile') return;
+    const ctrl = getController();
+    const queueLen = ctrl?.queueLength ?? 0;
+    const recording = animExportHandle !== null;
+
+    primaryBtn.classList.toggle('recording', recording);
+    primaryBtn.disabled = false;
+
+    if (recording) {
+      primaryBtn.textContent = '⏹ Stop';
+      // Status / progress filled by animProgressTimer.
+    } else if (queueLen === 0) {
+      primaryBtn.textContent = 'Choose animation…';
+      statusLbl.textContent = '🎬 Pick a .bvh / .vrma / .fbx';
+      framesLbl.textContent = '';
+    } else {
+      primaryBtn.textContent = '⏺ Record BVH';
+      const name = ctrl?.currentName || '';
+      const dur  = ctrl?.currentDuration ?? 0;
+      statusLbl.textContent = name
+        ? `🎬 ready · ${name} (${dur.toFixed(1)}s)`
+        : '🎬 ready';
+      framesLbl.textContent = '';
+    }
+  }
+
+  function startAnimProgressTimer(): void {
+    clearInterval(animProgressTimer);
+    animProgressTimer = rememberInterval(() => {
+      if (!animExportHandle) return;
+      const ctrl = getController();
+      const dur = ctrl?.currentDuration ?? 0;
+      const elapsed = animExportHandle.elapsed();
+      const pct = dur > 0 ? Math.min(100, Math.round((elapsed / dur) * 100)) : 0;
+      statusLbl.textContent = `⏺ recording ${pct}%`;
+      framesLbl.textContent = `${animExportHandle.frameCount()} frames`;
+    }, 200);
+  }
+
+  function startAnimRecord(): void {
+    const ctrl = getController();
+    if (!ctrl || ctrl.queueLength === 0) return;
+    if (animExportHandle) return; // already recording
+    const qi = ctrl.currentQueuePos >= 0 ? ctrl.currentQueuePos : 0;
+    try {
+      const handle = exportClipAsBvh(qi, ctrl, mocapSys.mocap.vrm);
+      animExportHandle = handle;
+      updateAnimUI();
+      startAnimProgressTimer();
+      handle.promise
+        .then((filename) => {
+          statusLbl.textContent = `✓ saved ${filename}`;
+          framesLbl.textContent = '';
+        })
+        .catch((e) => {
+          statusLbl.textContent = `❌ ${(e as Error).message.slice(0, 60)}`;
+        })
+        .finally(() => {
+          animExportHandle = null;
+          clearInterval(animProgressTimer);
+          updateAnimUI();
+        });
+    } catch (e) {
+      statusLbl.textContent = `❌ ${(e as Error).message.slice(0, 60)}`;
+      animExportHandle = null;
+    }
+  }
+
+  function cancelAnimRecord(): void {
+    animExportHandle?.cancel();
+    // The Promise's .finally clears the handle + repaints UI.
+  }
+
+  // Note: controller.onChange already has a single listener wired up by
+  // main.ts (the queue.setActive + setStatus call). It's a single-slot API,
+  // not multi-listener, so we deliberately don't add ourselves there. Instead
+  // we call updateAnimUI() at the three explicit moments where state shifts:
+  //   - source switch INTO animfile
+  //   - after a file finishes loading (anim-file-input change handler)
+  //   - on record start / stop transitions inside this module
+
   function updateMocapUI(state: MocapState): void {
     clearInterval(framesTimer);
     const mocap = getMocap();
@@ -211,6 +302,17 @@ export function mountDebugPanel(
     primaryBtn.disabled = false;
     if (state === 'off') sourceInfo.textContent = '';
     else refreshSourceInfo();
+
+    // Anim-file source has its own state machine — defer to updateAnimUI
+    // and skip the mocap-state branches below.
+    if (currentSource === 'animfile') {
+      stopCamBtn.style.display   = 'none';
+      playRow.style.display      = 'none';
+      previewPanel.style.display = 'none';
+      mocap?.setCanvas(null);
+      updateAnimUI();
+      return;
+    }
 
     if (state === 'off') {
       const hasFrozenFrame = !!mocap?.latestFrame;
@@ -282,9 +384,17 @@ export function mountDebugPanel(
     } else if (currentSource === 'video') {
       if (mocap.state === 'off') fileInput.click();
     } else {
-      // Anim file — open the BVH/VRMA/FBX picker. Mocap state is irrelevant
-      // here (the picker writes into the queue, not into mocap pipeline).
-      animFileInput.click();
+      // Anim file source has three states (see updateAnimUI):
+      //   recording → cancel (saves partial)
+      //   queue empty → open file picker
+      //   queue ready → start recording current item
+      if (animExportHandle) {
+        cancelAnimRecord();
+      } else if ((getController()?.queueLength ?? 0) === 0) {
+        animFileInput.click();
+      } else {
+        startAnimRecord();
+      }
     }
   }
 
@@ -304,6 +414,12 @@ export function mountDebugPanel(
       const next = b.dataset.source as CaptureSource | undefined;
       if (next !== 'camera' && next !== 'video' && next !== 'animfile') return;
       if (next === currentSource) return;
+      // Cancel anim-file BVH export if leaving animfile mid-recording — the
+      // partial BVH is still saved (BvhExportHandle.cancel() finishes the
+      // recorder and downloads what's been captured).
+      if (currentSource === 'animfile' && animExportHandle) {
+        cancelAnimRecord();
+      }
       const mocap = getMocap();
       // Stop any active mocap session before switching — anim-file source
       // doesn't run mocap, so leaving it active would be misleading.
@@ -335,6 +451,9 @@ export function mountDebugPanel(
       const msg = (e instanceof Error ? e.message : String(e)) || 'unknown error';
       statusLbl.textContent = `❌ ${msg.slice(0, 60)}`;
     }
+    // Clip is in the queue and playing now; flip primary CTA from
+    // "Choose animation…" to "⏺ Record BVH".
+    updateAnimUI();
   });
 
   // ── File video input ─────────────────────────────────────────────────────────

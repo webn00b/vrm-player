@@ -162,7 +162,8 @@ async function main() {
     },
     onExportBvh: (qi) => {
       setStatus('recording BVH…');
-      exportClipAsBvh(qi, controller, vrm)
+      const handle = exportClipAsBvh(qi, controller, vrm);
+      handle.promise
         .then((filename) => setStatus(`saved ${filename}`))
         .catch((e) => setStatus(`bvh export failed: ${(e as Error).message}`));
     },

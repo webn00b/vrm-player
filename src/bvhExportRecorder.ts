@@ -5,22 +5,45 @@ import { downloadBvh } from './mocap/bvhRecorder';
 import { createBvhRecorderForVrm } from './mocap/bvhRecorderFactory';
 import { renderLoopHooks } from './renderLoopHooks';
 
+export interface BvhExportHandle {
+  /** Resolves to filename when the file is saved (auto-finish or cancel). */
+  readonly promise: Promise<string>;
+  /** Stop early. Saves a partial BVH for whatever was captured so far. */
+  cancel(): void;
+  /** Number of frames written so far (live during recording). */
+  readonly frameCount: () => number;
+  /** Elapsed seconds since recording started (live during recording). */
+  readonly elapsed: () => number;
+}
+
 /**
  * Plays the queue item at `queuePos` from the start, captures every render
  * frame into a fresh BvhRecorder, and downloads the result when the clip
- * completes one loop. Reuses the live render path (so mocap, bonePanel, and
- * validator clamp all participate exactly as they would for any other
- * playback) — the recorded BVH matches what's on screen.
+ * completes one loop OR when the caller invokes `handle.cancel()`. Reuses the
+ * live render path (so mocap, bonePanel, and validator clamp all participate
+ * exactly as they would for any other playback) — the recorded BVH matches
+ * what's on screen.
  *
- * Returns a Promise that resolves with the filename once the file is saved,
- * or rejects on error / abort.
+ * Returns a `BvhExportHandle` exposing both the underlying Promise and a
+ * `cancel()` for early termination. Cancelling still saves a partial BVH —
+ * the format tolerates fewer Frames than the implied duration, so a
+ * truncated file plays back cleanly in any BVH viewer.
  */
 export function exportClipAsBvh(
   queuePos: number,
   controller: AnimationController,
   vrm: VRM,
-): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
+): BvhExportHandle {
+  let elapsed = 0;
+  let finished = false;
+  let cancelled = false;
+  // Default no-op until the Promise executor wires the real implementation
+  // synchronously below. A very-early cancel() (extremely unlikely — the
+  // executor runs in the same tick) just flips the flag.
+  let cancelImpl: () => void = () => { cancelled = true; };
+  const recorder = createBvhRecorderForVrm(vrm);
+
+  const promise = new Promise<string>((resolve, reject) => {
     if (queuePos < 0 || queuePos >= controller.queueLength) {
       reject(new Error('Invalid queue position'));
       return;
@@ -30,8 +53,6 @@ export function exportClipAsBvh(
       reject(new Error('Another BVH export is already in progress'));
       return;
     }
-
-    const recorder = createBvhRecorderForVrm(vrm);
 
     // Snapshot per-frame: read every supported bone's quaternion and the hips'
     // local position. Using getNormalizedBoneNode mirrors how mocap recording
@@ -63,9 +84,6 @@ export function exportClipAsBvh(
 
     recorder.start();
 
-    let elapsed = 0;
-    let finished = false;
-
     const finish = (): void => {
       if (finished) return;
       finished = true;
@@ -81,6 +99,12 @@ export function exportClipAsBvh(
     };
 
     renderLoopHooks.poseCaptureSink = (delta: number): void => {
+      // If cancel() flipped the flag between the previous tick and this one,
+      // bail out immediately — finish() handles the BVH save itself.
+      if (cancelled) {
+        finish();
+        return;
+      }
       recorder.addFrame(getQuaternion, getHipsPosition);
       elapsed += delta;
       // Stop after one full clip duration. Auto-advance in the controller may
@@ -91,5 +115,20 @@ export function exportClipAsBvh(
         finish();
       }
     };
+
+    // Hook up cancel() to do the same finish(). The render-loop sink will
+    // observe `cancelled` on its next tick if we don't drain it here.
+    cancelImpl = (): void => {
+      if (finished) return;
+      cancelled = true;
+      finish();
+    };
   });
+
+  return {
+    promise,
+    cancel: () => cancelImpl(),
+    frameCount: () => recorder.frameCount,
+    elapsed: () => elapsed,
+  };
 }
