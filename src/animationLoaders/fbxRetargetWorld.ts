@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
+import { VRMHumanBoneName, type VRM } from '@pixiv/three-vrm';
 import { mapFbxBoneToVrm } from './fbxBoneMap';
 
 interface Mapping {
@@ -67,11 +67,13 @@ export function retargetFbxToVrmWorldSpace(
   // 2. Snapshot REST world quaternions.
   //    FBX skeleton: just-loaded, no animation applied yet — already at rest.
   //    VRM: whatever pose the avatar is currently in (mocap, idle, queue
-  //    playback). To get a clean rest snapshot we temporarily replace each
-  //    mapped bone's local quaternion with its normalizedRestPose entry,
-  //    sample world rotations, then restore the saved poses. The whole
-  //    save/sample/restore cycle is synchronous so no other render frame
-  //    sees the swapped state.
+  //    playback). To get a clean rest snapshot we temporarily replace EVERY
+  //    humanoid bone's local quaternion with its normalizedRestPose entry —
+  //    not just the bones we're mapping — so unmapped ancestors of mapped
+  //    bones don't leak their live rotation into the world snapshot. Both
+  //    `vrmRestWorld` and `vrmImmediateParentRestWorld` are sampled inside
+  //    this rest window before restoring live poses; the whole cycle is
+  //    synchronous so no render frame sees the swapped state.
   fbxRoot.updateMatrixWorld(true);
 
   const fbxRestWorld = new Map<string, THREE.Quaternion>();
@@ -82,32 +84,42 @@ export function retargetFbxToVrmWorldSpace(
     fbxRestWorld.set(m.fbxName, m.fbxNode.getWorldQuaternion(new THREE.Quaternion()));
   }
 
-  // Save then reset all mapped VRM bones to rest, snapshot world, restore.
   const restPose = (vrm.humanoid as any).normalizedRestPose as
     | Record<string, { rotation?: [number, number, number, number] }>
     | undefined;
-  const savedLocals = new Map<VRMHumanBoneName, THREE.Quaternion>();
-  for (const m of mappings) {
-    savedLocals.set(m.vrmName, m.vrmNode.quaternion.clone());
-    const r = restPose?.[m.vrmName]?.rotation;
+  const savedLocals: Array<{ node: THREE.Object3D; q: THREE.Quaternion }> = [];
+  for (const boneName of Object.values(VRMHumanBoneName)) {
+    const node = vrm.humanoid.getNormalizedBoneNode(boneName);
+    if (!node) continue;
+    savedLocals.push({ node, q: node.quaternion.clone() });
+    const r = restPose?.[boneName]?.rotation;
     if (r && r.length === 4) {
-      m.vrmNode.quaternion.set(r[0], r[1], r[2], r[3]);
+      node.quaternion.set(r[0], r[1], r[2], r[3]);
     } else {
-      m.vrmNode.quaternion.set(0, 0, 0, 1); // identity fallback
+      node.quaternion.set(0, 0, 0, 1); // identity fallback
     }
   }
   vrm.scene.updateMatrixWorld(true);
 
+  // Snapshot world rotations of mapped bones AND the immediate-parent world
+  // rotation used as the fallback for chains whose nearest mapped ancestor
+  // doesn't exist. Both are read inside the rest window.
+  const vrmImmediateParentRestWorld = new Map<VRMHumanBoneName, THREE.Quaternion>();
   for (const m of mappings) {
     vrmRestWorld.set(m.vrmName, m.vrmNode.getWorldQuaternion(new THREE.Quaternion()));
+    if (m.vrmNode.parent) {
+      vrmImmediateParentRestWorld.set(
+        m.vrmName,
+        m.vrmNode.parent.getWorldQuaternion(new THREE.Quaternion()),
+      );
+    } else {
+      vrmImmediateParentRestWorld.set(m.vrmName, new THREE.Quaternion());
+    }
   }
 
   // Restore live poses (we'll mutate again later in the per-frame loop, but
   // for now keep things consistent with what the rest of the app expects).
-  for (const m of mappings) {
-    const saved = savedLocals.get(m.vrmName);
-    if (saved) m.vrmNode.quaternion.copy(saved);
-  }
+  for (const s of savedLocals) s.node.quaternion.copy(s.q);
   vrm.scene.updateMatrixWorld(true);
 
   // 3. Per-bone rest correction (the math).
@@ -135,7 +147,7 @@ export function retargetFbxToVrmWorldSpace(
 
   // 4. Build VRM dependency graph (top-down): each mapped bone's nearest
   //    mapped ancestor in the VRM hierarchy. For unmapped ancestors we
-  //    fall back to the live VRM rest world rotation.
+  //    fall back to `vrmImmediateParentRestWorld` snapshotted above.
   const vrmParentMappedName = new Map<VRMHumanBoneName, VRMHumanBoneName | null>();
   for (const m of mappings) {
     let parent = m.vrmNode.parent;
@@ -146,20 +158,6 @@ export function retargetFbxToVrmWorldSpace(
       parent = parent.parent;
     }
     vrmParentMappedName.set(m.vrmName, parentVrmName);
-  }
-  // Rest world quaternion of the *immediate* VRM parent node (used when the
-  // chain ancestor is unmapped — that ancestor stays at rest, so its world
-  // rotation never changes from this snapshot).
-  const vrmImmediateParentRestWorld = new Map<VRMHumanBoneName, THREE.Quaternion>();
-  for (const m of mappings) {
-    if (m.vrmNode.parent) {
-      vrmImmediateParentRestWorld.set(
-        m.vrmName,
-        m.vrmNode.parent.getWorldQuaternion(new THREE.Quaternion()),
-      );
-    } else {
-      vrmImmediateParentRestWorld.set(m.vrmName, new THREE.Quaternion());
-    }
   }
 
   // Top-down processing order: visit each bone after all of its mapped
@@ -239,15 +237,32 @@ export function retargetFbxToVrmWorldSpace(
   action.stop();
   mixer.uncacheClip(fbxClip);
 
-  // 6. Build retargeted tracks.
+  // 6. Build retargeted tracks. Defensive sign-continuity pass: THREE's
+  //    QuaternionLinearInterpolant flips signs pairwise during slerp, so
+  //    interpolation already picks the short arc — but downstream consumers
+  //    that read raw `track.values` (BVH recorder, VRMA exporter) get a
+  //    cleaner signal when consecutive frames share a hemisphere.
+  let signFlips = 0;
   const newTracks: THREE.KeyframeTrack[] = [];
   for (const m of mappings) {
     const td = trackData.get(m.vrmName)!;
     if (td.times.length === 0) continue;
+    const v = td.values;
+    for (let i = 4; i < v.length; i += 4) {
+      const dot = v[i - 4] * v[i] + v[i - 3] * v[i + 1]
+                + v[i - 2] * v[i + 2] + v[i - 1] * v[i + 3];
+      if (dot < 0) {
+        v[i]     = -v[i];
+        v[i + 1] = -v[i + 1];
+        v[i + 2] = -v[i + 2];
+        v[i + 3] = -v[i + 3];
+        signFlips++;
+      }
+    }
     newTracks.push(new THREE.QuaternionKeyframeTrack(
       `${m.vrmNode.name}.quaternion`,
       td.times,
-      td.values,
+      v,
     ));
   }
 
@@ -276,7 +291,8 @@ export function retargetFbxToVrmWorldSpace(
 
   console.info(
     `[fbx-import] world-space retarget: mapped ${mappings.length} bones, ` +
-    `sampled ${numFrames} frames at ${sampleFps} fps, produced ${newTracks.length} tracks`,
+    `sampled ${numFrames} frames at ${sampleFps} fps, produced ${newTracks.length} tracks, ` +
+    `quaternion sign-flips normalized: ${signFlips}`,
   );
 
   return new THREE.AnimationClip(name, fbxClip.duration, newTracks);
