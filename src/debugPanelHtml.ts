@@ -115,6 +115,17 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
       </div>
     </details>
 
+    <details class="dbg-fold" id="fold-hipforce">
+      <summary>Hip force</summary>
+      <div class="dbg-section">
+        <div class="dbg-stat" id="dbg-hipforce-mass">tracked mass: —</div>
+        <div class="dbg-stat" id="dbg-hipforce-total">|F_total|: —</div>
+        <div class="dbg-stat" id="dbg-hipforce-grav">|F_grav|:  —</div>
+        <div class="dbg-stat" id="dbg-hipforce-inert">|F_inert|: —</div>
+        <div class="dbg-stat" id="dbg-hipforce-tilt">tilt vs Y_hip: —</div>
+      </div>
+    </details>
+
     </div>
 
     <div class="dbg-tab-panel" data-panel="video">

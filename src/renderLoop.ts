@@ -16,7 +16,7 @@ export function startRenderLoop(
 ): CleanupFn {
   const { controller, pa, micro, idle } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
-  const { skelViz, validator, bonePanel, boneDrag } = tooling;
+  const { skelViz, validator, bonePanel, boneDrag, hipForce } = tooling;
 
   let stopped = false;
   let rafId = 0;
@@ -139,6 +139,11 @@ export function startRenderLoop(
     // 5c. BVH-export sink — same timing, separate slot so the verifier and the
     // export recorder don't have to share a single callback.
     renderLoopHooks.poseCaptureSink?.(delta);
+
+    // 5d. Hip force tracker — diagnostic only. Reads final world positions of
+    // upper-body bones, accumulates gravity + inertia, exposes via .latest for
+    // the debug panel. Cheap (~10 bones × a few Vector3 ops).
+    hipForce.update(delta);
 
     // 6. Skeleton overlay (after vrm.update so world matrices are fresh)
     skelViz.update();

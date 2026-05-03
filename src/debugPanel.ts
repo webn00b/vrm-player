@@ -17,7 +17,7 @@ export function mountDebugPanel(
 ): () => void {
   const { pa, micro, idle, controller } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
-  const { skelViz, validator, boneDrag } = tooling;
+  const { skelViz, validator, boneDrag, hipForce } = tooling;
   const getController = () => controller;
   const getMocap = () => mocap;
   const root = document.getElementById('debug-panel');
@@ -605,6 +605,50 @@ export function mountDebugPanel(
       fps = (fpsFrames * 1000) / dt;
       fpsFrames = 0;
       fpsWindowStart = now;
+    }
+  }, 100);
+
+  // ── Hip force readout ─────────────────────────────────────────────────────
+  // Per-frame the tracker updates `latest`; we sample it at 10 Hz into the
+  // panel — a faster cadence is unreadable to humans and just churns DOM.
+  // Lazy: only update when the fold is open.
+  const foldHipForce = document.getElementById('fold-hipforce') as HTMLDetailsElement | null;
+  const hipForceEls = {
+    mass:  document.getElementById('dbg-hipforce-mass'),
+    total: document.getElementById('dbg-hipforce-total'),
+    grav:  document.getElementById('dbg-hipforce-grav'),
+    inert: document.getElementById('dbg-hipforce-inert'),
+    tilt:  document.getElementById('dbg-hipforce-tilt'),
+  };
+  rememberInterval(() => {
+    if (!foldHipForce?.open) return;
+    const r = hipForce.latest;
+    if (!r) {
+      if (hipForceEls.total) hipForceEls.total.textContent = '|F_total|: —';
+      return;
+    }
+    if (hipForceEls.mass) hipForceEls.mass.textContent = `tracked mass: ${r.totalMass.toFixed(1)} kg`;
+    const fmtN = (v: number): string => `${v.toFixed(1)} N`;
+    if (!r.ready) {
+      // Gravity is valid even before warmup; inertia/total need velocity history.
+      if (hipForceEls.total) hipForceEls.total.textContent = '|F_total|: warming up…';
+      if (hipForceEls.grav)  hipForceEls.grav.textContent  = `|F_grav|:  ${fmtN(r.gravityWorld.length())}`;
+      if (hipForceEls.inert) hipForceEls.inert.textContent = '|F_inert|: —';
+      if (hipForceEls.tilt)  hipForceEls.tilt.textContent  = 'tilt vs Y_hip: —';
+      return;
+    }
+    if (hipForceEls.total) hipForceEls.total.textContent = `|F_total|: ${fmtN(r.totalWorld.length())}`;
+    if (hipForceEls.grav)  hipForceEls.grav.textContent  = `|F_grav|:  ${fmtN(r.gravityWorld.length())}`;
+    if (hipForceEls.inert) hipForceEls.inert.textContent = `|F_inert|: ${fmtN(r.inertiaWorld.length())}`;
+    // tilt = angle between F_total and +Y_hip; 0° means force is perfectly
+    // aligned with the spine (gravity straight down through a vertical body).
+    const local = r.totalInHipSpace;
+    const len = local.length();
+    if (len < 1e-6) {
+      if (hipForceEls.tilt) hipForceEls.tilt.textContent = 'tilt vs Y_hip: —';
+    } else {
+      const tiltDeg = Math.acos(Math.max(-1, Math.min(1, local.y / len))) * 180 / Math.PI;
+      if (hipForceEls.tilt) hipForceEls.tilt.textContent = `tilt vs Y_hip: ${tiltDeg.toFixed(1)}°`;
     }
   }, 100);
 

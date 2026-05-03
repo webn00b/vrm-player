@@ -19,6 +19,7 @@ import { MocapDebugViz } from './mocap/mocapDebugViz';
 import { MocapDebugRecorder } from './mocap/mocapDebugRecorder';
 import { SkeletonVisualizer } from './skeletonVisualizer';
 import { BoneValidator } from './validation/boneValidator';
+import { HipForceTracker } from './physics/hipForce';
 import { startRenderLoop } from './renderLoop';
 import { mountTransport } from './transport';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
@@ -138,8 +139,15 @@ async function main() {
 
   setStatus('drop a .bvh file or record from mocap to start');
 
+  // ── Hip force tracker (gravity + inertia diagnostic) ──────────────────────
+  // Reads world positions of upper-body bones AFTER the full render pipeline
+  // (BVH/mocap/manual offsets/validator clamp/micro), computes Σ-force at the
+  // hip in world & hip-local space. Auto-resets on pause→resume; we explicitly
+  // reset on clip change below in controller.onChange.
+  const hipForce = new HipForceTracker(vrm, { isPaused: () => controller.paused });
+
   const playback: PlaybackSystems = { controller, pa, micro, idle: idleLoop };
-  const tooling: ToolingSystems   = { skelViz, validator, bonePanel, boneDrag };
+  const tooling: ToolingSystems   = { skelViz, validator, bonePanel, boneDrag, hipForce };
 
   vrm.scene.visible = false;
 
@@ -248,6 +256,9 @@ async function main() {
   controller.onChange((queuePos, item) => {
     queue.setActive(queuePos);
     setStatus(`${queuePos + 1}/${controller.queueLength} · ${item.name} · ${item.duration.toFixed(1)}s`);
+    // Drop accumulated bone velocities — the new clip starts from a fresh pose
+    // so any inertia computed across the boundary would be a teleport spike.
+    hipForce.reset();
   });
 
   registerCleanup(
