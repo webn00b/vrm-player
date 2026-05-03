@@ -20,6 +20,7 @@ import { MocapDebugRecorder } from './mocap/mocapDebugRecorder';
 import { SkeletonVisualizer } from './skeletonVisualizer';
 import { BoneValidator } from './validation/boneValidator';
 import { HipForceTracker } from './physics/hipForce';
+import { HipBalanceCorrector } from './physics/hipBalanceCorrector';
 import { startRenderLoop } from './renderLoop';
 import { mountTransport } from './transport';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
@@ -146,8 +147,14 @@ async function main() {
   // reset on clip change below in controller.onChange.
   const hipForce = new HipForceTracker(vrm, { isPaused: () => controller.paused });
 
+  // ── Hip balance corrector (off by default) ────────────────────────────────
+  // Closed-loop counter-rotation around hip-local X/Z driven by horizontal
+  // components of `hipForce.latest`. Toggle from debug panel; reset shares
+  // the same controller.onChange hook as hipForce.
+  const hipBalance = new HipBalanceCorrector(vrm);
+
   const playback: PlaybackSystems = { controller, pa, micro, idle: idleLoop };
-  const tooling: ToolingSystems   = { skelViz, validator, bonePanel, boneDrag, hipForce };
+  const tooling: ToolingSystems   = { skelViz, validator, bonePanel, boneDrag, hipForce, hipBalance };
 
   vrm.scene.visible = false;
 
@@ -259,6 +266,7 @@ async function main() {
     // Drop accumulated bone velocities — the new clip starts from a fresh pose
     // so any inertia computed across the boundary would be a teleport spike.
     hipForce.reset();
+    hipBalance.reset();
   });
 
   registerCleanup(

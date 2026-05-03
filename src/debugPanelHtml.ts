@@ -123,6 +123,12 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
         <div class="dbg-stat" id="dbg-hipforce-grav">|F_grav|:  —</div>
         <div class="dbg-stat" id="dbg-hipforce-inert">|F_inert|: —</div>
         <div class="dbg-stat" id="dbg-hipforce-tilt">tilt vs Y_hip: —</div>
+        <div class="dbg-stat" id="dbg-hipforce-gtilt">gravity tilt: —</div>
+        <div class="dbg-row" style="margin-top:6px">
+          <span class="dbg-label">⚖ Balance corrector</span>
+          <button class="dbg-toggle off" id="hipbal-btn">OFF</button>
+        </div>
+        <div class="dbg-stat" id="dbg-hipbal-angles">corr. angles: —</div>
       </div>
     </details>
 

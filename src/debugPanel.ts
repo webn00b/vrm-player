@@ -17,7 +17,7 @@ export function mountDebugPanel(
 ): () => void {
   const { pa, micro, idle, controller } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
-  const { skelViz, validator, boneDrag, hipForce } = tooling;
+  const { skelViz, validator, boneDrag, hipForce, hipBalance } = tooling;
   const getController = () => controller;
   const getMocap = () => mocap;
   const root = document.getElementById('debug-panel');
@@ -619,7 +619,23 @@ export function mountDebugPanel(
     grav:  document.getElementById('dbg-hipforce-grav'),
     inert: document.getElementById('dbg-hipforce-inert'),
     tilt:  document.getElementById('dbg-hipforce-tilt'),
+    gtilt: document.getElementById('dbg-hipforce-gtilt'),
+    angles: document.getElementById('dbg-hipbal-angles'),
   };
+  // Balance-corrector toggle button. State mirrors hipBalance.enabled. Reset
+  // is automatic on disable (handled inside the corrector); on re-enable we
+  // start fresh with no carry-over angles.
+  const hipBalBtn = document.getElementById('hipbal-btn') as HTMLButtonElement | null;
+  const refreshHipBalBtn = (): void => {
+    if (!hipBalBtn) return;
+    hipBalBtn.textContent = hipBalance.enabled ? 'ON' : 'OFF';
+    hipBalBtn.classList.toggle('off', !hipBalance.enabled);
+  };
+  refreshHipBalBtn();
+  hipBalBtn?.addEventListener('click', () => {
+    hipBalance.enabled = !hipBalance.enabled;
+    refreshHipBalBtn();
+  });
   rememberInterval(() => {
     if (!foldHipForce?.open) return;
     const r = hipForce.latest;
@@ -649,6 +665,26 @@ export function mountDebugPanel(
     } else {
       const tiltDeg = Math.acos(Math.max(-1, Math.min(1, local.y / len))) * 180 / Math.PI;
       if (hipForceEls.tilt) hipForceEls.tilt.textContent = `tilt vs Y_hip: ${tiltDeg.toFixed(1)}°`;
+    }
+    // Gravity-only tilt = signal the corrector actually uses. Cleaner number,
+    // unaffected by motion-induced inertia. 0° = hip upright.
+    const gLocal = r.gravityInHipSpace;
+    const gLen = gLocal.length();
+    if (gLen < 1e-6) {
+      if (hipForceEls.gtilt) hipForceEls.gtilt.textContent = 'gravity tilt: —';
+    } else {
+      const gTiltDeg = Math.acos(Math.max(-1, Math.min(1, -gLocal.y / gLen))) * 180 / Math.PI;
+      if (hipForceEls.gtilt) hipForceEls.gtilt.textContent = `gravity tilt: ${gTiltDeg.toFixed(1)}°`;
+    }
+    // Balance-corrector applied angles (smoothed, post-clamp). When OFF the
+    // values stay at their last applied (or 0 after reset) snapshot.
+    if (hipForceEls.angles) {
+      if (hipBalance.enabled) {
+        const a = hipBalance.latestAnglesDeg;
+        hipForceEls.angles.textContent = `corr. angles: X=${a.x.toFixed(1)}°  Z=${a.z.toFixed(1)}°`;
+      } else {
+        hipForceEls.angles.textContent = 'corr. angles: (off)';
+      }
     }
   }, 100);
 

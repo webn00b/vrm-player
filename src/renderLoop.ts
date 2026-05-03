@@ -16,7 +16,7 @@ export function startRenderLoop(
 ): CleanupFn {
   const { controller, pa, micro, idle } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
-  const { skelViz, validator, bonePanel, boneDrag, hipForce } = tooling;
+  const { skelViz, validator, bonePanel, boneDrag, hipForce, hipBalance } = tooling;
 
   let stopped = false;
   let rafId = 0;
@@ -130,6 +130,13 @@ export function startRenderLoop(
     if (!overlaysSuspended) {
       micro.update(vrm);
     }
+
+    // 4b. Hip balance corrector — counter-rotation on hip computed live from
+    // hip's current world quaternion (no lag — see file header in
+    // hipBalanceCorrector.ts). Applied BEFORE vrm.update so VRM springs /
+    // secondary motion respond to the corrected orientation. No-op when
+    // disabled (default OFF).
+    hipBalance.apply();
 
     // 5. VRM systems
     vrm.update(delta);

@@ -10,6 +10,7 @@ import type { BoneValidator } from './validation/boneValidator';
 import type { BonePosePanel } from './bonePosePanel';
 import type { BoneDragController } from './boneDragController';
 import type { HipForceTracker } from './physics/hipForce';
+import type { HipBalanceCorrector } from './physics/hipBalanceCorrector';
 
 export interface PlaybackSystems {
   controller: AnimationController | null;
@@ -30,4 +31,5 @@ export interface ToolingSystems {
   bonePanel: BonePosePanel;
   boneDrag: BoneDragController;
   hipForce: HipForceTracker;
+  hipBalance: HipBalanceCorrector;
 }

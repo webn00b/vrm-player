@@ -35,6 +35,14 @@ export interface HipForceResult {
    * upper body is leaning.
    */
   totalInHipSpace: THREE.Vector3;
+  /**
+   * Gravity-only force in hip-local frame. This is a clean signal of "hip
+   * orientation vs world gravity" — purely a function of hip rotation, no
+   * time derivatives, no inertial coupling. Use this (NOT totalInHipSpace)
+   * for closed-loop balance correction; total includes inertia which forms
+   * a positive feedback loop with any controller acting on the hip.
+   */
+  gravityInHipSpace: THREE.Vector3;
   /** False on the first 1–2 frames after reset(): velocity not yet available. */
   ready: boolean;
 }
@@ -71,6 +79,7 @@ const ZERO_RESULT: HipForceResult = {
   inertiaWorld: new THREE.Vector3(),
   totalWorld: new THREE.Vector3(),
   totalInHipSpace: new THREE.Vector3(),
+  gravityInHipSpace: new THREE.Vector3(),
   ready: false,
 };
 
@@ -102,6 +111,7 @@ export class HipForceTracker {
   private readonly _outInertia = new THREE.Vector3();
   private readonly _outTotal = new THREE.Vector3();
   private readonly _outTotalHipSpace = new THREE.Vector3();
+  private readonly _outGravityHipSpace = new THREE.Vector3();
   private _latest: HipForceResult | null = null;
 
   constructor(vrm: VRM, opts: HipForceOptions = {}) {
@@ -236,9 +246,12 @@ export class HipForceTracker {
 
     this._outTotal.copy(this._outGravity).add(this._outInertia);
 
-    // Express F_total in hip-local frame: F_local = q_hip⁻¹ × F_world.
+    // Express F_total and F_gravity in hip-local frame. F_gravity_hipSpace is
+    // the closed-loop balance signal: pure function of hip orientation, no
+    // inertial coupling, so a controller acting on it doesn't resonate.
     this.hipNode.getWorldQuaternion(this._scratchHipQuat).invert();
     this._outTotalHipSpace.copy(this._outTotal).applyQuaternion(this._scratchHipQuat);
+    this._outGravityHipSpace.copy(this._outGravity).applyQuaternion(this._scratchHipQuat);
 
     // Build the result. Reuse the same buffers — caller is expected to either
     // consume immediately or .clone() the vectors it cares about.
@@ -248,6 +261,10 @@ export class HipForceTracker {
       inertiaWorld: this._outInertia,
       totalWorld: this._outTotal,
       totalInHipSpace: this._outTotalHipSpace,
+      gravityInHipSpace: this._outGravityHipSpace,
+      // `ready` reflects velocity-history availability — required for inertia
+      // and total. Gravity (and gravityInHipSpace) is valid every frame, so a
+      // gravity-only consumer like the balance corrector can ignore `ready`.
       ready: this.warmupFrames >= 2 && anyAcc,
     };
     this._latest = result;
