@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import type { createScene } from './scene';
 import type { loadVRM } from './vrmLoader';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
-import { MOCAP_VALIDATION_EXCLUDED_BONES } from './mocap/mocapValidationBones';
+import {
+  MOCAP_VALIDATION_EXCLUDED_BONES,
+  CLIP_VALIDATION_EXCLUDED_BONES,
+} from './mocap/mocapValidationBones';
 import { renderLoopHooks } from './renderLoopHooks';
 
 type CleanupFn = () => void;
@@ -72,9 +75,20 @@ export function startRenderLoop(
     // on arms/legs/hands/fingers, so a self-recorded clip plays back to the
     // same on-screen pose it was captured from.
     if (!renderLoopHooks.suspendValidatorClamp) {
-      const skipMocapClampZone = mocap.state !== 'off' || hasBvhActive;
-      validator.clampAll(skipMocapClampZone ? MOCAP_VALIDATION_EXCLUDED_BONES : undefined);
+      // Clip playback uses a wider exclusion (adds hips) — see comment on
+      // CLIP_VALIDATION_EXCLUDED_BONES. Live mocap keeps the original set.
+      const excluded = hasBvhActive
+        ? CLIP_VALIDATION_EXCLUDED_BONES
+        : mocap.state !== 'off'
+          ? MOCAP_VALIDATION_EXCLUDED_BONES
+          : undefined;
+      validator.clampAll(excluded);
     }
+
+    // 3c1. Skeleton logger — streaming bone diagnostics (≤1 ms when active,
+    // zero overhead when not). Hooked here so the snapshot is the same final
+    // pose that the BVH recorder and the on-screen view see.
+    renderLoopHooks.skeletonLoggerTick?.();
 
     // 3c2. Record the on-screen pose (post-clamp, post-overlays) into the live
     // recorder. Doing this AFTER clamp ensures the BVH file matches exactly

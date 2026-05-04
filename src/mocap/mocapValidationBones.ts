@@ -40,3 +40,15 @@ export const MOCAP_VALIDATION_EXCLUDED_BONES = new Set<VRMHumanBoneName>([
     ),
   ),
 ]);
+
+// Bones excluded from ROM clamping while a BVH/FBX clip is the authoritative
+// source. Superset of the mocap exclusion list with `Hips` added: clip-driven
+// dance content (samba etc.) routinely rotates hips ~90° around an axis, which
+// our default ROM treats as overshoot. Euler→clamp→Euler near gimbal-lock
+// then alternates between equivalent decompositions of the same orientation
+// and produces visible 180° flips between adjacent frames. Mocap solver has
+// its own hip handling so the live path keeps the original list.
+export const CLIP_VALIDATION_EXCLUDED_BONES = new Set<VRMHumanBoneName>([
+  ...MOCAP_VALIDATION_EXCLUDED_BONES,
+  VRMHumanBoneName.Hips,
+]);

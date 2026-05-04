@@ -21,6 +21,8 @@ import { SkeletonVisualizer } from './skeletonVisualizer';
 import { BoneValidator } from './validation/boneValidator';
 import { HipForceTracker } from './physics/hipForce';
 import { HipBalanceCorrector } from './physics/hipBalanceCorrector';
+import { createSkeletonLogger } from './diagnostics/skeletonLogger';
+import { renderLoopHooks } from './renderLoopHooks';
 import { startRenderLoop } from './renderLoop';
 import { mountTransport } from './transport';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
@@ -153,8 +155,17 @@ async function main() {
   // the same controller.onChange hook as hipForce.
   const hipBalance = new HipBalanceCorrector(vrm);
 
+  // ── Skeleton logger (compact diagnostic, hooked post-clamp) ───────────────
+  // Inert until `start()` is called from the debug-panel toggle. Wires into
+  // renderLoopHooks.skeletonLoggerTick so the snapshot reflects the same
+  // final on-screen pose that the BVH recorder sees.
+  const skeletonLogger = createSkeletonLogger(vrm, validator);
+  renderLoopHooks.skeletonLoggerTick = () => skeletonLogger.tick();
+  registerCleanup(() => { renderLoopHooks.skeletonLoggerTick = null; });
+  (window as any).__skelLog = skeletonLogger;
+
   const playback: PlaybackSystems = { controller, pa, micro, idle: idleLoop };
-  const tooling: ToolingSystems   = { skelViz, validator, bonePanel, boneDrag, hipForce, hipBalance };
+  const tooling: ToolingSystems   = { skelViz, validator, bonePanel, boneDrag, hipForce, hipBalance, skeletonLogger };
 
   vrm.scene.visible = false;
 

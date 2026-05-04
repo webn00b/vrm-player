@@ -17,7 +17,7 @@ export function mountDebugPanel(
 ): () => void {
   const { pa, micro, idle, controller } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
-  const { skelViz, validator, boneDrag, hipForce, hipBalance } = tooling;
+  const { skelViz, validator, boneDrag, hipForce, hipBalance, skeletonLogger } = tooling;
   const getController = () => controller;
   const getMocap = () => mocap;
   const root = document.getElementById('debug-panel');
@@ -1287,6 +1287,48 @@ export function mountDebugPanel(
       valWorst.textContent = 'worst: —';
     }
   }, 200);
+
+  // ── Skeleton logger (compact per-clip diagnostic) ─────────────────────────
+
+  const skelLogBtn  = root.querySelector<HTMLButtonElement>('#skel-log-btn')!;
+  const skelLogDl   = root.querySelector<HTMLButtonElement>('#skel-log-dl')!;
+  const skelLogStat = root.querySelector<HTMLElement>('#skel-log-stat')!;
+
+  const inferSkelLogLabel = (): string => {
+    if (mocap.state !== 'off') return 'mocap';
+    const c = getController();
+    if (c && c.hasBvhActive) return 'clip';
+    return 'idle';
+  };
+
+  skelLogBtn.addEventListener('click', () => {
+    if (skeletonLogger.active) {
+      const digest = skeletonLogger.stop();
+      console.log(digest);
+      skelLogBtn.textContent = '⏺ Rec';
+      skelLogBtn.classList.add('off');
+      skelLogStat.textContent = `${skeletonLogger.frameCount}fr · digest in console`;
+    } else {
+      skeletonLogger.start(inferSkelLogLabel());
+      skelLogBtn.textContent = '⏹ Stop';
+      skelLogBtn.classList.remove('off');
+      skelLogStat.textContent = 'recording…';
+    }
+  });
+
+  skelLogDl.addEventListener('click', () => {
+    if (skeletonLogger.frameCount === 0) {
+      skelLogStat.textContent = 'no recording yet';
+      return;
+    }
+    skeletonLogger.download(`skel_log_${Date.now()}.txt`);
+  });
+
+  rememberInterval(() => {
+    if (skeletonLogger.active) {
+      skelLogStat.textContent = `${skeletonLogger.frameCount}fr · recording…`;
+    }
+  }, 250);
 
   // ── Skeleton toggles ──────────────────────────────────────────────────────
 

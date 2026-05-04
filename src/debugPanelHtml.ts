@@ -90,6 +90,14 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
           <span class="dbg-label" style="opacity:.6;font-size:11px">dump defaults to console</span>
           <button class="dbg-toggle off" id="val-dump">Dump</button>
         </div>
+        <div class="dbg-row" style="margin-top:6px">
+          <span class="dbg-label">📋 Skel log</span>
+          <div style="display:flex;gap:3px">
+            <button class="dbg-toggle off" id="skel-log-btn" title="Toggle compact per-frame skeleton diagnostics. Stop → console digest.">⏺ Rec</button>
+            <button class="dbg-toggle off" id="skel-log-dl" title="Download last digest as .txt">⬇</button>
+          </div>
+        </div>
+        <div class="dbg-stat" id="skel-log-stat"></div>
       </div>
     </details>
 

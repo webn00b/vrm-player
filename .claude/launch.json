@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "vite",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 5173
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "export PATH=/Users/fedor/.nvm/versions/node/v22.19.0/bin:$PATH && exec npm run dev"],
+      "port": 5333
     }
   ]
 }

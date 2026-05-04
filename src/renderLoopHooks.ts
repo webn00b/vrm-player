@@ -34,10 +34,17 @@ export const renderLoopHooks: {
    * and the export recorder can coexist.
    */
   poseCaptureSink: ((delta: number) => void) | null;
+  /**
+   * SkeletonLogger tick — fires immediately after `validator.clampAll(...)`
+   * (so it sees the final on-screen pose) and before any per-frame recorder.
+   * Inert when no logger is mounted; the logger gates itself by `active`.
+   */
+  skeletonLoggerTick: (() => void) | null;
 } = {
   suspendOverlays: false,
   extraMixer: null,
   suspendValidatorClamp: false,
   onAfterVrmUpdate: null,
   poseCaptureSink: null,
+  skeletonLoggerTick: null,
 };

@@ -82,8 +82,16 @@ export class BoneValidator {
 
     if (overshoot === 0) return 0;
 
+    // Preserve hemisphere: setFromEuler always returns a canonical form, which
+    // can be antipodal to the input even when the rotation is similar. That
+    // looks like a 180° flip to anything diffing adjacent frames (skel logger,
+    // slerp interpolators downstream). Keep the sign aligned with the input.
+    const origX = q.x, origY = q.y, origZ = q.z, origW = q.w;
     _euler.set(cx, cy, cz, c.order);
     q.setFromEuler(_euler);
+    if (q.x * origX + q.y * origY + q.z * origZ + q.w * origW < 0) {
+      q.set(-q.x, -q.y, -q.z, -q.w);
+    }
     return overshoot;
   }
 

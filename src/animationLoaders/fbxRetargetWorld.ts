@@ -10,8 +10,13 @@ interface Mapping {
 }
 
 interface RetargetOptions {
-  /** Sample rate for the retargeted clip (Hz). Higher = larger clip but
-   *  smoother. 30 matches FBX/Mixamo default and the BvhRecorder rate. */
+  /**
+   * Sample rate for the retargeted clip (Hz). Higher = larger clip but
+   * captures fast rotations correctly. 60 fps is the safe default — at 30
+   * fps a fast spin (>180° between samples) gets short-arced the wrong way
+   * by quaternion sign normalization, producing a visible 180° flip on
+   * dance clips with whip turns (e.g. Mixamo samba ~6-7s mark).
+   */
   sampleFps?: number;
 }
 
@@ -44,7 +49,7 @@ export function retargetFbxToVrmWorldSpace(
   name: string,
   opts: RetargetOptions = {},
 ): THREE.AnimationClip {
-  const sampleFps = opts.sampleFps ?? 30;
+  const sampleFps = opts.sampleFps ?? 60;
 
   // 1. Build name → bone mapping (FBX → VRM)
   const mappings: Mapping[] = [];
@@ -243,6 +248,14 @@ export function retargetFbxToVrmWorldSpace(
   //    that read raw `track.values` (BVH recorder, VRMA exporter) get a
   //    cleaner signal when consecutive frames share a hemisphere.
   let signFlips = 0;
+  // Worst per-frame angular delta across ALL produced tracks — diagnostic for
+  // "is the sample rate high enough to capture this clip's fastest spin?"
+  // Anything above ~90° between adjacent samples means we're close to the
+  // Nyquist limit for rotation and the produced clip risks short-arc errors
+  // (visible 180° flips). Bump sampleFps if this fires.
+  let worstDeltaRad = 0;
+  let worstDeltaBone: VRMHumanBoneName | null = null;
+  let worstDeltaTime = 0;
   const newTracks: THREE.KeyframeTrack[] = [];
   for (const m of mappings) {
     const td = trackData.get(m.vrmName)!;
@@ -257,6 +270,18 @@ export function retargetFbxToVrmWorldSpace(
         v[i + 2] = -v[i + 2];
         v[i + 3] = -v[i + 3];
         signFlips++;
+      }
+      // Track the worst per-frame angular delta on this track. Quaternion
+      // half-angle θ/2 = acos(clamp(dot, -1, 1)); rotation angle is 2·θ/2.
+      // After sign normalization above, dot is always ≥0, so angle ∈ [0, π].
+      const dot2 = Math.max(-1, Math.min(1,
+        v[i - 4] * v[i] + v[i - 3] * v[i + 1]
+      + v[i - 2] * v[i + 2] + v[i - 1] * v[i + 3]));
+      const angleRad = 2 * Math.acos(dot2);
+      if (angleRad > worstDeltaRad) {
+        worstDeltaRad = angleRad;
+        worstDeltaBone = m.vrmName;
+        worstDeltaTime = td.times[i / 4];
       }
     }
     newTracks.push(new THREE.QuaternionKeyframeTrack(
@@ -289,10 +314,15 @@ export function retargetFbxToVrmWorldSpace(
     }
   }
 
+  const worstDeltaDeg = (worstDeltaRad * 180 / Math.PI).toFixed(1);
+  const worstWarn = worstDeltaRad > Math.PI / 2
+    ? `  ⚠ worst delta exceeds 90° — bump sampleFps to fix short-arc artifacts`
+    : '';
   console.info(
     `[fbx-import] world-space retarget: mapped ${mappings.length} bones, ` +
     `sampled ${numFrames} frames at ${sampleFps} fps, produced ${newTracks.length} tracks, ` +
-    `quaternion sign-flips normalized: ${signFlips}`,
+    `quaternion sign-flips normalized: ${signFlips}, ` +
+    `worst per-frame Δ: ${worstDeltaDeg}° on ${worstDeltaBone ?? '—'} @ t=${worstDeltaTime.toFixed(2)}s${worstWarn}`,
   );
 
   return new THREE.AnimationClip(name, fbxClip.duration, newTracks);
