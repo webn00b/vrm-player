@@ -6,6 +6,7 @@ import { mountSkelModal } from './debugPanelSkelModal';
 import { mountBvhModal } from './debugPanelBvhModal';
 import { mountBvhVerifyModal } from './debugPanelBvhVerifyModal';
 import { wireDebugPanelTools } from './debugPanelTools';
+import { wireDebugPanelStats } from './debugPanelStats';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 import { exportClipAsBvh, type BvhExportHandle } from './bvhExportRecorder';
 
@@ -117,26 +118,9 @@ export function mountDebugPanel(
     });
   });
 
-  // ── Priority bars ─────────────────────────────────────────────────────────
-
-  const bar1 = document.getElementById('dbg-bar-1')!;
-  const bar2 = document.getElementById('dbg-bar-2')!;
-  const bar5 = document.getElementById('dbg-bar-5')!;
-  const statBones = document.getElementById('dbg-bones')!;
-  const MAX_BONES = 15;
-
-  rememberInterval(() => {
-    let lv1 = 0, lv2 = 0, lv5 = 0;
-    for (const [, level] of pa.levelSnapshot) {
-      if (level >= 5) lv5++; else if (level === 2) lv2++; else if (level === 1) lv1++;
-    }
-    const pct = (n: number) => `${Math.min(100, (n / MAX_BONES) * 100)}%`;
-    bar1.style.width = pct(lv1); bar2.style.width = pct(lv2); bar5.style.width = pct(lv5);
-    bar1.style.opacity = lv1 > 0 ? '1' : '0.2';
-    bar2.style.opacity = lv2 > 0 ? '1' : '0.2';
-    bar5.style.opacity = lv5 > 0 ? '1' : '0.2';
-    statBones.textContent = `Active bones: ${pa.activeBoneCount}`;
-  }, 100);
+  // ── Per-frame readouts (priority bars + hip force). Pure poll-and-update,
+  //    no event handlers — see debugPanelStats.ts.
+  wireDebugPanelStats({ pa, hipForce, hipBalance, rememberInterval });
 
   // ── Mocap controls ────────────────────────────────────────────────────────
 
@@ -606,86 +590,6 @@ export function mountDebugPanel(
       fps = (fpsFrames * 1000) / dt;
       fpsFrames = 0;
       fpsWindowStart = now;
-    }
-  }, 100);
-
-  // ── Hip force readout ─────────────────────────────────────────────────────
-  // Per-frame the tracker updates `latest`; we sample it at 10 Hz into the
-  // panel — a faster cadence is unreadable to humans and just churns DOM.
-  // Lazy: only update when the fold is open.
-  const foldHipForce = document.getElementById('fold-hipforce') as HTMLDetailsElement | null;
-  const hipForceEls = {
-    mass:  document.getElementById('dbg-hipforce-mass'),
-    total: document.getElementById('dbg-hipforce-total'),
-    grav:  document.getElementById('dbg-hipforce-grav'),
-    inert: document.getElementById('dbg-hipforce-inert'),
-    tilt:  document.getElementById('dbg-hipforce-tilt'),
-    gtilt: document.getElementById('dbg-hipforce-gtilt'),
-    angles: document.getElementById('dbg-hipbal-angles'),
-  };
-  // Balance-corrector toggle button. State mirrors hipBalance.enabled. Reset
-  // is automatic on disable (handled inside the corrector); on re-enable we
-  // start fresh with no carry-over angles.
-  const hipBalBtn = document.getElementById('hipbal-btn') as HTMLButtonElement | null;
-  const refreshHipBalBtn = (): void => {
-    if (!hipBalBtn) return;
-    hipBalBtn.textContent = hipBalance.enabled ? 'ON' : 'OFF';
-    hipBalBtn.classList.toggle('off', !hipBalance.enabled);
-  };
-  refreshHipBalBtn();
-  hipBalBtn?.addEventListener('click', () => {
-    hipBalance.enabled = !hipBalance.enabled;
-    refreshHipBalBtn();
-  });
-  rememberInterval(() => {
-    if (!foldHipForce?.open) return;
-    const r = hipForce.latest;
-    if (!r) {
-      if (hipForceEls.total) hipForceEls.total.textContent = '|F_total|: —';
-      return;
-    }
-    if (hipForceEls.mass) hipForceEls.mass.textContent = `tracked mass: ${r.totalMass.toFixed(1)} kg`;
-    const fmtN = (v: number): string => `${v.toFixed(1)} N`;
-    if (!r.ready) {
-      // Gravity is valid even before warmup; inertia/total need velocity history.
-      if (hipForceEls.total) hipForceEls.total.textContent = '|F_total|: warming up…';
-      if (hipForceEls.grav)  hipForceEls.grav.textContent  = `|F_grav|:  ${fmtN(r.gravityWorld.length())}`;
-      if (hipForceEls.inert) hipForceEls.inert.textContent = '|F_inert|: —';
-      if (hipForceEls.tilt)  hipForceEls.tilt.textContent  = 'tilt vs Y_hip: —';
-      return;
-    }
-    if (hipForceEls.total) hipForceEls.total.textContent = `|F_total|: ${fmtN(r.totalWorld.length())}`;
-    if (hipForceEls.grav)  hipForceEls.grav.textContent  = `|F_grav|:  ${fmtN(r.gravityWorld.length())}`;
-    if (hipForceEls.inert) hipForceEls.inert.textContent = `|F_inert|: ${fmtN(r.inertiaWorld.length())}`;
-    // tilt = angle between F_total and +Y_hip; 0° means force is perfectly
-    // aligned with the spine (gravity straight down through a vertical body).
-    const local = r.totalInHipSpace;
-    const len = local.length();
-    if (len < 1e-6) {
-      if (hipForceEls.tilt) hipForceEls.tilt.textContent = 'tilt vs Y_hip: —';
-    } else {
-      const tiltDeg = Math.acos(Math.max(-1, Math.min(1, local.y / len))) * 180 / Math.PI;
-      if (hipForceEls.tilt) hipForceEls.tilt.textContent = `tilt vs Y_hip: ${tiltDeg.toFixed(1)}°`;
-    }
-    // Gravity-only tilt = signal the corrector actually uses. Cleaner number,
-    // unaffected by motion-induced inertia. 0° = hip upright.
-    const gLocal = r.gravityInHipSpace;
-    const gLen = gLocal.length();
-    if (gLen < 1e-6) {
-      if (hipForceEls.gtilt) hipForceEls.gtilt.textContent = 'gravity tilt: —';
-    } else {
-      const gTiltDeg = Math.acos(Math.max(-1, Math.min(1, -gLocal.y / gLen))) * 180 / Math.PI;
-      if (hipForceEls.gtilt) hipForceEls.gtilt.textContent = `gravity tilt: ${gTiltDeg.toFixed(1)}°`;
-    }
-    // Balance-corrector applied angles (smoothed, post-clamp). When OFF the
-    // values stay at their last applied (or 0 after reset) snapshot.
-    if (hipForceEls.angles) {
-      if (hipBalance.enabled) {
-        const a = hipBalance.latestAnglesDeg;
-        hipForceEls.angles.textContent = `corr. angles: X=${a.x.toFixed(1)}°  Z=${a.z.toFixed(1)}°`;
-      } else {
-        hipForceEls.angles.textContent = 'corr. angles: (off)';
-      }
     }
   }, 100);
 
