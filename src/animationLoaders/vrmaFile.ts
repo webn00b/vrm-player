@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { VRM } from '@pixiv/three-vrm';
 import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
 import { applyHumanoidRestCorrectionsToClip } from '../humanoidRestPose';
+import { normalizeQuaternionSignsAcrossClip } from './quaternionContinuity';
 
 /**
  * Load a `.vrma` file (glTF binary with the VRM animation extension) and
@@ -25,6 +26,17 @@ export async function loadVrmaFromFile(file: File, vrm: VRM, name: string): Prom
     // Same A-pose→T-pose correction the BVH→VRMA path applies, so a re-imported
     // self-recorded VRMA round-trips back to the same on-screen pose.
     applyHumanoidRestCorrectionsToClip(clip, vrm);
+    // Sign-continuity pass — see quaternionContinuity.ts. VRMAs exported from
+    // gimbal-locked sources (Mixamo dance via FBX→VRMA, our own BVH-recorder→
+    // VRMA round-trip) inherit the same hemisphere-cross discontinuity that
+    // BVH does, and without this pass play back as recurring 180° flips.
+    const flipReport = normalizeQuaternionSignsAcrossClip(clip);
+    if (flipReport.totalFlips > 0) {
+      console.info(
+        `[vrma-import] '${name}' sign-continuity: flipped ${flipReport.totalFlips} keyframes ` +
+        `across ${flipReport.tracksAffected} track(s); worst: ${flipReport.worstTrack} (${flipReport.worstFlips})`,
+      );
+    }
     return clip;
   } finally {
     URL.revokeObjectURL(url);

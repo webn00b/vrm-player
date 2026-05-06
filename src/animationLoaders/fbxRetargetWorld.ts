@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { VRMHumanBoneName, type VRM } from '@pixiv/three-vrm';
 import { mapFbxBoneToVrm } from './fbxBoneMap';
+import { normalizeQuaternionSignsInPlace } from './quaternionContinuity';
 
 interface Mapping {
   fbxName: string;
@@ -242,16 +243,11 @@ export function retargetFbxToVrmWorldSpace(
   action.stop();
   mixer.uncacheClip(fbxClip);
 
-  // 6. Build retargeted tracks. Defensive sign-continuity pass: THREE's
-  //    QuaternionLinearInterpolant flips signs pairwise during slerp, so
-  //    interpolation already picks the short arc — but downstream consumers
-  //    that read raw `track.values` (BVH recorder, VRMA exporter) get a
-  //    cleaner signal when consecutive frames share a hemisphere.
+  // 6. Build retargeted tracks. Per-bone sign-continuity pass first, then
+  //    measure worst per-frame delta on the (now hemisphere-consistent) data
+  //    for the diagnostic summary. > 90° in the summary means we're near the
+  //    Nyquist limit for rotation at this sampleFps and risk short-arc errors.
   let signFlips = 0;
-  // Worst per-frame angular delta across ALL produced tracks. > 90° means
-  // we're near the Nyquist limit for rotation at this sample rate and the
-  // produced clip risks short-arc errors (visible 180° flips). Bump
-  // sampleFps if the warning in the summary log fires.
   let worstDeltaRad = 0;
   let worstDeltaBone: VRMHumanBoneName | null = null;
   let worstDeltaTime = 0;
@@ -260,20 +256,14 @@ export function retargetFbxToVrmWorldSpace(
     const td = trackData.get(m.vrmName)!;
     if (td.times.length === 0) continue;
     const v = td.values;
+    signFlips += normalizeQuaternionSignsInPlace(v);
     for (let i = 4; i < v.length; i += 4) {
-      const dot = v[i - 4] * v[i] + v[i - 3] * v[i + 1]
-                + v[i - 2] * v[i + 2] + v[i - 1] * v[i + 3];
-      if (dot < 0) {
-        v[i]     = -v[i];
-        v[i + 1] = -v[i + 1];
-        v[i + 2] = -v[i + 2];
-        v[i + 3] = -v[i + 3];
-        signFlips++;
-      }
-      // Quaternion half-angle θ/2 = acos(|dot|); rotation angle = 2·θ/2.
-      const angleRad = 2 * Math.acos(Math.max(-1, Math.min(1,
+      // After sign-norm dot ≥ 0, so |dot| = dot. Quaternion half-angle
+      // θ/2 = acos(dot); rotation angle = 2·θ/2.
+      const dot = Math.max(-1, Math.min(1,
         v[i - 4] * v[i] + v[i - 3] * v[i + 1]
-      + v[i - 2] * v[i + 2] + v[i - 1] * v[i + 3])));
+      + v[i - 2] * v[i + 2] + v[i - 1] * v[i + 3]));
+      const angleRad = 2 * Math.acos(dot);
       if (angleRad > worstDeltaRad) {
         worstDeltaRad = angleRad;
         worstDeltaBone = m.vrmName;
