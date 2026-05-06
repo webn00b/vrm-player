@@ -248,11 +248,10 @@ export function retargetFbxToVrmWorldSpace(
   //    that read raw `track.values` (BVH recorder, VRMA exporter) get a
   //    cleaner signal when consecutive frames share a hemisphere.
   let signFlips = 0;
-  // Worst per-frame angular delta across ALL produced tracks — diagnostic for
-  // "is the sample rate high enough to capture this clip's fastest spin?"
-  // Anything above ~90° between adjacent samples means we're close to the
-  // Nyquist limit for rotation and the produced clip risks short-arc errors
-  // (visible 180° flips). Bump sampleFps if this fires.
+  // Worst per-frame angular delta across ALL produced tracks. > 90° means
+  // we're near the Nyquist limit for rotation at this sample rate and the
+  // produced clip risks short-arc errors (visible 180° flips). Bump
+  // sampleFps if the warning in the summary log fires.
   let worstDeltaRad = 0;
   let worstDeltaBone: VRMHumanBoneName | null = null;
   let worstDeltaTime = 0;
@@ -271,13 +270,10 @@ export function retargetFbxToVrmWorldSpace(
         v[i + 3] = -v[i + 3];
         signFlips++;
       }
-      // Track the worst per-frame angular delta on this track. Quaternion
-      // half-angle θ/2 = acos(clamp(dot, -1, 1)); rotation angle is 2·θ/2.
-      // After sign normalization above, dot is always ≥0, so angle ∈ [0, π].
-      const dot2 = Math.max(-1, Math.min(1,
+      // Quaternion half-angle θ/2 = acos(|dot|); rotation angle = 2·θ/2.
+      const angleRad = 2 * Math.acos(Math.max(-1, Math.min(1,
         v[i - 4] * v[i] + v[i - 3] * v[i + 1]
-      + v[i - 2] * v[i + 2] + v[i - 1] * v[i + 3]));
-      const angleRad = 2 * Math.acos(dot2);
+      + v[i - 2] * v[i + 2] + v[i - 1] * v[i + 3])));
       if (angleRad > worstDeltaRad) {
         worstDeltaRad = angleRad;
         worstDeltaBone = m.vrmName;
