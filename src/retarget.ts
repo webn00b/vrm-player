@@ -58,6 +58,22 @@ export async function retargetBvhToVrm(
         console.info(`[retarget] applied rest-pose correction to ${correctedTracks} quaternion track(s) in "${name}"`);
       }
     }
+    // Step 2b: defensive quaternion sign continuity. THREE.js BVHLoader does
+    // Euler→quaternion per-frame independently, so at gimbal lock (e.g.
+    // hip Y ≈ ±90° common in Mixamo dance BVHs) two physically-identical
+    // orientations can land in opposite hemispheres of the 4-sphere. Three.js
+    // QuaternionLinearInterpolant (slerpFlat) handles dot<0 between adjacent
+    // pairs internally, but ANY post-processing that reads raw `track.values`
+    // (rest correction, validator, BVH recorder, VRMA exporter) will see the
+    // sign-discontinuity as a real 180° flip. Force consecutive-frame
+    // hemisphere consistency once here, after rest correction.
+    const signFlipsPerTrack = normalizeQuaternionSignsAcrossClip(clip);
+    if (signFlipsPerTrack.totalFlips > 0) {
+      console.info(
+        `[retarget] '${name}' quaternion sign-continuity pass: flipped ${signFlipsPerTrack.totalFlips} keyframes ` +
+        `across ${signFlipsPerTrack.tracksAffected} track(s); worst track: ${signFlipsPerTrack.worstTrack} (${signFlipsPerTrack.worstFlips} flips)`,
+      );
+    }
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -75,6 +91,60 @@ export async function retargetBvhToVrm(
   }
 
   return clip;
+}
+
+interface SignFlipReport {
+  totalFlips: number;
+  tracksAffected: number;
+  worstTrack: string;
+  worstFlips: number;
+}
+
+/**
+ * Walk every QuaternionKeyframeTrack on the clip and force consecutive-frame
+ * sign continuity (negate `q_curr` if `dot(q_prev, q_curr) < 0`). Mutates
+ * track values in place. Returns aggregate stats for diagnostics.
+ *
+ * Why we need this: THREE.js BVHLoader does Euler→quaternion per-frame
+ * independently, so at gimbal lock (e.g. hip Y ≈ ±90° common in Mixamo dance
+ * BVHs) two physically-identical orientations can land in opposite hemispheres
+ * of the 4-sphere. Three.js's QuaternionLinearInterpolant handles dot<0
+ * pairwise during slerp, but ANY post-processing that reads raw `track.values`
+ * (rest correction, validator, downstream re-export) sees the
+ * sign-discontinuity as a real 180° flip. We collapse it here, once, after
+ * all other quaternion-mutating steps so subsequent consumers see continuous
+ * signal.
+ */
+function normalizeQuaternionSignsAcrossClip(clip: THREE.AnimationClip): SignFlipReport {
+  let totalFlips = 0;
+  let tracksAffected = 0;
+  let worstTrack = '';
+  let worstFlips = 0;
+  for (const track of clip.tracks) {
+    if (!(track instanceof THREE.QuaternionKeyframeTrack)) continue;
+    const v = track.values;
+    let trackFlips = 0;
+    for (let i = 4; i < v.length; i += 4) {
+      const dot = v[i - 4] * v[i] + v[i - 3] * v[i + 1]
+                + v[i - 2] * v[i + 2] + v[i - 1] * v[i + 3];
+      if (dot < 0) {
+        v[i]     = -v[i];
+        v[i + 1] = -v[i + 1];
+        v[i + 2] = -v[i + 2];
+        v[i + 3] = -v[i + 3];
+        trackFlips++;
+      }
+    }
+    if (trackFlips > 0) {
+      tracksAffected++;
+      totalFlips += trackFlips;
+      if (trackFlips > worstFlips) {
+        worstFlips = trackFlips;
+        worstTrack = track.name;
+      }
+    }
+  }
+  return { totalFlips, tracksAffected, worstTrack, worstFlips };
 }
 
 /**
