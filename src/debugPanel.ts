@@ -5,6 +5,7 @@ import { buildMainPanelHtml, buildTuningPanelHtml } from './debugPanelHtml';
 import { mountSkelModal } from './debugPanelSkelModal';
 import { mountBvhModal } from './debugPanelBvhModal';
 import { mountBvhVerifyModal } from './debugPanelBvhVerifyModal';
+import { wireDebugPanelTools } from './debugPanelTools';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 import { exportClipAsBvh, type BvhExportHandle } from './bvhExportRecorder';
 
@@ -1259,165 +1260,12 @@ export function mountDebugPanel(
     };
   }
 
-  // ── Validation (ROM) ──────────────────────────────────────────────────────
-
-  const valToggle = root.querySelector<HTMLButtonElement>('#val-toggle')!;
-  const valStat   = root.querySelector<HTMLElement>('#val-stat')!;
-  const valWorst  = root.querySelector<HTMLElement>('#val-worst')!;
-  const valDump   = root.querySelector<HTMLButtonElement>('#val-dump')!;
-
-  valToggle.addEventListener('click', () => {
-    const on = !validator.enabled;
-    validator.setEnabled(on);
-    valToggle.textContent = on ? 'ON' : 'OFF';
-    valToggle.classList.toggle('off', !on);
+  // ── Bottom-of-panel tooling rows (validation, skel-logger, skel toggles,
+  //    bone-drag, debug recorder). See debugPanelTools.ts for details.
+  wireDebugPanelTools({
+    root, validator, skelViz, boneDrag, skeletonLogger, dbgRecorder, mocap,
+    getController, setModelVisible, rememberInterval,
   });
-
-  valDump.addEventListener('click', () => {
-    console.log('[validator] default bone constraints:', validator.getConstraints());
-  });
-
-  rememberInterval(() => {
-    const s = validator.getStats();
-    valStat.textContent = `clamped/frame: ${s.clampedThisFrame}`;
-    if (s.worstBone) {
-      const deg = (s.worstDelta * 180 / Math.PI).toFixed(1);
-      valWorst.textContent = `worst: ${s.worstBone} +${deg}°`;
-    } else {
-      valWorst.textContent = 'worst: —';
-    }
-  }, 200);
-
-  // ── Skeleton logger (compact per-clip diagnostic) ─────────────────────────
-
-  const skelLogBtn  = root.querySelector<HTMLButtonElement>('#skel-log-btn')!;
-  const skelLogDl   = root.querySelector<HTMLButtonElement>('#skel-log-dl')!;
-  const skelLogStat = root.querySelector<HTMLElement>('#skel-log-stat')!;
-
-  const inferSkelLogLabel = (): string => {
-    if (mocap.state !== 'off') return 'mocap';
-    const c = getController();
-    if (c && c.hasBvhActive) return 'clip';
-    return 'idle';
-  };
-
-  skelLogBtn.addEventListener('click', () => {
-    if (skeletonLogger.active) {
-      const digest = skeletonLogger.stop();
-      console.log(digest);
-      skelLogBtn.textContent = '⏺ Rec';
-      skelLogBtn.classList.add('off');
-      skelLogStat.textContent = `${skeletonLogger.frameCount}fr · digest in console`;
-    } else {
-      skeletonLogger.start(inferSkelLogLabel());
-      skelLogBtn.textContent = '⏹ Stop';
-      skelLogBtn.classList.remove('off');
-      skelLogStat.textContent = 'recording…';
-    }
-  });
-
-  skelLogDl.addEventListener('click', () => {
-    if (skeletonLogger.frameCount === 0) {
-      skelLogStat.textContent = 'no recording yet';
-      return;
-    }
-    skeletonLogger.download(`skel_log_${Date.now()}.txt`);
-  });
-
-  rememberInterval(() => {
-    if (skeletonLogger.active) {
-      skelLogStat.textContent = `${skeletonLogger.frameCount}fr · recording…`;
-    }
-  }, 250);
-
-  // ── Skeleton toggles ──────────────────────────────────────────────────────
-
-  const modelToggle = root.querySelector<HTMLButtonElement>('#model-toggle')!;
-  const skelToggle  = root.querySelector<HTMLButtonElement>('#skel-toggle')!;
-  const skelBody    = root.querySelector<HTMLButtonElement>('#skel-body')!;
-  const skelFingers = root.querySelector<HTMLButtonElement>('#skel-fingers')!;
-  const skelOptions = root.querySelector<HTMLElement>('#skel-options')!;
-
-  // Default debug view: skeleton on, avatar mesh opt-in via the model toggle.
-  setModelVisible(false);
-  skelViz.setVisible(true);
-
-  modelToggle.addEventListener('click', () => {
-    const on = modelToggle.textContent === 'OFF';
-    setModelVisible(on);
-    modelToggle.textContent = on ? 'ON' : 'OFF';
-    modelToggle.classList.toggle('off', !on);
-  });
-
-  skelToggle.addEventListener('click', () => {
-    const on = !skelViz.visible;
-    skelViz.setVisible(on);
-    skelToggle.textContent = on ? 'ON' : 'OFF';
-    skelToggle.classList.toggle('off', !on);
-    skelOptions.style.display = on ? 'flex' : 'none';
-  });
-
-  skelBody.addEventListener('click', () => {
-    const on = !skelViz.showBody;
-    skelViz.setShowBody(on);
-    skelBody.textContent = on ? 'ON' : 'OFF';
-    skelBody.classList.toggle('off', !on);
-  });
-
-  skelFingers.addEventListener('click', () => {
-    const on = !skelViz.showFingers;
-    skelViz.setShowFingers(on);
-    skelFingers.textContent = on ? 'ON' : 'OFF';
-    skelFingers.classList.toggle('off', !on);
-  });
-
-  // ── Bone drag (in-scene rotation gizmo) ──────────────────────────────────
-  const dragToggle = root.querySelector<HTMLButtonElement>('#bone-drag-toggle')!;
-  const dragReset  = root.querySelector<HTMLButtonElement>('#bone-drag-reset')!;
-  dragToggle.addEventListener('click', () => {
-    const on = !boneDrag.enabled;
-    boneDrag.setEnabled(on);
-    dragToggle.textContent = on ? 'ON' : 'OFF';
-    dragToggle.classList.toggle('off', !on);
-    // Auto-show skeleton when enabling — there's nothing to grab otherwise.
-    if (on && !skelViz.visible) {
-      skelViz.setVisible(true);
-      skelToggle.textContent = 'ON';
-      skelToggle.classList.remove('off');
-      skelOptions.style.display = 'flex';
-    }
-  });
-  dragReset.addEventListener('click', () => {
-    boneDrag.resetAll();
-  });
-
-  // ── Debug recorder ────────────────────────────────────────────────────────
-
-  const dbgRecBtn    = root.querySelector<HTMLButtonElement>('#dbgrec-btn')!;
-  const dbgRecFrames = root.querySelector<HTMLElement>('#dbgrec-frames')!;
-
-  dbgRecBtn.addEventListener('click', () => {
-    if (dbgRecorder.active) {
-      dbgRecorder.stop();
-      dbgRecBtn.textContent = '⏺ Rec';
-      dbgRecBtn.classList.add('off');
-    } else {
-      dbgRecorder.start();
-      dbgRecBtn.textContent = '⏹ Stop';
-      dbgRecBtn.classList.remove('off');
-    }
-  });
-
-  // Update frame counter while recording
-  rememberInterval(() => {
-    if (dbgRecorder.active) {
-      dbgRecFrames.textContent = `${dbgRecorder.frameCount}fr`;
-    } else {
-      dbgRecFrames.textContent = dbgRecorder.frameCount > 0
-        ? `${dbgRecorder.frameCount}fr saved`
-        : '';
-    }
-  }, 200);
 
   // ── Skeleton info modal ───────────────────────────────────────────────────
 
