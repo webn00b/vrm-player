@@ -8,6 +8,7 @@ import { wireDebugPanelTools } from './debugPanelTools';
 import { wireDebugPanelStats } from './debugPanelStats';
 import { wireDebugPanelCalibration } from './debugPanelCalibration';
 import { wireMocapControls } from './debugPanelMocapControls';
+import { wireDebugPanelMocapParams } from './debugPanelMocapParams';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 
 export function mountDebugPanel(
@@ -131,87 +132,9 @@ export function mountDebugPanel(
     rememberInterval, rememberTimeout, onAnimFile,
   });
 
-  // ── Pose model quality ───────────────────────────────────────────────────────
-
-  root.querySelectorAll<HTMLButtonElement>('.dbg-toggle[data-quality]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const mocap = getMocap();
-      if (!mocap || mocap.state !== 'off') return; // must be idle to switch
-      const q = btn.dataset.quality as 'lite' | 'full' | 'heavy';
-      btn.textContent = '…';
-      btn.disabled = true;
-      try {
-        await mocap.setPoseQuality(q);
-      } finally {
-        btn.disabled = false;
-      }
-      // visual state
-      root.querySelectorAll<HTMLButtonElement>('.dbg-toggle[data-quality]').forEach((b) => {
-        const active = b.dataset.quality === q;
-        b.textContent = b.dataset.quality!;
-        b.classList.toggle('off', !active);
-      });
-    });
-  });
-
-  // ── Mirror toggle ────────────────────────────────────────────────────────────
-
-  const mirrorBtn = root.querySelector<HTMLButtonElement>('#mocap-mirror-btn')!;
-  mirrorBtn.addEventListener('click', () => {
-    const mocap = getMocap();
-    if (!mocap) return;
-    const next = !mocap.mirrorX;
-    mocap.setMirrorX(next);
-    mirrorBtn.textContent = next ? 'ON' : 'OFF';
-    mirrorBtn.classList.toggle('off', !next);
-  });
-
-  // ── Face tracking toggle ─────────────────────────────────────────────────────
-
-  const faceBtn = root.querySelector<HTMLButtonElement>('#mocap-face-btn')!;
-  faceBtn.addEventListener('click', () => {
-    const mocap = getMocap();
-    if (!mocap) return;
-    const next = !mocap.faceTrackingEnabled;
-    mocap.setFaceTrackingEnabled(next);
-    faceBtn.textContent = next ? 'ON' : 'OFF';
-    faceBtn.classList.toggle('off', !next);
-  });
-
-  // ── Hip position toggle ──────────────────────────────────────────────────────
-
-  const hipBtn = root.querySelector<HTMLButtonElement>('#mocap-hip-btn')!;
-  hipBtn.addEventListener('click', () => {
-    const mocap = getMocap();
-    if (!mocap) return;
-    const next = !mocap.hipPositionEnabled;
-    mocap.setHipPositionEnabled(next);
-    hipBtn.textContent = next ? 'ON' : 'OFF';
-    hipBtn.classList.toggle('off', !next);
-  });
-
-  // ── Hand priority checkbox ──────────────────────────────────────────────────
-
-  const handPrioBox = root.querySelector<HTMLInputElement>('#mocap-handprio-box')!;
-  handPrioBox.checked = getMocap()?.handTrackingPriorityEnabled ?? true;
-  handPrioBox.addEventListener('change', () => {
-    const mocap = getMocap();
-    if (!mocap) {
-      handPrioBox.checked = true;
-      return;
-    }
-    mocap.setHandTrackingPriorityEnabled(handPrioBox.checked);
-  });
-
-  // ── Shoulder spread slider (in tuning panel) ───────────────────────────────
-
-  const spreadSlider = document.querySelector<HTMLInputElement>('#mocap-spread-slider')!;
-  const spreadVal    = document.querySelector<HTMLElement>('#mocap-spread-val')!;
-  spreadSlider.addEventListener('input', () => {
-    const v = parseFloat(spreadSlider.value);
-    spreadVal.textContent = `${v}°`;
-    getMocap()?.setShoulderSpread(v);
-  });
+  // ── Mocap parameter toggles + sliders (quality, mirror, face, hip,
+  //    handprio, spread, filter, depth). See debugPanelMocapParams.ts.
+  wireDebugPanelMocapParams({ root, getMocap });
 
   // ── Debug skeleton + visibility stats ───────────────────────────────────────
 
@@ -350,32 +273,6 @@ export function mountDebugPanel(
       row('▶ State',          m.state),
     ].join('');
   }, 200);
-
-  // ── OneEuroFilter toggle ─────────────────────────────────────────────────────
-
-  const filterBtn = root.querySelector<HTMLButtonElement>('#mocap-filter-btn')!;
-  filterBtn.addEventListener('click', () => {
-    const mocap = getMocap();
-    if (!mocap) return;
-    const next = !mocap.filterEnabled;
-    mocap.setFilterEnabled(next);
-    filterBtn.textContent = next ? 'ON' : 'OFF';
-    filterBtn.classList.toggle('off', !next);
-  });
-
-  // ── Depth scale (2D / mid / 3D) ──────────────────────────────────────────────
-
-  root.querySelectorAll<HTMLButtonElement>('.dbg-toggle[data-depth]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const mocap = getMocap();
-      if (!mocap) return;
-      const v = parseFloat(btn.dataset.depth!);
-      mocap.setDepthScale(v);
-      root.querySelectorAll<HTMLButtonElement>('.dbg-toggle[data-depth]').forEach((b) => {
-        b.classList.toggle('off', parseFloat(b.dataset.depth!) !== v);
-      });
-    });
-  });
 
   // ── Tuning-panel wiring (all elements live in #mocap-tuning-panel) ───────
   // Calibration column extracted to debugPanelCalibration. Hips=shoulders +
