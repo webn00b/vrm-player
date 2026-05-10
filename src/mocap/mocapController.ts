@@ -354,6 +354,9 @@ export class MocapController {
   get hipsBaseWorld() { return this.applier.hipsBaseWorld; }
   get debugTargets() { return this.applier.debugTargets; }
 
+  /** Per-chain visibility-loss state (D1-lite). Passthrough from the applier. */
+  getTrackingHealth() { return this.applier.getTrackingHealth(); }
+
   /**
    * IK target reach as % of avatar limb length, per side.
    *   < 90%  — comfortable reach, IK bends freely

@@ -135,6 +135,30 @@ export function wireDebugPanelMocapStats(deps: DebugPanelMocapStatsDeps): void {
     const propR = st.rightArmScale > 0 ? (1 / st.rightArmScale) * 100 : 0;
     const propBody = st.bodyScale  > 0 ? (1 / st.bodyScale)  * 100 : 0;
 
+    // ── Tracking health (D1-lite): per-chain visibility-loss state ──────────
+    // Shows the current phase of the per-bone visibility state machine.
+    //   live       — actively tracked
+    //   recovering — visibility just returned, blending back to live
+    //   fresh      — lost <200 ms ago, holding last-good pose
+    //   decaying   — lost 200-800 ms ago, fading toward rest
+    //   rested     — lost >800 ms ago, at rest pose
+    // Mirrors the fade behaviour the user sees on the avatar.
+    const trackHealth = m.getTrackingHealth();
+    const phaseColor = (phase: string): string => {
+      if (phase === 'live')       return '#4ade80';
+      if (phase === 'recovering') return '#86efac';
+      if (phase === 'fresh')      return '#fbbf24';
+      if (phase === 'decaying')   return '#fb923c';
+      return '#f87171';  // rested
+    };
+    const formatPhase = (chain: { phase: string; msSinceLoss: number }): string => {
+      const c = phaseColor(chain.phase);
+      const suffix = chain.phase === 'live' || chain.phase === 'recovering'
+        ? ''
+        : ` (${(chain.msSinceLoss / 1000).toFixed(1)}s)`;
+      return `<span style="color:${c}">${chain.phase}${suffix}</span>`;
+    };
+
     scalarStatsEl.innerHTML = [
       row('🧭 Calibrated',    st.calibrated ? '<span style="color:#4ade80">yes</span>' : '<span style="color:#f87171">no</span>'),
       row('📏 Body scale',    `${body}%`),
@@ -149,6 +173,13 @@ export function wireDebugPanelMocapStats(deps: DebugPanelMocapStatsDeps): void {
       fitRow('✋ R arm',       dt.hasArm, reach.armR),
       fitRow('🦶 L leg',       dt.hasLeg, reach.legL),
       fitRow('🦶 R leg',       dt.hasLeg, reach.legR),
+      '<div style="margin-top:6px;opacity:.5;font-size:9px">— tracking health —</div>',
+      row('🦾 L arm',          formatPhase(trackHealth.leftArm)),
+      row('🦾 R arm',          formatPhase(trackHealth.rightArm)),
+      row('🦵 L leg',          formatPhase(trackHealth.leftLeg)),
+      row('🦵 R leg',          formatPhase(trackHealth.rightLeg)),
+      row('🧍 Hips',           formatPhase(trackHealth.hips)),
+      row('〰 Spine',           formatPhase(trackHealth.spine)),
       '<div style="margin-top:6px;opacity:.5;font-size:9px">— input —</div>',
       row('✋ Hands',         handsDetected),
       row('😶 Face pts',      hasFace),

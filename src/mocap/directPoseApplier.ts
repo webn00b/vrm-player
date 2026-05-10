@@ -22,7 +22,7 @@ import {
   solveSpineTarget,
 } from './torsoTargetSolver';
 import { applyTwoBoneChain } from './twoBoneChainApplication';
-import { BoneTracker } from './boneTrackState';
+import { BoneTracker, trackPhase, msSinceLoss, type TrackPhase } from './boneTrackState';
 import {
   capArmScaleByCurrentSegments,
 } from './solverHeuristics';
@@ -38,6 +38,23 @@ import {
   resetMocapDebugTargets,
   type MocapDebugTargets,
 } from './mocapDiagnostics';
+
+// ── Public types ──────────────────────────────────────────────────────────────
+
+export interface BoneChainHealth {
+  phase: TrackPhase;
+  /** Milliseconds since the bone's last visible frame. 0 when currently live. */
+  msSinceLoss: number;
+}
+
+export interface TrackingHealth {
+  leftArm:  BoneChainHealth;
+  rightArm: BoneChainHealth;
+  leftLeg:  BoneChainHealth;
+  rightLeg: BoneChainHealth;
+  hips:     BoneChainHealth;
+  spine:    BoneChainHealth;
+}
 
 // ── DirectPoseApplier ─────────────────────────────────────────────────────────
 
@@ -394,6 +411,30 @@ export class DirectPoseApplier {
         handLerp: this._handLerp,
       }, hand.landmarks, hand.side, false, prioritized);
     }
+  }
+
+  /** Per-chain tracking-health readout for the D1-lite debug panel.
+   *  Each entry reports the current state-machine phase for a representative
+   *  bone of the chain (upper arm / upper leg / hips / spine) plus how many
+   *  milliseconds since the bone's last visible frame. Returns 0 when live. */
+  getTrackingHealth(): TrackingHealth {
+    const now = this._now > 0 ? this._now :
+      (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const get = (name: string): BoneChainHealth => {
+      const s = this._boneTracker.state(name);
+      return {
+        phase:       trackPhase(s, now),
+        msSinceLoss: Math.round(msSinceLoss(s, now)),
+      };
+    };
+    return {
+      leftArm:  get('leftUpperArm'),
+      rightArm: get('rightUpperArm'),
+      leftLeg:  get('leftUpperLeg'),
+      rightLeg: get('rightUpperLeg'),
+      hips:     get('hips'),
+      spine:    get('spine'),
+    };
   }
 
   /** Local normalized-bone quaternion as [x,y,z,w] — for BVH recording. */
