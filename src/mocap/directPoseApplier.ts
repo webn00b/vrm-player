@@ -23,6 +23,7 @@ import {
 } from './torsoTargetSolver';
 import { applyTwoBoneChain } from './twoBoneChainApplication';
 import { BoneTracker, trackPhase, msSinceLoss, type TrackPhase } from './boneTrackState';
+import { recoverWristZ } from './anatomicalDepth';
 import {
   capArmScaleByCurrentSegments,
 } from './solverHeuristics';
@@ -835,12 +836,38 @@ export class DirectPoseApplier {
     otherUpperNode.updateWorldMatrix(false, false);
     const midAvatarShoulder = this._v6.copy(shoulderWorld).add(otherUpperNode.getWorldPosition(this._v4)).multiplyScalar(0.5);
 
+    // B1: anatomical Z recovery for the wrist when foreshortening is detected.
+    // MediaPipe's Z component on `pw` is the noisiest signal of the chain;
+    // when the arm points along the camera axis the 2D shoulder→wrist length
+    // is short relative to the performer's known arm length, and the model's
+    // reported Z is often far from truth. We replace it with a sphere-
+    // intersection solution constrained by performer arm length.
+    //
+    // Mirror mapping: side='left' uses performer's RIGHT arm length
+    //                 (see MocapCalibration.armScale() for the same swap).
+    const perfMeasurements = calib.performerMeasurements();
+    const perfArmLen = side === 'left'
+      ? perfMeasurements.rightArmMax
+      : perfMeasurements.leftArmMax;
+    let effectivePw = pw;
+    if (perfArmLen > 0.05) {
+      const recovered = recoverWristZ({
+        shoulder: { x: ps.x, y: ps.y, z: ps.z },
+        wrist:    { x: pw.x, y: pw.y, z: pw.z },
+        armLength: perfArmLen,
+      });
+      if (recovered.recovered) {
+        // Preserve visibility / other fields, only overwrite Z.
+        effectivePw = { ...pw, z: recovered.wrist.z };
+      }
+    }
+
     const rawArmScale = calib.armScale(side);
     let armScale = rawArmScale;
     const shoulderScale = calib.shoulderWidthRatio();
     const avatarArmLen = calib.upperArmLength(side) + calib.lowerArmLength(side);
     const perfUpperLen = Math.hypot(pe.x - ps.x, pe.y - ps.y, pe.z - ps.z);
-    const perfLowerLen = Math.hypot(pw.x - pe.x, pw.y - pe.y, pw.z - pe.z);
+    const perfLowerLen = Math.hypot(effectivePw.x - pe.x, effectivePw.y - pe.y, effectivePw.z - pe.z);
     const perfSegmentLen = perfUpperLen + perfLowerLen;
     let segmentScaleCap = Number.NaN;
     const armScaleCap = capArmScaleByCurrentSegments(rawArmScale, avatarArmLen, perfSegmentLen);
@@ -868,7 +895,7 @@ export class DirectPoseApplier {
       perfRightShoulder: perfRs,
       perfShoulder: ps,
       perfElbow: pe,
-      perfWrist: pw,
+      perfWrist: effectivePw,
       otherWrist: lms[side === 'left' ? 15 : 16] ?? null,
       perfLeftHip: lh ?? null,
       perfRightHip: rh ?? null,
