@@ -22,6 +22,7 @@ import {
   solveSpineTarget,
 } from './torsoTargetSolver';
 import { applyTwoBoneChain } from './twoBoneChainApplication';
+import { BoneTracker } from './boneTrackState';
 import {
   capArmScaleByCurrentSegments,
 } from './solverHeuristics';
@@ -175,6 +176,21 @@ export class DirectPoseApplier {
 
   // Extra scratch quaternion for spine lateral bend (keeps _q1/_q2 semantics unchanged).
   private _q3 = new THREE.Quaternion();
+
+  // Per-bone visibility-loss state machine (A1+A2). Resolves the "snap-freeze
+  // when visibility drops" symptom by holding last-good for HOLD_MS, fading
+  // toward identity over RELAX_MS, and blending back on visibility return.
+  // Used at each _visible()-gate callsite (limb, arm IK, leg IK, hips, spine,
+  // shoulders). For IK chains where applyTwoBoneChain writes nodes directly,
+  // we call markObserved() on visible frames and fade() on invisible ones.
+  private _boneTracker = new BoneTracker();
+  // Timestamp captured once per apply() call so all bone updates within a
+  // frame see the same time (otherwise FRESH/DECAYING thresholds would drift
+  // across the per-bone iteration).
+  private _now = 0;
+  // Scratch quaternion reserved for the state machine — avoids stepping on
+  // _q1/_q2/_q3 which are heavily reused by torso/IK solvers.
+  private _qFade = new THREE.Quaternion();
   constructor(vrm: VRM, calibration?: MocapCalibration) {
     this.vrm = vrm;
     this.calibration = calibration ?? null;
@@ -315,6 +331,11 @@ export class DirectPoseApplier {
   }
 
   apply(frame: PoseFrame): void {
+    // Cache `now` for the state machine — all bone updates within a single
+    // apply() must use the same timestamp so phase boundaries (FRESH→DECAYING
+    // etc.) don't drift across the loop.
+    this._now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+
     // Debug target flags are frame-local; reset them before solving this frame
     // so stale arm/leg IK markers do not survive when tracking drops out.
     resetMocapDebugTargets(this.debugTargets);
@@ -493,6 +514,14 @@ export class DirectPoseApplier {
       const node = this.nodeCache.get(nodeName);
       const restAxis = this.restLocalAxis.get(nodeName);
       if (!node || !restAxis || !node.parent) return;
+      if (!shouldersVisible) {
+        // A1: fade clavicle toward rest. Shoulder bones had no slerp pre-fade
+        // (direct copy of solver output), so we copy fade target directly.
+        const fade = this._boneTracker.fade(nodeName, this._now, this._qFade);
+        node.quaternion.copy(fade);
+        node.updateWorldMatrix(false, true);
+        return;
+      }
       node.parent.updateWorldMatrix(true, false);
       node.parent.getWorldQuaternion(this._q1);
       const target = solveShoulderTarget({
@@ -501,12 +530,13 @@ export class DirectPoseApplier {
         parentWorldQuaternion: this._q1,
         leftShoulder: ls!,
         rightShoulder: rs!,
-        performerShoulder: shouldersVisible ? performerShoulder : undefined,
+        performerShoulder,
         spreadRadians: rad,
         spreadSign,
       });
       node.quaternion.copy(target);
       node.updateWorldMatrix(false, true);
+      this._boneTracker.markObserved(nodeName, node.quaternion, this._now);
     };
 
     // Mirror: avatar LEFT clavicle follows performer's RIGHT shoulder, and vice versa.
@@ -531,10 +561,19 @@ export class DirectPoseApplier {
     const lms = frame.worldLandmarks;
     const lh = lms[LM.LEFT_HIP], rh = lms[LM.RIGHT_HIP];
     const ls = lms[LM.LEFT_SHOULDER], rs = lms[LM.RIGHT_SHOULDER];
-    if (!lh || !rh || !ls || !rs) return;
-    // Need all four torso landmarks to be visible for a reliable basis
-    if (!this._visible(lh) || !this._visible(rh) ||
-        !this._visible(ls) || !this._visible(rs)) return;
+    // Need all four torso landmarks to be visible for a reliable basis.
+    // A1: previously early-returned (hips frozen indefinitely); now fade to rest.
+    const torsoVisible =
+      !!lh && !!rh && !!ls && !!rs &&
+      this._visible(lh) && this._visible(rh) &&
+      this._visible(ls) && this._visible(rs);
+    if (!torsoVisible) {
+      const fadeTarget = this._boneTracker.fade('hips', this._now, this._qFade);
+      if (this._spineLerp >= 1) hipsNode.quaternion.copy(fadeTarget);
+      else                      hipsNode.quaternion.slerp(fadeTarget, this._spineLerp);
+      hipsNode.updateWorldMatrix(false, true);
+      return;
+    }
     hipsNode.parent.updateWorldMatrix(true, false);
     hipsNode.parent.getWorldQuaternion(this._q2);
     const hipsTarget = solveHipsOrientationTarget({
@@ -552,6 +591,7 @@ export class DirectPoseApplier {
     if (this._spineLerp >= 1) hipsNode.quaternion.copy(hipsTarget);
     else                      hipsNode.quaternion.slerp(hipsTarget, this._spineLerp);
     hipsNode.updateWorldMatrix(false, true);
+    this._boneTracker.markObserved('hips', hipsNode.quaternion, this._now);
 
     // ── Hip world position ──────────────────────────────────────────────────
     if (this._hipPositionEnabled) {
@@ -605,8 +645,23 @@ export class DirectPoseApplier {
     const lms = frame.worldLandmarks;
     const lh = lms[LM.LEFT_HIP], rh = lms[LM.RIGHT_HIP];
     const ls = lms[LM.LEFT_SHOULDER], rs = lms[LM.RIGHT_SHOULDER];
-    if (!ls || !rs) return;
-    if (!this._visible(ls) || !this._visible(rs)) return;
+    const shouldersVisible = !!ls && !!rs && this._visible(ls) && this._visible(rs);
+    if (!shouldersVisible) {
+      // A1: fade spine + chest toward rest instead of leaving them frozen.
+      if (spineNode) {
+        const fade = this._boneTracker.fade('spine', this._now, this._qFade);
+        if (this._spineLerp >= 1) spineNode.quaternion.copy(fade);
+        else                      spineNode.quaternion.slerp(fade, this._spineLerp);
+        spineNode.updateWorldMatrix(false, true);
+      }
+      if (chestNode) {
+        const fade = this._boneTracker.fade('chest', this._now, this._qFade);
+        if (this._spineLerp >= 1) chestNode.quaternion.copy(fade);
+        else                      chestNode.quaternion.slerp(fade, this._spineLerp);
+        chestNode.updateWorldMatrix(false, true);
+      }
+      return;
+    }
 
     const hipsVisible = !!lh && !!rh && this._visible(lh) && this._visible(rh);
     hipsNode.updateWorldMatrix(true, false);
@@ -633,13 +688,14 @@ export class DirectPoseApplier {
     Object.assign(this.debugTargets.torsoSolver, spineTarget.diagnostics);
     const halfTwist = spineTarget.halfTwist;
 
-    const applyTwist = (node: THREE.Object3D): void => {
+    const applyTwist = (node: THREE.Object3D, trackName: string): void => {
       if (this._spineLerp >= 1) node.quaternion.copy(halfTwist);
       else                      node.quaternion.slerp(halfTwist, this._spineLerp);
       node.updateWorldMatrix(false, true);
+      this._boneTracker.markObserved(trackName, node.quaternion, this._now);
     };
-    if (spineNode) applyTwist(spineNode);
-    if (chestNode) applyTwist(chestNode);
+    if (spineNode) applyTwist(spineNode, 'spine');
+    if (chestNode) applyTwist(chestNode, 'chest');
   }
 
   private _applyLimb(
@@ -654,19 +710,30 @@ export class DirectPoseApplier {
 
     const p = frame.worldLandmarks[parentIdx];
     const c = frame.worldLandmarks[childIdx];
-    if (!p || !c) return;
-    // Skip this limb if either endpoint is poorly tracked — leave the bone
-    // at its previous rotation so idle / animation layers can retain control.
-    if (!this._visible(p) || !this._visible(c)) return;
+    if (!p || !c) {
+      // Missing landmark data entirely — fade toward rest via state machine.
+      const fadeTarget = this._boneTracker.fade(boneName, this._now, this._qFade);
+      node.quaternion.slerp(fadeTarget, this._bodyLerp);
+      return;
+    }
+    const visible = this._visible(p) && this._visible(c);
 
-    this._mpDeltaToVrm(c.x - p.x, c.y - p.y, c.z - p.z, this._v1);
-    if (this._v1.lengthSq() < 1e-6) return;
-    applyWorldDirectionToBone({
-      node,
-      restAxis,
-      worldDirection: this._v1,
-      lerp: this._bodyLerp,
-    });
+    if (visible) {
+      this._mpDeltaToVrm(c.x - p.x, c.y - p.y, c.z - p.z, this._v1);
+      if (this._v1.lengthSq() < 1e-6) return;
+      applyWorldDirectionToBone({
+        node,
+        restAxis,
+        worldDirection: this._v1,
+        lerp: this._bodyLerp,
+      });
+      // Capture the resulting local quaternion as last-good for the tracker.
+      this._boneTracker.markObserved(boneName, node.quaternion, this._now);
+    } else {
+      // A1: instead of snap-freezing, fade toward rest via state machine.
+      const fadeTarget = this._boneTracker.fade(boneName, this._now, this._qFade);
+      node.quaternion.slerp(fadeTarget, this._bodyLerp);
+    }
   }
 
   /**
@@ -699,8 +766,24 @@ export class DirectPoseApplier {
     const eIdx = side === 'left' ? 14 : 13;
     const wIdx = side === 'left' ? 16 : 15;
     const ps = lms[sIdx], pe = lms[eIdx], pw = lms[wIdx];
-    if (!perfLs || !perfRs || !ps || !pe || !pw) return;
-    if (!this._visible(perfLs) || !this._visible(perfRs) || !this._visible(ps) || !this._visible(pe) || !this._visible(pw)) return;
+    const chainVisible =
+      !!perfLs && !!perfRs && !!ps && !!pe && !!pw &&
+      this._visible(perfLs) && this._visible(perfRs) &&
+      this._visible(ps) && this._visible(pe) && this._visible(pw);
+    if (!chainVisible) {
+      // A1: chain landmarks unreliable → fade upper+lower toward rest via
+      // state machine instead of leaving the bones at their previous IK pose.
+      const upperFade = this._boneTracker.fade(upperName, this._now, this._qFade);
+      if (this._bodyLerp >= 1) upperNode.quaternion.copy(upperFade);
+      else                     upperNode.quaternion.slerp(upperFade, this._bodyLerp);
+      upperNode.updateWorldMatrix(false, true);
+
+      const lowerFade = this._boneTracker.fade(lowerName, this._now, this._qFade);
+      if (this._bodyLerp >= 1) lowerNode.quaternion.copy(lowerFade);
+      else                     lowerNode.quaternion.slerp(lowerFade, this._bodyLerp);
+      lowerNode.updateWorldMatrix(false, true);
+      return;
+    }
 
     // Avatar same-side shoulder = IK root. Target anchor is the midpoint of both shoulders.
     upperNode.parent!.updateWorldMatrix(true, false);
@@ -801,6 +884,10 @@ export class DirectPoseApplier {
       lowerRestAxis: lowerRest,
       lerp: this._bodyLerp,
     });
+    // State machine: record the current (post-slerp) local quaternions so a
+    // subsequent visibility-loss frame holds these poses instead of identity.
+    this._boneTracker.markObserved(upperName, upperNode.quaternion, this._now);
+    this._boneTracker.markObserved(lowerName, lowerNode.quaternion, this._now);
   }
 
   /**
@@ -827,8 +914,24 @@ export class DirectPoseApplier {
     const kIdx = side === 'left' ? 26 : 25;
     const aIdx = side === 'left' ? 28 : 27;
     const ph = lms[hIdx], pk = lms[kIdx], pa = lms[aIdx];
-    if (!ph || !pk || !pa) return;
-    if (!this._visible(ph) || !this._visible(pk) || !this._visible(pa)) return;
+    const chainVisible =
+      !!ph && !!pk && !!pa && this._visible(ph) && this._visible(pk) && this._visible(pa);
+    if (!chainVisible) {
+      // A1: leg landmarks unreliable → fade upper+lower toward rest via state
+      // machine. Distinguishes "occluded for 1 frame" (hold last good IK) from
+      // "occluded for >800ms" (slide back to rest pose). The previous early-
+      // return left the bones frozen at the last IK output indefinitely.
+      const upperFade = this._boneTracker.fade(upperName, this._now, this._qFade);
+      if (this._bodyLerp >= 1) upperNode.quaternion.copy(upperFade);
+      else                     upperNode.quaternion.slerp(upperFade, this._bodyLerp);
+      upperNode.updateWorldMatrix(false, true);
+
+      const lowerFade = this._boneTracker.fade(lowerName, this._now, this._qFade);
+      if (this._bodyLerp >= 1) lowerNode.quaternion.copy(lowerFade);
+      else                     lowerNode.quaternion.slerp(lowerFade, this._bodyLerp);
+      lowerNode.updateWorldMatrix(false, true);
+      return;
+    }
 
     // Avatar same-side hip = IK root and target anchor.
     upperNode.parent!.updateWorldMatrix(true, false);
@@ -877,6 +980,8 @@ export class DirectPoseApplier {
       lowerRestAxis: lowerRest,
       lerp: this._bodyLerp,
     });
+    this._boneTracker.markObserved(upperName, upperNode.quaternion, this._now);
+    this._boneTracker.markObserved(lowerName, lowerNode.quaternion, this._now);
   }
 
   private _relaxLegToRest(side: 'left' | 'right'): void {
