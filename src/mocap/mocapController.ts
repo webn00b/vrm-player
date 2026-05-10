@@ -4,6 +4,7 @@ import { PoseDetector, type PoseModelQuality, type PoseFrame } from './poseDetec
 import { DirectPoseApplier } from './directPoseApplier';
 import { FaceApplier } from './faceApplier';
 import { BvhRecorder, downloadBvh } from './bvhRecorder';
+import { bvhExportConfig } from './bvhExportConfig';
 import { MocapCalibration, type CalibrationStatus } from './mocapCalibration';
 import { getCachedHumanoidRestAxes } from '../humanoidRestPose';
 import { captureSnapshot, type PoseSnapshot } from './bvhRoundtripVerifier';
@@ -104,7 +105,22 @@ export class MocapController {
       getJointOffset: (name) => this._getBvhJointOffset(name),
       getRestCorrectionInv: (name) => correctionInvMap.get(name) ?? null,
       flipForVrm0,
+      systemAnimatorCompat: bvhExportConfig.systemAnimatorCompat,
     });
+  }
+
+  /**
+   * Switch the global SystemAnimator-compatible BVH export flag and rebuild
+   * the persistent live/grab recorders so the change takes effect on the
+   * next recording session. Mid-session toggling is intentionally a no-op
+   * for in-flight recordings — switching format mid-file would produce a
+   * corrupt mixed-format BVH.
+   */
+  setSystemAnimatorCompat(v: boolean): void {
+    bvhExportConfig.setSystemAnimatorCompat(v);
+    if (this._state === 'recording') return; // don't disturb an active capture
+    this.liveRecorder = this._createRecorder();
+    this.grabRecorder = this._createRecorder();
   }
 
   private _buildCorrectionInvMap(): Map<string, [number, number, number, number]> {

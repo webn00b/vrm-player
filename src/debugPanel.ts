@@ -170,6 +170,19 @@ export function mountDebugPanel(
     getController, setModelVisible, rememberInterval,
   });
 
+  // ── BVH-export options: SystemAnimator-compat toggle ───────────────────
+  // Drives MocapController.setSystemAnimatorCompat which (a) updates the
+  // shared bvhExportConfig flag read by createBvhRecorderForVrm (queue's
+  // ⬇ BVH button) and (b) rebuilds the live/grab recorders so the next
+  // mocap session uses the new format.
+  const saCompatBtn = root.querySelector<HTMLButtonElement>('#bvh-sa-compat-btn');
+  saCompatBtn?.addEventListener('click', () => {
+    const next = saCompatBtn.classList.contains('off');
+    mocap.setSystemAnimatorCompat(next);
+    saCompatBtn.textContent = next ? 'ON' : 'OFF';
+    saCompatBtn.classList.toggle('off', !next);
+  });
+
   // ── Skeleton info modal ───────────────────────────────────────────────────
 
   const cleanupSkelModal = mountSkelModal({

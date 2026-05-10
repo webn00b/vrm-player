@@ -101,6 +101,19 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
       </div>
     </details>
 
+    <details class="dbg-fold" id="fold-bvh-export">
+      <summary>BVH export</summary>
+      <div class="dbg-section">
+        <div class="dbg-row">
+          <span class="dbg-label" title="Write BVH in SystemAnimatorOnline / XR Animator's format. Uses YXZ Euler order, ×10 OFFSET scale, and canonicalised bone offsets so the file plays back correctly on those third-party VRM players.">🎬 SystemAnimator-compat</span>
+          <button class="dbg-toggle off" id="bvh-sa-compat-btn">OFF</button>
+        </div>
+        <div class="dbg-hint" style="font-size:10px">
+          ON → BVH из mocap-recorder и из «⬇ BVH» queue-export пишется в формате SystemAnimator (YXZ-Euler, OFFSET ×10, canonical axes). Применяется к следующей записи; текущая идущая запись доезжает в исходном формате.
+        </div>
+      </div>
+    </details>
+
     <details class="dbg-fold" id="fold-diagnostics">
       <summary>Diagnostics</summary>
       <div class="dbg-section">
