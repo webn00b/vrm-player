@@ -19,6 +19,7 @@ export interface DebugPanelMocapParamsDeps {
 export function wireDebugPanelMocapParams(deps: DebugPanelMocapParamsDeps): void {
   wirePoseQuality(deps);
   wireMirrorToggle(deps);
+  wireSymmetryFallbackToggle(deps);
   wireFaceToggle(deps);
   wireHipPositionToggle(deps);
   wireHandPriorityCheckbox(deps);
@@ -75,6 +76,11 @@ function wireOnOffToggle(
 
 const wireMirrorToggle = ({ root, getMocap }: DebugPanelMocapParamsDeps): void =>
   wireOnOffToggle(root, getMocap, '#mocap-mirror-btn', (m) => m.mirrorX, (m, v) => m.setMirrorX(v));
+
+const wireSymmetryFallbackToggle = ({ root, getMocap }: DebugPanelMocapParamsDeps): void =>
+  wireOnOffToggle(root, getMocap, '#mocap-symmetry-btn',
+    (m) => m.symmetryFallback,
+    (m, v) => m.setSymmetryFallback(v));
 
 const wireFaceToggle = ({ root, getMocap }: DebugPanelMocapParamsDeps): void =>
   wireOnOffToggle(root, getMocap, '#mocap-face-btn', (m) => m.faceTrackingEnabled, (m, v) => m.setFaceTrackingEnabled(v));

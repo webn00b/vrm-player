@@ -166,6 +166,13 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
         <button class="dbg-toggle" id="mocap-hip-btn">ON</button>
       </div>
       <div class="dbg-row">
+        <span class="dbg-label" style="font-size:11px"
+              title="When ON: if one arm/leg becomes invisible and the other side is live, copy the visible side's local quaternions to the missing side. Works for bilaterally-symmetric poses (claps, mirror dance); produces wrong poses for asymmetric motion. Off by default.">
+          🪟 Symmetry fallback
+        </span>
+        <button class="dbg-toggle off" id="mocap-symmetry-btn">OFF</button>
+      </div>
+      <div class="dbg-row">
         <span class="dbg-label">📐 Depth</span>
         <div style="display:flex;gap:3px">
           <button class="dbg-toggle off" data-depth="0">2D</button>

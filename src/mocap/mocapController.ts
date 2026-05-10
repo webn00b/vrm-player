@@ -167,6 +167,9 @@ export class MocapController {
   setMirrorX(v: boolean): void { this.applier.setMirrorX(v); }
   get mirrorX(): boolean { return this.applier.mirrorX; }
 
+  setSymmetryFallback(v: boolean): void { this.applier.setSymmetryFallback(v); }
+  get symmetryFallback(): boolean { return this.applier.symmetryFallback; }
+
   setBodySmoothing(v: number): void { this.applier.setBodySmoothing(v); }
   get bodySmoothing(): number { return this.applier.bodySmoothing; }
 

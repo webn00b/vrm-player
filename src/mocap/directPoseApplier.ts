@@ -211,6 +211,14 @@ export class DirectPoseApplier {
   // _q1/_q2/_q3 which are heavily reused by torso/IK solvers.
   private _qFade = new THREE.Quaternion();
 
+  // A3: opt-in symmetry fallback. When one side of an IK chain (arm or leg)
+  // becomes invisible while the other side is live, we can copy the other
+  // side's local-frame quaternion to keep the missing limb animated. Works
+  // best for bilaterally-symmetric poses (claps, dance moves with mirror
+  // motion) and produces incorrect-but-not-broken poses for asymmetric
+  // input. Off by default — user toggles it on for specific use-cases.
+  private _symmetryFallback = false;
+
   // B4: post-IK quaternion smoothing for arm bones. IK's two-stage solver
   // amplifies landmark jitter into visible tremor on the bone output;
   // QuaternionOneEuro damps it without blurring fast motion. Per-bone
@@ -426,6 +434,12 @@ export class DirectPoseApplier {
       }, hand.landmarks, hand.side, false, prioritized);
     }
   }
+
+  /** Enable / disable the bilateral-symmetry IK fallback (A3). When ON, an
+   *  invisible arm or leg chain copies its mirror partner's local quaternions
+   *  if the partner is currently live. Off by default. */
+  setSymmetryFallback(v: boolean): void { this._symmetryFallback = v; }
+  get symmetryFallback(): boolean { return this._symmetryFallback; }
 
   /** Per-chain tracking-health readout for the D1-lite debug panel.
    *  Each entry reports the current state-machine phase for a representative
@@ -848,8 +862,34 @@ export class DirectPoseApplier {
       this._visible(perfLs) && this._visible(perfRs) &&
       this._visible(ps) && this._visible(pe) && this._visible(pw);
     if (!chainVisible) {
-      // A1: chain landmarks unreliable → fade upper+lower toward rest via
-      // state machine instead of leaving the bones at their previous IK pose.
+      // A3: opt-in symmetry fallback — copy the OTHER arm's local quaternions
+      // if it's currently live. Works for bilaterally-symmetric poses (mirror
+      // dance, claps); produces wrong-but-not-broken poses for asymmetric
+      // motion. Relies on the assumption that VRM rigs have mirror-symmetric
+      // local bone frames so the same local rotation produces mirrored world
+      // motion on the other side.
+      if (this._symmetryFallback) {
+        const otherSide = side === 'left' ? 'right' : 'left';
+        const otherUpperName = otherSide + 'UpperArm';
+        const otherLowerName = otherSide + 'LowerArm';
+        const otherUpperPhase = trackPhase(this._boneTracker.state(otherUpperName), this._now);
+        if (otherUpperPhase === 'live' || otherUpperPhase === 'recovering') {
+          const otherUpper = this.nodeCache.get(otherUpperName);
+          const otherLower = this.nodeCache.get(otherLowerName);
+          if (otherUpper && otherLower) {
+            upperNode.quaternion.copy(otherUpper.quaternion);
+            upperNode.updateWorldMatrix(false, true);
+            lowerNode.quaternion.copy(otherLower.quaternion);
+            lowerNode.updateWorldMatrix(false, true);
+            this._boneTracker.markObserved(upperName, upperNode.quaternion, this._now);
+            this._boneTracker.markObserved(lowerName, lowerNode.quaternion, this._now);
+            return;
+          }
+        }
+      }
+      // A1 fallback: chain landmarks unreliable → fade upper+lower toward
+      // rest via state machine instead of leaving the bones at their previous
+      // IK pose.
       const upperFade = this._boneTracker.fade(upperName, this._now, this._qFade);
       if (this._bodyLerp >= 1) upperNode.quaternion.copy(upperFade);
       else                     upperNode.quaternion.slerp(upperFade, this._bodyLerp);
@@ -1036,6 +1076,27 @@ export class DirectPoseApplier {
     const chainVisible =
       !!ph && !!pk && !!pa && this._visible(ph) && this._visible(pk) && this._visible(pa);
     if (!chainVisible) {
+      // A3: same symmetry-fallback path as arm IK. See _applyArmIK for
+      // rationale on the local-quaternion-copy approach.
+      if (this._symmetryFallback) {
+        const otherSide = side === 'left' ? 'right' : 'left';
+        const otherUpperName = otherSide + 'UpperLeg';
+        const otherLowerName = otherSide + 'LowerLeg';
+        const otherUpperPhase = trackPhase(this._boneTracker.state(otherUpperName), this._now);
+        if (otherUpperPhase === 'live' || otherUpperPhase === 'recovering') {
+          const otherUpper = this.nodeCache.get(otherUpperName);
+          const otherLower = this.nodeCache.get(otherLowerName);
+          if (otherUpper && otherLower) {
+            upperNode.quaternion.copy(otherUpper.quaternion);
+            upperNode.updateWorldMatrix(false, true);
+            lowerNode.quaternion.copy(otherLower.quaternion);
+            lowerNode.updateWorldMatrix(false, true);
+            this._boneTracker.markObserved(upperName, upperNode.quaternion, this._now);
+            this._boneTracker.markObserved(lowerName, lowerNode.quaternion, this._now);
+            return;
+          }
+        }
+      }
       // A1: leg landmarks unreliable → fade upper+lower toward rest via state
       // machine. Distinguishes "occluded for 1 frame" (hold last good IK) from
       // "occluded for >800ms" (slide back to rest pose). The previous early-
