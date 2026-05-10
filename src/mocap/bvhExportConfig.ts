@@ -12,6 +12,7 @@
 
 let _saCompat = false;
 let _flipBody180Y = false;
+let _flipRightLeg180Y = false;
 
 export const bvhExportConfig = {
   get systemAnimatorCompat(): boolean {
@@ -25,5 +26,11 @@ export const bvhExportConfig = {
   },
   setFlipBody180Y(v: boolean): void {
     _flipBody180Y = v;
+  },
+  get flipRightLeg180Y(): boolean {
+    return _flipRightLeg180Y;
+  },
+  setFlipRightLeg180Y(v: boolean): void {
+    _flipRightLeg180Y = v;
   },
 };

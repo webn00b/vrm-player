@@ -27,6 +27,13 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
         </span>
         <button class="dbg-toggle off" id="bvh-flip180-btn">OFF</button>
       </div>
+      <div class="dbg-row" style="margin-top:6px">
+        <span class="dbg-label" style="font-size:11px"
+              title="Pre-multiply rightUpperLeg quaternion by 180° around Y. Use if only the right leg points backwards after the body fix lands (asymmetric bind-pose mismatch). FK propagates to knee/ankle/toes automatically.">
+          🦵 Right leg 180° Y
+        </span>
+        <button class="dbg-toggle off" id="bvh-right-leg-flip-btn">OFF</button>
+      </div>
     </div>
 
     <div class="dbg-section">

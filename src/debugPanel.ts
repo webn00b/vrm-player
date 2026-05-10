@@ -197,6 +197,14 @@ export function mountDebugPanel(
     flip180Btn.classList.toggle('off', !next);
   });
 
+  const rightLegFlipBtn = root.querySelector<HTMLButtonElement>('#bvh-right-leg-flip-btn');
+  rightLegFlipBtn?.addEventListener('click', () => {
+    const next = rightLegFlipBtn.classList.contains('off');
+    mocap.setFlipRightLeg180Y(next);
+    rightLegFlipBtn.textContent = next ? 'ON' : 'OFF';
+    rightLegFlipBtn.classList.toggle('off', !next);
+  });
+
   // ── Skeleton info modal ───────────────────────────────────────────────────
 
   const cleanupSkelModal = mountSkelModal({

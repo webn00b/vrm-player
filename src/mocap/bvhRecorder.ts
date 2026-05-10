@@ -145,6 +145,18 @@ interface BvhRecorderOptions {
    * `systemAnimatorCompat` is also true.
    */
   flipBody180Y?: boolean;
+  /**
+   * Pre-multiply ONLY the `rightUpperLeg` quaternion by R_Y(180°) — fixes
+   * the "right leg points backwards" symptom in MMD-style players whose
+   * right-leg bone has a 180°-mirrored bind orientation versus ours. The
+   * 180° flows down to rightLowerLeg / rightFoot / rightToes via forward
+   * kinematics, so we only touch the root of the right-leg chain.
+   *
+   * Mirror sub-option to `flipBody180Y` — independent toggles because the
+   * conventions differ per target rig: SA-MMD's body is one way, its
+   * right-leg chain is another.
+   */
+  flipRightLeg180Y?: boolean;
 }
 
 // ── BvhRecorder ───────────────────────────────────────────────────────────────
@@ -165,6 +177,7 @@ export class BvhRecorder {
   private readonly _flipForVrm0: boolean;
   private readonly _systemAnimatorCompat: boolean;
   private readonly _flipBody180Y: boolean;
+  private readonly _flipRightLeg180Y: boolean;
 
   constructor(options: BvhRecorderOptions = {}) {
     this._getJointOffset = options.getJointOffset ?? null;
@@ -172,6 +185,7 @@ export class BvhRecorder {
     this._flipForVrm0 = options.flipForVrm0 ?? false;
     this._systemAnimatorCompat = options.systemAnimatorCompat ?? false;
     this._flipBody180Y = options.flipBody180Y ?? false;
+    this._flipRightLeg180Y = options.flipRightLeg180Y ?? false;
   }
 
   get recording():  boolean { return this._recording; }
@@ -330,6 +344,11 @@ export class BvhRecorder {
         // the root by R_Y(180°) flips our content to match. Children
         // inherit via forward kinematics, no other bones need touching.
         if (this._flipBody180Y && j.isRoot) {
+          q = flipQuat180Y(q);
+        }
+        // Right-leg root only — children inherit via FK in the receiving
+        // skeleton so we don't double-flip.
+        if (this._flipRightLeg180Y && j.name === 'rightUpperLeg') {
           q = flipQuat180Y(q);
         }
         const [ry, rx, rz] = quatToYXZ(q);

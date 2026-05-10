@@ -107,6 +107,7 @@ export class MocapController {
       flipForVrm0,
       systemAnimatorCompat: bvhExportConfig.systemAnimatorCompat,
       flipBody180Y: bvhExportConfig.flipBody180Y,
+      flipRightLeg180Y: bvhExportConfig.flipRightLeg180Y,
     });
   }
 
@@ -116,6 +117,17 @@ export class MocapController {
    *  change takes effect on the next session. */
   setFlipBody180Y(v: boolean): void {
     bvhExportConfig.setFlipBody180Y(v);
+    if (this._state === 'recording') return;
+    this.liveRecorder = this._createRecorder();
+    this.grabRecorder = this._createRecorder();
+  }
+
+  /** Pre-rotate `rightUpperLeg` by 180° around Y. Asymmetric companion to
+   *  `setFlipBody180Y` — fixes target-avatar bind-mismatch where only the
+   *  right leg points backwards after the body fix lands. FK propagates
+   *  the rotation through knee/ankle/toes automatically. */
+  setFlipRightLeg180Y(v: boolean): void {
+    bvhExportConfig.setFlipRightLeg180Y(v);
     if (this._state === 'recording') return;
     this.liveRecorder = this._createRecorder();
     this.grabRecorder = this._createRecorder();

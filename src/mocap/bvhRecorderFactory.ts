@@ -32,6 +32,7 @@ export function createBvhRecorderForVrm(
     flipForVrm0,
     systemAnimatorCompat: saCompat,
     flipBody180Y: bvhExportConfig.flipBody180Y,
+    flipRightLeg180Y: bvhExportConfig.flipRightLeg180Y,
   });
 }
 
