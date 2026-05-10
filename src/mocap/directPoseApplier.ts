@@ -519,7 +519,29 @@ export class DirectPoseApplier {
    * Use for IK *position* targets — depth scale reduces noisy Z in hand/foot placement.
    */
   private _mpDeltaToVrm(dx: number, dy: number, dz: number, out: THREE.Vector3): void {
-    mpDeltaToVrm(this._mirrorX, dx, dy, dz, out, this._depthScale);
+    // B2: adaptive Z attenuation. When the 2D projection (|Δxy|) is much
+    // shorter than the Z magnitude, the limb is foreshortened along the
+    // camera axis and MediaPipe's Z carries most of the (noisy) signal.
+    // Damp Z further in that regime so the resulting bone direction bends
+    // toward the image plane rather than violently along Z.
+    //
+    // Safety net for `_applyLimb` (pre-calibration / non-IK bones). When
+    // arm IK kicks in, B1's sphere-intersection on the wrist replaces this
+    // with a stricter anatomical recovery.
+    let effectiveDepthScale = this._depthScale;
+    const dxy = Math.hypot(dx, dy);
+    const dzAbs = Math.abs(dz);
+    if (dxy < 1e-4) {
+      // Almost-pure-Z delta — almost certainly noisy regression. Clamp hard.
+      effectiveDepthScale *= 0.3;
+    } else if (dzAbs > dxy * 1.5) {
+      // |Δz| > 1.5 × |Δxy| → suspect foreshortening.
+      // Smoothly ramp damping from 1.0 at ratio 1.5 down to 0.4 at ratio ≥ 3.
+      const r = dzAbs / dxy;
+      const t = Math.min(1, (r - 1.5) / 1.5);
+      effectiveDepthScale *= (1 - 0.6 * t);
+    }
+    mpDeltaToVrm(this._mirrorX, dx, dy, dz, out, effectiveDepthScale);
   }
 
   /**
