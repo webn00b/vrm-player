@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import { BvhRecorder } from './bvhRecorder';
-import { bvhExportConfig } from './bvhExportConfig';
 import { getCachedHumanoidRestAxes } from '../humanoidRestPose';
 
 /**
@@ -17,22 +16,13 @@ import { getCachedHumanoidRestAxes } from '../humanoidRestPose';
  *  - VRM 0.x avatars get x/z pre-flipped so a round-trip through
  *    `createVRMAnimationClip` cancels out
  */
-export function createBvhRecorderForVrm(
-  vrm: VRM,
-  options: { systemAnimatorCompat?: boolean } = {},
-): BvhRecorder {
+export function createBvhRecorderForVrm(vrm: VRM): BvhRecorder {
   const correctionInvMap = buildCorrectionInvMap(vrm);
   const flipForVrm0 = vrm.meta.metaVersion === '0';
-  // Default to the global toggle if not explicitly overridden — the queue's
-  // "⬇ BVH" button doesn't pass options, so the UI checkbox controls both.
-  const saCompat = options.systemAnimatorCompat ?? bvhExportConfig.systemAnimatorCompat;
   return new BvhRecorder({
     getJointOffset: (name) => getJointOffset(vrm, name),
     getRestCorrectionInv: (name) => correctionInvMap.get(name) ?? null,
     flipForVrm0,
-    systemAnimatorCompat: saCompat,
-    flipBody180Y: bvhExportConfig.flipBody180Y,
-    flipRightLeg180Y: bvhExportConfig.flipRightLeg180Y,
   });
 }
 

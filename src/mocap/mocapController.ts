@@ -4,7 +4,6 @@ import { PoseDetector, type PoseModelQuality, type PoseFrame } from './poseDetec
 import { DirectPoseApplier } from './directPoseApplier';
 import { FaceApplier } from './faceApplier';
 import { BvhRecorder, downloadBvh } from './bvhRecorder';
-import { bvhExportConfig } from './bvhExportConfig';
 import { MocapCalibration, type CalibrationStatus } from './mocapCalibration';
 import { getCachedHumanoidRestAxes } from '../humanoidRestPose';
 import { captureSnapshot, type PoseSnapshot } from './bvhRoundtripVerifier';
@@ -105,46 +104,7 @@ export class MocapController {
       getJointOffset: (name) => this._getBvhJointOffset(name),
       getRestCorrectionInv: (name) => correctionInvMap.get(name) ?? null,
       flipForVrm0,
-      systemAnimatorCompat: bvhExportConfig.systemAnimatorCompat,
-      flipBody180Y: bvhExportConfig.flipBody180Y,
-      flipRightLeg180Y: bvhExportConfig.flipRightLeg180Y,
     });
-  }
-
-  /** Toggle the optional "flip body 180° around Y" sub-option used by some
-   *  third-party players whose avatar bind-pose faces opposite to ours.
-   *  Like setSystemAnimatorCompat: rebuilds live/grab recorders so the
-   *  change takes effect on the next session. */
-  setFlipBody180Y(v: boolean): void {
-    bvhExportConfig.setFlipBody180Y(v);
-    if (this._state === 'recording') return;
-    this.liveRecorder = this._createRecorder();
-    this.grabRecorder = this._createRecorder();
-  }
-
-  /** Pre-rotate `rightUpperLeg` by 180° around Y. Asymmetric companion to
-   *  `setFlipBody180Y` — fixes target-avatar bind-mismatch where only the
-   *  right leg points backwards after the body fix lands. FK propagates
-   *  the rotation through knee/ankle/toes automatically. */
-  setFlipRightLeg180Y(v: boolean): void {
-    bvhExportConfig.setFlipRightLeg180Y(v);
-    if (this._state === 'recording') return;
-    this.liveRecorder = this._createRecorder();
-    this.grabRecorder = this._createRecorder();
-  }
-
-  /**
-   * Switch the global SystemAnimator-compatible BVH export flag and rebuild
-   * the persistent live/grab recorders so the change takes effect on the
-   * next recording session. Mid-session toggling is intentionally a no-op
-   * for in-flight recordings — switching format mid-file would produce a
-   * corrupt mixed-format BVH.
-   */
-  setSystemAnimatorCompat(v: boolean): void {
-    bvhExportConfig.setSystemAnimatorCompat(v);
-    if (this._state === 'recording') return; // don't disturb an active capture
-    this.liveRecorder = this._createRecorder();
-    this.grabRecorder = this._createRecorder();
   }
 
   private _buildCorrectionInvMap(): Map<string, [number, number, number, number]> {

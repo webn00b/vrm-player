@@ -9,33 +9,6 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
 
     <div class="dbg-tab-panel active" data-panel="main">
 
-    <div class="dbg-section" style="background:rgba(76,175,80,0.06);border:1px solid rgba(76,175,80,0.25);border-radius:6px;padding:8px 10px">
-      <div class="dbg-row">
-        <span class="dbg-label" style="font-weight:600;font-size:13px"
-              title="Запись и экспорт BVH будут в формате SystemAnimatorOnline / XR Animator (YXZ Euler, OFFSET ×10, canonical axes). Применяется к следующей записи. Касается и live mocap-recorder, и кнопки ⬇ BVH в очереди.">
-          🎬 BVH формат: SystemAnimator
-        </span>
-        <button class="dbg-toggle off" id="bvh-sa-compat-btn">OFF</button>
-      </div>
-      <div class="dbg-hint" id="bvh-sa-hint" style="font-size:10px;margin-top:2px;opacity:.7">
-        OFF → наш формат (играет в этом плеере). ON → формат SystemAnimator (для XR Animator / SA Online).
-      </div>
-      <div class="dbg-row" style="margin-top:6px">
-        <span class="dbg-label" style="font-size:11px"
-              title="Pre-multiply hip quaternion by 180° around Y. Use if the target player's avatar bind-pose faces away from the camera. Only takes effect when SA-compat is also ON.">
-          🔄 Flip body 180° Y
-        </span>
-        <button class="dbg-toggle off" id="bvh-flip180-btn">OFF</button>
-      </div>
-      <div class="dbg-row" style="margin-top:6px">
-        <span class="dbg-label" style="font-size:11px"
-              title="Roll-and-mirror transform on rightUpperLeg: rolls the leg 180° around its long axis to fix 'right leg backwards' AND sign-flips X/Z animation to compensate for the visual mirror that pure rolling would create. FK propagates to knee/ankle/toes automatically.">
-          🦵 Right leg 180° Y
-        </span>
-        <button class="dbg-toggle off" id="bvh-right-leg-flip-btn">OFF</button>
-      </div>
-    </div>
-
     <div class="dbg-section">
       <div class="dbg-row">
         <span class="dbg-label" style="font-weight:600">🎭 Demo mode</span>
@@ -127,7 +100,6 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
         <div class="dbg-stat" id="skel-log-stat"></div>
       </div>
     </details>
-
 
     <details class="dbg-fold" id="fold-diagnostics">
       <summary>Diagnostics</summary>

@@ -170,41 +170,6 @@ export function mountDebugPanel(
     getController, setModelVisible, rememberInterval,
   });
 
-  // ── BVH-export options: SystemAnimator-compat toggle (top of Main tab) ─
-  // Drives MocapController.setSystemAnimatorCompat which (a) updates the
-  // shared bvhExportConfig flag read by createBvhRecorderForVrm (queue's
-  // ⬇ BVH button) and (b) rebuilds the live/grab recorders so the next
-  // mocap session uses the new format.
-  const saCompatBtn  = root.querySelector<HTMLButtonElement>('#bvh-sa-compat-btn');
-  const saCompatHint = root.querySelector<HTMLElement>('#bvh-sa-hint');
-  saCompatBtn?.addEventListener('click', () => {
-    const next = saCompatBtn.classList.contains('off');
-    mocap.setSystemAnimatorCompat(next);
-    saCompatBtn.textContent = next ? 'ON' : 'OFF';
-    saCompatBtn.classList.toggle('off', !next);
-    if (saCompatHint) {
-      saCompatHint.textContent = next
-        ? '✅ ON → формат SystemAnimator. Не играет в этом плеере, но играет в XR Animator / SA Online.'
-        : 'OFF → наш формат (играет в этом плеере). ON → формат SystemAnimator (для XR Animator / SA Online).';
-    }
-  });
-
-  const flip180Btn = root.querySelector<HTMLButtonElement>('#bvh-flip180-btn');
-  flip180Btn?.addEventListener('click', () => {
-    const next = flip180Btn.classList.contains('off');
-    mocap.setFlipBody180Y(next);
-    flip180Btn.textContent = next ? 'ON' : 'OFF';
-    flip180Btn.classList.toggle('off', !next);
-  });
-
-  const rightLegFlipBtn = root.querySelector<HTMLButtonElement>('#bvh-right-leg-flip-btn');
-  rightLegFlipBtn?.addEventListener('click', () => {
-    const next = rightLegFlipBtn.classList.contains('off');
-    mocap.setFlipRightLeg180Y(next);
-    rightLegFlipBtn.textContent = next ? 'ON' : 'OFF';
-    rightLegFlipBtn.classList.toggle('off', !next);
-  });
-
   // ── Skeleton info modal ───────────────────────────────────────────────────
 
   const cleanupSkelModal = mountSkelModal({
