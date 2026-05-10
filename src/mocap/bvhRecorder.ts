@@ -171,6 +171,18 @@ export class BvhRecorder {
   }
 
   /**
+   * Append a fully-formed `Frame` object directly, bypassing the live mocap
+   * pipeline. Internal test hook — regression tests need to feed known
+   * quaternions to the writer without standing up a real VRM. NOT meant for
+   * runtime use; live capture goes through `addFrame` / `captureFrame`.
+   * @internal
+   */
+  pushFrame(frame: Frame): void {
+    if (!this._recording) this._recording = true;
+    this.frames.push(frame);
+  }
+
+  /**
    * Snapshot current bone state. Rate-limited to FRAME_RATE so the BVH's declared
    * Frame Time matches actual playback speed regardless of RAF rate.
    */
