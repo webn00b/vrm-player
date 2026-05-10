@@ -146,15 +146,20 @@ interface BvhRecorderOptions {
    */
   flipBody180Y?: boolean;
   /**
-   * Pre-multiply ONLY the `rightUpperLeg` quaternion by R_Y(180°) — fixes
-   * the "right leg points backwards" symptom in MMD-style players whose
-   * right-leg bone has a 180°-mirrored bind orientation versus ours. The
-   * 180° flows down to rightLowerLeg / rightFoot / rightToes via forward
-   * kinematics, so we only touch the root of the right-leg chain.
+   * Roll-and-mirror transform on `rightUpperLeg`: q ↦ q · R_Y(180°)⁻¹.
+   * In YXZ Euler this is (αY + 180°, −αX, −αZ) — i.e. the bone is rolled
+   * 180° around its long axis (fixes "right leg points backwards" for
+   * targets whose right-leg has a flipped bind) AND the X/Z animation
+   * components are sign-inverted. The sign-flip is necessary because a
+   * naïve pre-multiplication R · q rolls the bone but leaves the local
+   * X/Z axes pointing the wrong way, so the unchanged BVH numbers play
+   * back as a mirror-image of the intended motion.
    *
-   * Mirror sub-option to `flipBody180Y` — independent toggles because the
-   * conventions differ per target rig: SA-MMD's body is one way, its
-   * right-leg chain is another.
+   * The transform flows down to rightLowerLeg / rightFoot / rightToes
+   * via forward kinematics, so we only touch the root of the right-leg
+   * chain. Independent toggle from `flipBody180Y` — conventions differ
+   * per target rig: SA-MMD's body is one way, its right-leg chain is
+   * another.
    */
   flipRightLeg180Y?: boolean;
 }
@@ -347,9 +352,14 @@ export class BvhRecorder {
           q = flipQuat180Y(q);
         }
         // Right-leg root only — children inherit via FK in the receiving
-        // skeleton so we don't double-flip.
+        // skeleton so we don't double-flip. Uses post-multiply q·R⁻¹
+        // (NOT pre-multiply): pre-mul R·q would roll the bone 180° around
+        // its long axis but leave local X/Z axes "visually mirrored",
+        // making the unchanged X/Z Euler animation play back reversed.
+        // Post-mul yields Euler (αY+180°, −αX, −αZ) — static roll plus
+        // sign-flipped animation X/Z, which compensates the mirror.
         if (this._flipRightLeg180Y && j.name === 'rightUpperLeg') {
-          q = flipQuat180Y(q);
+          q = rollMirrorQuat180Y(q);
         }
         const [ry, rx, rz] = quatToYXZ(q);
         parts.push(ry * RAD2DEG, rx * RAD2DEG, rz * RAD2DEG);
@@ -405,6 +415,25 @@ function flipQuat180Y(
   //   z' =  q1w*z + q1x*y - q1y*x + q1z*w = 0 + 0 - x + 0 = -x
   //   w' =  q1w*w - q1x*x - q1y*y - q1z*z = 0 - 0 - y - 0 = -y
   return [q[2], q[3], -q[0], -q[1]];
+}
+
+/** Post-multiply a quaternion by R_Y(180°)⁻¹ = R_Y(−180°).
+ *  q_out = q · R_Y(180°)⁻¹. Decomposing q as YXZ Euler (αY, αX, αZ),
+ *  q_out's Euler is (αY + 180°, −αX, −αZ): the long-axis roll fixes the
+ *  static "leg backwards" mismatch, and the X/Z sign-flip compensates
+ *  the visual mirror that a plain R·q pre-multiply would produce.
+ *
+ *  Hamilton product q · q2 with q2 = R_Y(−180°) = (0, 0, −1, 0) in
+ *  (w,x,y,z) — i.e. (x2,y2,z2,w2) = (0,−1,0,0):
+ *     x' =  w·x2 + x·w2 + y·z2 − z·y2 = 0 + 0 + 0 − z·(−1) = z
+ *     y' =  w·y2 − x·z2 + y·w2 + z·x2 = w·(−1) − 0 + 0 + 0 = −w
+ *     z' =  w·z2 + x·y2 − y·x2 + z·w2 = 0 + x·(−1) − 0 + 0 = −x
+ *     w' =  w·w2 − x·x2 − y·y2 − z·z2 = 0 − 0 − y·(−1) − 0 = y
+ */
+function rollMirrorQuat180Y(
+  q: [number, number, number, number],
+): [number, number, number, number] {
+  return [q[2], -q[3], -q[0], q[1]];
 }
 
 /** SystemAnimator canonicalises bone OFFSETs onto a canonical axis per bone
