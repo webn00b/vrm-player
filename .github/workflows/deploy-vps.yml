@@ -24,6 +24,20 @@ jobs:
           node-version: 22
           cache: npm
 
+      # Cache the Vite dependency-prebundle output too — actions/setup-node
+      # already caches the npm download, but re-running `vite build` from
+      # scratch still re-prebundles three.js / mediapipe / vrm into
+      # node_modules/.vite, which is the slow part. Keying on package-lock
+      # invalidates exactly when deps change.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.vite
+            node_modules/.cache
+          key: vite-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            vite-${{ runner.os }}-
+
       - run: npm ci
 
       - run: npm run build
@@ -35,9 +49,14 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
+      # `--exclude='models/*.vrm'` preserves the manually-uploaded VRM
+      # binaries on the VPS — they're gitignored locally (large), so CI
+      # never has them, and we don't want --delete to wipe them. The
+      # models/index.json file IS in the repo (public/models/index.json),
+      # so it does ship with the deploy and stays in sync.
       - name: Rsync to VPS
         run: |
-          rsync -avz --delete \
+          rsync -avz --delete --exclude='models/*.vrm' \
             -e "ssh -i ~/.ssh/id_ed25519" \
             dist/ \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_PATH }}/

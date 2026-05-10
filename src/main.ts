@@ -27,17 +27,34 @@ import { startRenderLoop } from './renderLoop';
 import { mountTransport } from './transport';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 
-const vrmModules = import.meta.glob('/models/*.vrm', {
-  query: '?url',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
-
-function resolveVrmUrl(): string {
-  const entries = Object.entries(vrmModules).sort(([a], [b]) => a.localeCompare(b));
-  const first = entries[0];
-  if (!first) throw new Error('no .vrm files in ./models/ — see README');
-  return first[1];
+/**
+ * Resolve which VRM to load via runtime fetch of `models/index.json`.
+ *
+ * Why not `import.meta.glob` like before: with the build-time glob, .vrm
+ * files had to be present in the repo at CI time for Vite to copy them into
+ * `dist/assets/`. We don't want 16-50 MB binaries in git, so .vrm files
+ * stay gitignored and live in `public/models/` locally + `/var/www/<site>/
+ * models/` on the VPS. The CI rsync deploys excludes `models/*.vrm` so the
+ * server-side copies persist; the site reads `models/index.json` (kept in
+ * git inside `public/models/`) to know what's available at runtime.
+ */
+async function resolveVrmUrl(): Promise<string> {
+  const res = await fetch('/models/index.json', { cache: 'no-cache' });
+  if (!res.ok) {
+    throw new Error(
+      `models/index.json not found (HTTP ${res.status}). ` +
+      `Add a JSON array of .vrm filenames to public/models/index.json ` +
+      `and place the .vrm files in public/models/ locally / ` +
+      `/var/www/<site>/models/ on the server.`,
+    );
+  }
+  const list = await res.json() as string[];
+  if (!Array.isArray(list) || list.length === 0) {
+    throw new Error('models/index.json is empty — add at least one .vrm filename');
+  }
+  // Sort alphabetically for deterministic "first" pick across runs.
+  const sorted = [...list].sort();
+  return `/models/${sorted[0]}`;
 }
 
 type CleanupFn = () => void;
@@ -63,7 +80,7 @@ async function main() {
   const ctx = createScene(container);
 
   setStatus('loading VRM…');
-  const vrm = await loadVRM(resolveVrmUrl());
+  const vrm = await loadVRM(await resolveVrmUrl());
   // NOTE: mirror effect for mocap is applied at the landmark level in
   // DirectPoseApplier (_mirrorX flag) — do NOT scale the scene negatively,
   // that breaks the direct-math's getWorldQuaternion calls on parent bones.
