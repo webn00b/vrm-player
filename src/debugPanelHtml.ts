@@ -20,6 +20,13 @@ export function buildMainPanelHtml(idle: IdleLoop): string {
       <div class="dbg-hint" id="bvh-sa-hint" style="font-size:10px;margin-top:2px;opacity:.7">
         OFF → наш формат (играет в этом плеере). ON → формат SystemAnimator (для XR Animator / SA Online).
       </div>
+      <div class="dbg-row" style="margin-top:6px">
+        <span class="dbg-label" style="font-size:11px"
+              title="Pre-multiply hip quaternion by 180° around Y. Use if the target player's avatar bind-pose faces away from the camera. Only takes effect when SA-compat is also ON.">
+          🔄 Flip body 180° Y
+        </span>
+        <button class="dbg-toggle off" id="bvh-flip180-btn">OFF</button>
+      </div>
     </div>
 
     <div class="dbg-section">

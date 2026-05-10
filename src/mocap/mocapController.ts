@@ -106,7 +106,19 @@ export class MocapController {
       getRestCorrectionInv: (name) => correctionInvMap.get(name) ?? null,
       flipForVrm0,
       systemAnimatorCompat: bvhExportConfig.systemAnimatorCompat,
+      flipBody180Y: bvhExportConfig.flipBody180Y,
     });
+  }
+
+  /** Toggle the optional "flip body 180° around Y" sub-option used by some
+   *  third-party players whose avatar bind-pose faces opposite to ours.
+   *  Like setSystemAnimatorCompat: rebuilds live/grab recorders so the
+   *  change takes effect on the next session. */
+  setFlipBody180Y(v: boolean): void {
+    bvhExportConfig.setFlipBody180Y(v);
+    if (this._state === 'recording') return;
+    this.liveRecorder = this._createRecorder();
+    this.grabRecorder = this._createRecorder();
   }
 
   /**

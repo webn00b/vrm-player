@@ -231,6 +231,67 @@ test('SA-compat E2E: hip position scaled ×10 in MOTION row', () => {
   assert.ok(Math.abs(cols[2] + 0.5)  < 0.01, `hips Z ×10 should be -0.5, got ${cols[2]}`);
 });
 
+test('SA-compat E2E: flipBody180Y pre-rotates hips by 180° Y, leaves other bones untouched', () => {
+  const TOLERANCE_DEG = 0.05;
+
+  // Reference: hips quaternion = identity. Without flip, parsed hips should
+  // also be identity. With flip ON, parsed hips should be R_Y(180°).
+  const qIdentity = new THREE.Quaternion(0, 0, 0, 1);
+  const qR180Y = new THREE.Quaternion(0, 1, 0, 0);
+
+  // No flip — round-trip identity unchanged
+  const recPlain = new BvhRecorder({
+    getJointOffset: (name) => FIXTURE_OFFSETS[name] ?? [0, 0, 0],
+    systemAnimatorCompat: true,
+    flipBody180Y: false,
+  });
+  recPlain.pushFrame(makeFrame('hips', qIdentity));
+  const textPlain = recPlain.stop();
+  const hipsPlain = new BVHLoader().parse(textPlain).clip.tracks.find(
+    (t) => t.name === 'hips.quaternion',
+  );
+  const qPlainOut = new THREE.Quaternion(
+    hipsPlain.values[0], hipsPlain.values[1], hipsPlain.values[2], hipsPlain.values[3],
+  );
+  assert.ok(
+    quatAngleDeg(qIdentity, qPlainOut) < TOLERANCE_DEG,
+    `no-flip identity round-trip should stay identity, drift ${quatAngleDeg(qIdentity, qPlainOut).toFixed(4)}°`,
+  );
+
+  // Flip ON — identity input should come out as R_Y(180°)
+  const recFlip = new BvhRecorder({
+    getJointOffset: (name) => FIXTURE_OFFSETS[name] ?? [0, 0, 0],
+    systemAnimatorCompat: true,
+    flipBody180Y: true,
+  });
+  // Use a spine rotation too, to verify children are NOT also flipped (the
+  // 180° Y inherits via forward kinematics — we shouldn't pre-rotate spine).
+  const qSpine = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 10 * D2R);
+  const frame = makeFrame('hips', qIdentity);
+  frame.bones['spine'] = [qSpine.x, qSpine.y, qSpine.z, qSpine.w];
+  recFlip.pushFrame(frame);
+  const textFlip = recFlip.stop();
+  const clipFlip = new BVHLoader().parse(textFlip).clip;
+  const hipsFlip = clipFlip.tracks.find((t) => t.name === 'hips.quaternion');
+  const qHipsOut = new THREE.Quaternion(
+    hipsFlip.values[0], hipsFlip.values[1], hipsFlip.values[2], hipsFlip.values[3],
+  );
+  assert.ok(
+    quatAngleDeg(qR180Y, qHipsOut) < TOLERANCE_DEG,
+    `hips with flip should equal R_Y(180°), drift ${quatAngleDeg(qR180Y, qHipsOut).toFixed(4)}°`,
+  );
+
+  // Spine should remain its untouched 10° X rotation (NOT pre-rotated too)
+  const spineFlip = clipFlip.tracks.find((t) => t.name === 'spine.quaternion');
+  const qSpineOut = new THREE.Quaternion(
+    spineFlip.values[0], spineFlip.values[1], spineFlip.values[2], spineFlip.values[3],
+  );
+  assert.ok(
+    quatAngleDeg(qSpine, qSpineOut) < TOLERANCE_DEG,
+    `spine should NOT be flipped (flipBody180Y is hips-only), drift ${quatAngleDeg(qSpine, qSpineOut).toFixed(4)}°`,
+  );
+});
+
 test('SA-compat E2E: foot/toes End Site offset pulls leaf to ground', () => {
   const rec = buildRecorder(/*saCompat=*/true);
   rec.pushFrame(makeFrame('hips', new THREE.Quaternion(0, 0, 0, 1)));

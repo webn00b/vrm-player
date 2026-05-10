@@ -133,6 +133,18 @@ interface BvhRecorderOptions {
    * doesn't apply those post-corrections so we shouldn't pre-bake them.
    */
   systemAnimatorCompat?: boolean;
+  /**
+   * Pre-multiply the hips quaternion by a 180° rotation around the world-Y
+   * axis at write time. Useful when the target VRM player (SystemAnimator,
+   * MMD-style players) has its bind-pose facing the opposite direction from
+   * our VRM — without this, our identity-rotation avatar appears facing
+   * AWAY from the camera in the target player.
+   *
+   * Only applied to the `hips` root bone (its 180° propagates to every
+   * child through normal forward kinematics), and only when
+   * `systemAnimatorCompat` is also true.
+   */
+  flipBody180Y?: boolean;
 }
 
 // ── BvhRecorder ───────────────────────────────────────────────────────────────
@@ -152,12 +164,14 @@ export class BvhRecorder {
   private readonly _getRestCorrectionInv: ((name: string) => [number, number, number, number] | null) | null;
   private readonly _flipForVrm0: boolean;
   private readonly _systemAnimatorCompat: boolean;
+  private readonly _flipBody180Y: boolean;
 
   constructor(options: BvhRecorderOptions = {}) {
     this._getJointOffset = options.getJointOffset ?? null;
     this._getRestCorrectionInv = options.getRestCorrectionInv ?? null;
     this._flipForVrm0 = options.flipForVrm0 ?? false;
     this._systemAnimatorCompat = options.systemAnimatorCompat ?? false;
+    this._flipBody180Y = options.flipBody180Y ?? false;
   }
 
   get recording():  boolean { return this._recording; }
@@ -311,6 +325,13 @@ export class BvhRecorder {
       if (this._systemAnimatorCompat) {
         // SA-compat skips rest-correction and VRM-0 flip — its loader
         // doesn't apply those, so we shouldn't pre-bake them.
+        // Optional 180° Y flip on hips: target player's avatar may have
+        // its bind-pose facing the opposite direction; pre-multiplying
+        // the root by R_Y(180°) flips our content to match. Children
+        // inherit via forward kinematics, no other bones need touching.
+        if (this._flipBody180Y && j.isRoot) {
+          q = flipQuat180Y(q);
+        }
         const [ry, rx, rz] = quatToYXZ(q);
         parts.push(ry * RAD2DEG, rx * RAD2DEG, rz * RAD2DEG);
       } else {
@@ -351,6 +372,20 @@ function quatToYXZ(arr: [number, number, number, number]): [number, number, numb
   _q.fromArray(arr);
   _e.setFromQuaternion(_q, 'YXZ');
   return [_e.y, _e.x, _e.z];
+}
+
+/** Pre-multiply a quaternion by R_Y(180°). q_out = R_Y(180°) · q.
+ *  R_Y(180°) = (0, 1, 0, 0). Hamilton product expanded for the case
+ *  q1 = (0, 1, 0, 0) is cheap, no setup. */
+function flipQuat180Y(
+  q: [number, number, number, number],
+): [number, number, number, number] {
+  // (q1 · q2) for q1=(0,1,0,0), q2=(x,y,z,w):
+  //   x' =  q1w*x + q1x*w + q1y*z - q1z*y = 0 + 0 + z - 0 = z
+  //   y' =  q1w*y - q1x*z + q1y*w + q1z*x = 0 + 0 + w + 0 = w
+  //   z' =  q1w*z + q1x*y - q1y*x + q1z*w = 0 + 0 - x + 0 = -x
+  //   w' =  q1w*w - q1x*x - q1y*y - q1z*z = 0 - 0 - y - 0 = -y
+  return [q[2], q[3], -q[0], -q[1]];
 }
 
 /** SystemAnimator canonicalises bone OFFSETs onto a canonical axis per bone

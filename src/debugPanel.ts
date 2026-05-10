@@ -189,6 +189,14 @@ export function mountDebugPanel(
     }
   });
 
+  const flip180Btn = root.querySelector<HTMLButtonElement>('#bvh-flip180-btn');
+  flip180Btn?.addEventListener('click', () => {
+    const next = flip180Btn.classList.contains('off');
+    mocap.setFlipBody180Y(next);
+    flip180Btn.textContent = next ? 'ON' : 'OFF';
+    flip180Btn.classList.toggle('off', !next);
+  });
+
   // ── Skeleton info modal ───────────────────────────────────────────────────
 
   const cleanupSkelModal = mountSkelModal({

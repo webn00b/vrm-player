@@ -31,6 +31,7 @@ export function createBvhRecorderForVrm(
     getRestCorrectionInv: (name) => correctionInvMap.get(name) ?? null,
     flipForVrm0,
     systemAnimatorCompat: saCompat,
+    flipBody180Y: bvhExportConfig.flipBody180Y,
   });
 }
 
