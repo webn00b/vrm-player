@@ -49,14 +49,9 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
-      # `--exclude='models/*.vrm'` preserves the manually-uploaded VRM
-      # binaries on the VPS — they're gitignored locally (large), so CI
-      # never has them, and we don't want --delete to wipe them. The
-      # models/index.json file IS in the repo (public/models/index.json),
-      # so it does ship with the deploy and stays in sync.
       - name: Rsync to VPS
         run: |
-          rsync -avz --delete --exclude='models/*.vrm' \
+          rsync -avz --delete \
             -e "ssh -i ~/.ssh/id_ed25519" \
             dist/ \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_PATH }}/

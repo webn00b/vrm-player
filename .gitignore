@@ -5,5 +5,4 @@ dist/
 *.log
 
 # Asset files — keep out of git, add your own locally
-public/models/*.vrm
 animations/*.bvh
