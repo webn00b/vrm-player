@@ -24,6 +24,7 @@ import {
 import { applyTwoBoneChain } from './twoBoneChainApplication';
 import { BoneTracker, trackPhase, msSinceLoss, type TrackPhase } from './boneTrackState';
 import { recoverWristZ } from './anatomicalDepth';
+import { QuaternionOneEuro } from './oneEuroFilter';
 import {
   capArmScaleByCurrentSegments,
 } from './solverHeuristics';
@@ -209,6 +210,18 @@ export class DirectPoseApplier {
   // Scratch quaternion reserved for the state machine — avoids stepping on
   // _q1/_q2/_q3 which are heavily reused by torso/IK solvers.
   private _qFade = new THREE.Quaternion();
+
+  // B4: post-IK quaternion smoothing for arm bones. IK's two-stage solver
+  // amplifies landmark jitter into visible tremor on the bone output;
+  // QuaternionOneEuro damps it without blurring fast motion. Per-bone
+  // instances (4 total: L/R × upper/lower arm) so they don't interfere.
+  private _armQuatFilters: Record<string, QuaternionOneEuro> = {
+    leftUpperArm:  new QuaternionOneEuro(1.0, 0.05),
+    leftLowerArm:  new QuaternionOneEuro(1.0, 0.05),
+    rightUpperArm: new QuaternionOneEuro(1.0, 0.05),
+    rightLowerArm: new QuaternionOneEuro(1.0, 0.05),
+  };
+  private _qFiltered = new THREE.Quaternion();
   constructor(vrm: VRM, calibration?: MocapCalibration) {
     this.vrm = vrm;
     this.calibration = calibration ?? null;
@@ -974,8 +987,24 @@ export class DirectPoseApplier {
       lowerRestAxis: lowerRest,
       lerp: this._bodyLerp,
     });
-    // State machine: record the current (post-slerp) local quaternions so a
-    // subsequent visibility-loss frame holds these poses instead of identity.
+    // B4: damp residual IK jitter via QuaternionOneEuro on the post-slerp
+    // bone quaternion. Adaptive: heavy smoothing at rest, light during fast
+    // motion. Time in seconds for the filter's frequency math.
+    const tSec = this._now * 0.001;
+    const upperFilter = this._armQuatFilters[upperName];
+    const lowerFilter = this._armQuatFilters[lowerName];
+    if (upperFilter) {
+      upperFilter.filter(upperNode.quaternion, tSec, this._qFiltered);
+      upperNode.quaternion.copy(this._qFiltered);
+      upperNode.updateWorldMatrix(false, true);
+    }
+    if (lowerFilter) {
+      lowerFilter.filter(lowerNode.quaternion, tSec, this._qFiltered);
+      lowerNode.quaternion.copy(this._qFiltered);
+      lowerNode.updateWorldMatrix(false, true);
+    }
+    // State machine: record the (filtered) local quaternions so a subsequent
+    // visibility-loss frame holds the smoothed pose instead of identity.
     this._boneTracker.markObserved(upperName, upperNode.quaternion, this._now);
     this._boneTracker.markObserved(lowerName, lowerNode.quaternion, this._now);
   }

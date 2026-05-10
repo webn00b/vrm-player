@@ -84,3 +84,84 @@ export class LandmarkFilter {
 
   reset(): void { for (const f of this._filters) f.reset(); }
 }
+
+// ── Quaternion variant ───────────────────────────────────────────────────────
+
+import * as THREE from 'three';
+
+/**
+ * OneEuroFilter variant for unit quaternions, smoothed via slerp rather than
+ * per-component lerp (which would denormalize the quaternion). The "signal"
+ * is the angular displacement from the previous filtered quaternion; the
+ * speed-adaptive cutoff applies to that angular velocity.
+ *
+ * Sign-continuity is handled internally: if dot(prev, cur) < 0 we flip the
+ * sign of `cur` before slerping, preventing the long-way-around rotation
+ * that would otherwise produce a visible flick.
+ *
+ * Intended for the IK chain output (post-application, pre-slerp into bone)
+ * — the IK solver's two-stage decomposition amplifies landmark jitter into
+ * visible bone tremor, and a quaternion-level filter damps it without
+ * blurring real motion (One-Euro adapts to fast moves).
+ */
+export class QuaternionOneEuro {
+  private readonly _prev = new THREE.Quaternion();
+  private readonly _prevRaw = new THREE.Quaternion();
+  private _angSpeed = 0;    // |Δθ| / Δt smoothed
+  private _t        = -1;
+  private _init     = false;
+
+  constructor(
+    private minCutoff = 1.0,
+    private beta      = 0.05,
+    private dCutoff   = 1.0,
+  ) {}
+
+  /**
+   * Update the filter with a new raw quaternion and timestamp.
+   * Writes the filtered result into `out` (caller-owned to avoid allocation).
+   */
+  filter(cur: THREE.Quaternion, t: number, out: THREE.Quaternion): THREE.Quaternion {
+    if (!this._init) {
+      this._init = true;
+      this._prev.copy(cur);
+      this._prevRaw.copy(cur);
+      this._t = t;
+      this._angSpeed = 0;
+      out.copy(cur);
+      return out;
+    }
+    const dt = Math.max(1e-3, t - this._t);
+
+    // Sign-flip raw input if it sits in the opposite hemisphere from previous.
+    if (this._prev.dot(cur) < 0) {
+      cur.set(-cur.x, -cur.y, -cur.z, -cur.w);
+    }
+
+    // Instantaneous angular speed (rad/s).
+    const dot = Math.min(1, Math.max(-1, this._prev.dot(cur)));
+    const angle = 2 * Math.acos(Math.abs(dot));
+    const rawSpeed = angle / dt;
+
+    // Lowpass the angular speed itself before using it to adapt the cutoff.
+    const aD = QuaternionOneEuro._alpha(dt, this.dCutoff);
+    this._angSpeed = aD * rawSpeed + (1 - aD) * this._angSpeed;
+
+    const cutoff = this.minCutoff + this.beta * this._angSpeed;
+    const a = QuaternionOneEuro._alpha(dt, cutoff);
+
+    // Slerp prev → cur by alpha (low alpha = heavy smoothing).
+    out.copy(this._prev).slerp(cur, a);
+    this._prev.copy(out);
+    this._prevRaw.copy(cur);
+    this._t = t;
+    return out;
+  }
+
+  reset(): void { this._init = false; this._angSpeed = 0; }
+
+  private static _alpha(dt: number, cutoff: number): number {
+    const tau = 1 / (2 * Math.PI * cutoff);
+    return 1 / (1 + tau / dt);
+  }
+}
