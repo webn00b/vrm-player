@@ -6,3 +6,10 @@ dist/
 
 # Asset files — keep out of git, add your own locally
 animations/*.bvh
+
+# Playwright e2e artifacts
+playwright-report/
+test-results/
+
+# Vitest coverage reports
+coverage/

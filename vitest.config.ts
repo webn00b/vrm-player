@@ -9,6 +9,13 @@ export default defineConfig({
       'tests/**/*.test.ts',
       'src/**/*.test.ts',
     ],
+    // Exclude Playwright e2e specs (they use a different runner + browser
+    // environment). Playwright suffixes its files .spec.ts.
+    exclude: [
+      'tests/e2e/**',
+      'node_modules/**',
+      'dist/**',
+    ],
     environment: 'node',
     // Three.js is heavy; avoid happy-dom/jsdom unless a test actually needs DOM.
     // (mock VRMs we'll build for applier integration tests use plain THREE.Object3D
