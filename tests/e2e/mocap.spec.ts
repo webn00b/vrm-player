@@ -22,6 +22,10 @@ import { test, expect } from '@playwright/test';
 const HAS_REAL_VIDEO = !!process.env.FAKE_VIDEO_PATH;
 
 test('start mocap with fake camera: state transitions to "live" without errors', async ({ page }) => {
+  // When FAKE_VIDEO_PATH is set the real-video test below already exercises
+  // this same path and asserts strictly more — running both back-to-back
+  // can also trigger chromium-level fake-camera resource contention.
+  test.skip(HAS_REAL_VIDEO, 'superseded by the FAKE_VIDEO_PATH test below');
   const consoleErrors: string[] = [];
   page.on('console', (msg) => {
     if (msg.type() === 'error') consoleErrors.push(msg.text());
@@ -80,6 +84,14 @@ test('with real fake-video: avatar bones move when mocap is live', async ({ page
   });
 
   // Enable the debug skeleton overlay so per-bone visibility readouts populate.
+  // The dbgskel toggle lives in the Video tab > "Mocap advanced" <details>
+  // section, which is collapsed by default in a fresh browser context (no
+  // localStorage fold state). Open the fold + switch tab before clicking.
+  await page.locator('.dbg-tab[data-tab="video"]').click();
+  await page.evaluate(() => {
+    const fold = document.getElementById('fold-mocap-advanced') as HTMLDetailsElement | null;
+    if (fold) fold.open = true;
+  });
   await page.locator('#mocap-dbgskel-btn').click();
 
   // Let MediaPipe process a few seconds of the recording.
