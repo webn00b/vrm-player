@@ -73,7 +73,9 @@
       background: rgba(110,168,255,0.12);
       border-color: #6ea8ff;
     }
-    .drop-zone input { display: none; }
+    /* The file <input> sits as a sibling of the drop-zone (not nested),
+       so we just hide it globally rather than via descendant selector. */
+    #fbx-to-json-input { display: none; }
     .status {
       margin-top: 8px;
       font-size: 11px;
@@ -107,10 +109,15 @@
         Preserves original bone names (e.g. <code>mixamorigHips</code>).
         Per-track schema with seconds-based timestamps.
       </div>
-      <label class="drop-zone" id="fbx-to-json-zone">
+      <!-- Drop zone is a <div>, not a <label>. Wrapping a hidden file <input>
+           inside a <label> causes some browsers to route drop events to the
+           input element (or quietly drop them on the floor); a div with its
+           own click → input.click() handler is the reliable pattern. -->
+      <div class="drop-zone" id="fbx-to-json-zone" tabindex="0" role="button"
+           aria-label="Choose or drop an FBX file">
         Drop a .fbx file here, or click to pick
-        <input type="file" accept=".fbx" id="fbx-to-json-input">
-      </label>
+      </div>
+      <input type="file" accept=".fbx" id="fbx-to-json-input">
       <div class="status" id="fbx-to-json-status"></div>
     </div>
 

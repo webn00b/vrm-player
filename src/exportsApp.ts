@@ -16,9 +16,9 @@
 import { convertFbxFileToJson } from './fbxToJsonConverter';
 
 interface FileTool {
-  /** Drop-zone `<label>` element (also acts as click target). */
-  zone:   HTMLLabelElement;
-  /** Hidden file `<input>` inside the zone. */
+  /** Drop-zone `<div>` element (click forwards to the input). */
+  zone:   HTMLDivElement;
+  /** Sibling file `<input>`, hidden via CSS. */
   input:  HTMLInputElement;
   /** Status line below the zone. */
   status: HTMLDivElement;
@@ -37,8 +37,18 @@ function setStatus(el: HTMLDivElement, msg: string, kind: 'info' | 'ok' | 'error
 function wireFileTool(tool: FileTool): void {
   const { zone, input, status, label, convert } = tool;
 
-  // Click on the label opens the file picker via the embedded <input>.
-  // (Already the native label-for-input behaviour — no JS needed for that.)
+  // Click anywhere on the zone opens the file picker. Forwarding manually
+  // (rather than nesting <input> inside a <label>) means the drop-zone
+  // events fire reliably on the <div> without being intercepted by the
+  // hidden file input.
+  zone.addEventListener('click', () => input.click());
+  // Keyboard accessibility: Enter / Space activates the zone like a button.
+  zone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      input.click();
+    }
+  });
 
   const handleFiles = async (files: FileList | null | undefined): Promise<void> => {
     const file = files?.[0];
@@ -75,7 +85,15 @@ function wireFileTool(tool: FileTool): void {
 // ── Bootstrap each tool defined in exports.html ─────────────────────────────
 
 function init(): void {
-  const fbxZone   = document.getElementById('fbx-to-json-zone')   as HTMLLabelElement | null;
+  // Page-level dragover/drop prevention. Without these, dropping a file
+  // OUTSIDE any drop-zone causes the browser to navigate to the file URL
+  // (opening it in the current tab) — destroys the page state. Browsers
+  // require BOTH dragover AND drop to call preventDefault to suppress the
+  // default file-handling.
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop',     (e) => e.preventDefault());
+
+  const fbxZone   = document.getElementById('fbx-to-json-zone')   as HTMLDivElement   | null;
   const fbxInput  = document.getElementById('fbx-to-json-input')  as HTMLInputElement | null;
   const fbxStatus = document.getElementById('fbx-to-json-status') as HTMLDivElement   | null;
   if (fbxZone && fbxInput && fbxStatus) {
