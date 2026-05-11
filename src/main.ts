@@ -7,6 +7,7 @@ import type { ParsedBVH } from './bvhLoader';
 import { loadAnimationFile, isSupportedAnimationFile } from './animationImport';
 import { exportClipAsBvh } from './bvhExportRecorder';
 import { exportClipAsGlb } from './gltfExportRecorder';
+import { exportClipAsFbx } from './fbxExportRecorder';
 import { AnimationController } from './animationController';
 import { PriorityAnimator } from './priorityAnimator';
 import { MicroAnimations } from './microAnimations';
@@ -220,6 +221,16 @@ async function main() {
       exportClipAsGlb(vrm, clip, name)
         .then((filename) => setStatus(`saved ${filename}`))
         .catch((e) => setStatus(`glb export failed: ${(e as Error).message}`));
+    },
+    onExportFbx: (qi) => {
+      const clip = controller.getClipAtQueuePos(qi);
+      if (!clip) { setStatus('no animation clip for this item'); return; }
+      const itemIdx = controller.getItemIndexAtQueuePos(qi);
+      const name = names[itemIdx] || 'export';
+      setStatus('exporting FBX…');
+      exportClipAsFbx(vrm, clip, name)
+        .then((filename) => setStatus(`saved ${filename}`))
+        .catch((e) => setStatus(`fbx export failed: ${(e as Error).message}`));
     },
   });
 
