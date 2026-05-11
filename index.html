@@ -568,6 +568,14 @@
         </div>
         <div id="queue-panel" class="panel">
           <p class="panel-title">Queue</p>
+          <div class="queue-tools" style="font-size:11px;margin-bottom:6px">
+            <label for="fbx-to-json-input"
+                   title="Convert FBX file to portable JSON (no avatar / no retargeting). Preserves original FBX bone names."
+                   style="cursor:pointer;color:#6ea8ff;text-decoration:underline">
+              🔄 FBX → JSON
+            </label>
+            <input type="file" accept=".fbx" id="fbx-to-json-input" style="display:none">
+          </div>
           <div id="queue-list-wrap">
             <ul id="queue-list"></ul>
             <div id="queue-empty">
