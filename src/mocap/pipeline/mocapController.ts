@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import { PoseDetector, type PoseModelQuality, type PoseFrame } from './poseDetector';
-import { DirectPoseApplier } from './directPoseApplier';
-import { FaceApplier } from './faceApplier';
-import { BvhRecorder, downloadBvh } from './bvhRecorder';
-import { MocapCalibration, type CalibrationStatus } from './mocapCalibration';
-import { getCachedHumanoidRestAxes } from '../humanoidRestPose';
-import { captureSnapshot, type PoseSnapshot } from './bvhRoundtripVerifier';
+import { DirectPoseApplier } from '../retargeters/directPoseApplier';
+import { FaceApplier } from '../retargeters/faceApplier';
+import { BvhRecorder, downloadBvh } from '../bvh/bvhRecorder';
+import { MocapCalibration, type CalibrationStatus } from '../trackers/mocapCalibration';
+import { getCachedHumanoidRestAxes } from '../../humanoidRestPose';
+import { captureSnapshot, type PoseSnapshot } from '../bvh/bvhRoundtripVerifier';
 
 export type MocapState = 'off' | 'live' | 'recording';
 

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
-import type { PoseFrame } from './poseDetector';
-import type { MocapCalibration } from './mocapCalibration';
-import { getCachedHumanoidRestAxes, HUMANOID_DIRECTION_CHILD } from '../humanoidRestPose';
+import type { PoseFrame } from '../pipeline/poseDetector';
+import type { MocapCalibration } from '../trackers/mocapCalibration';
+import { getCachedHumanoidRestAxes, HUMANOID_DIRECTION_CHILD } from '../../humanoidRestPose';
 import {
   FACE,
   FINGER_VRM_NAMES,
@@ -11,24 +11,24 @@ import {
   PALM_ROOT_SUFFIXES,
   PROCESS_ORDER,
 } from './directPoseConfig';
-import { solveArmTarget } from './armTargetSolver';
+import { solveArmTarget } from '../solvers/armTargetSolver';
 import { applyWorldDirectionToBone } from './boneDirectionRetarget';
 import { applyKalidoHandRetarget, applyTrackedPalmRetarget } from './handRetarget';
-import { mpDeltaToVrm, mpDirToVrm, mpDirToVrmTorso } from './motionSpace';
-import { solveShoulderTarget } from './shoulderRetarget';
+import { mpDeltaToVrm, mpDirToVrm, mpDirToVrmTorso } from '../solvers/motionSpace';
+import { solveShoulderTarget } from '../solvers/shoulderRetarget';
 import {
   solveHipPositionTarget,
   solveHipsOrientationTarget,
   solveSpineTarget,
-} from './torsoTargetSolver';
-import { applyTwoBoneChain } from './twoBoneChainApplication';
-import { BoneTracker, trackPhase, msSinceLoss, type TrackPhase } from './boneTrackState';
-import { recoverWristZ } from './anatomicalDepth';
-import { QuaternionOneEuro } from './oneEuroFilter';
+} from '../solvers/torsoTargetSolver';
+import { applyTwoBoneChain } from '../solvers/twoBoneChainApplication';
+import { BoneTracker, trackPhase, msSinceLoss, type TrackPhase } from '../trackers/boneTrackState';
+import { recoverWristZ } from '../solvers/anatomicalDepth';
+import { QuaternionOneEuro } from '../trackers/oneEuroFilter';
 import {
   capArmScaleByCurrentSegments,
-} from './solverHeuristics';
-import { solveLegTarget } from './legTargetSolver';
+} from '../solvers/solverHeuristics';
+import { solveLegTarget } from '../solvers/legTargetSolver';
 import {
   createMocapDebugTargets,
   getAnkleTarget,
@@ -39,7 +39,7 @@ import {
   getWristTarget,
   resetMocapDebugTargets,
   type MocapDebugTargets,
-} from './mocapDiagnostics';
+} from '../diagnostics/mocapDiagnostics';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 

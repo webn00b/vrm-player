@@ -1,4 +1,4 @@
-import type { MocapController } from './mocap/mocapController';
+import type { MocapController } from './mocap/pipeline/mocapController';
 
 export interface DebugPanelMocapParamsDeps {
   root: HTMLElement;

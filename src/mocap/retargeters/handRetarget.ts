@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { Hand as KalidoHand } from 'kalidokit';
-import type { HandFrame } from './poseDetector';
+import type { HandFrame } from '../pipeline/poseDetector';
 import { kalidoHandBoneToVrm } from './directPoseConfig';
-import { mpDirToVrm } from './motionSpace';
+import { mpDirToVrm } from '../solvers/motionSpace';
 
 export interface HandRetargetContext {
   nodeCache: Map<string, THREE.Object3D>;

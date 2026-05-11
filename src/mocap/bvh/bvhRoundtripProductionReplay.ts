@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
-import { renderLoopHooks } from '../renderLoopHooks';
+import { renderLoopHooks } from '../../renderLoopHooks';
 import { BVH_FRAME_TIME } from './bvhRecorder';
 import { captureSnapshot, type PoseSnapshot } from './bvhRoundtripVerifier';
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { MocapController } from './mocap/mocapController';
+import type { MocapController } from './mocap/pipeline/mocapController';
 
 export interface DebugPanelHipsModalDeps {
   getMocap: () => MocapController | null;

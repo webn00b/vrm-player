@@ -2,8 +2,8 @@ import type { BoneValidator } from './validation/boneValidator';
 import type { SkeletonVisualizer } from './skeletonVisualizer';
 import type { BoneDragController } from './boneDragController';
 import type { SkeletonLogger } from './diagnostics/skeletonLogger';
-import type { MocapDebugRecorder } from './mocap/mocapDebugRecorder';
-import type { MocapController } from './mocap/mocapController';
+import type { MocapDebugRecorder } from './mocap/diagnostics/mocapDebugRecorder';
+import type { MocapController } from './mocap/pipeline/mocapController';
 import type { AnimationController } from './animationController';
 
 export interface DebugPanelToolsDeps {

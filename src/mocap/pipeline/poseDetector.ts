@@ -3,7 +3,7 @@ import {
   HolisticLandmarker,
   type HolisticLandmarkerResult,
 } from '@mediapipe/tasks-vision';
-import { LandmarkFilter } from './oneEuroFilter';
+import { LandmarkFilter } from '../trackers/oneEuroFilter';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

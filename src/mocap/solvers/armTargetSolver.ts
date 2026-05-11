@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import type { HandFrame, Landmark3D } from './poseDetector';
-import type { ArmSolverDiagnostics } from './mocapDiagnostics';
-import { FACE, LM } from './directPoseConfig';
+import type { HandFrame, Landmark3D } from '../pipeline/poseDetector';
+import type { ArmSolverDiagnostics } from '../diagnostics/mocapDiagnostics';
+import { FACE, LM } from '../retargeters/directPoseConfig';
 import { mpDeltaToVrm, mpDirToVrm } from './motionSpace';
 import {
   computeFaceNearBlend,

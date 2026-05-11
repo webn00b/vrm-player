@@ -25,7 +25,7 @@
 
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
-import type { PoseFrame, Landmark3D } from './poseDetector';
+import type { PoseFrame, Landmark3D } from '../pipeline/poseDetector';
 
 const LM = {
   LEFT_EAR:       7,  RIGHT_EAR:      8,

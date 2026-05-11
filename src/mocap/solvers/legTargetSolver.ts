@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Landmark3D } from './poseDetector';
+import type { Landmark3D } from '../pipeline/poseDetector';
 import { mpDeltaToVrm } from './motionSpace';
 interface LegLockState {
   locked: boolean;

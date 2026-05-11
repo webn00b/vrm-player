@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import type { Landmark3D } from './poseDetector';
+import type { Landmark3D } from '../pipeline/poseDetector';
 import {
   createTorsoSolverDiagnostics,
   type TorsoSolverDiagnostics,
-} from './mocapDiagnostics';
+} from '../diagnostics/mocapDiagnostics';
 import { mpDeltaToVrm, mpDirToVrm, mpDirToVrmTorso } from './motionSpace';
 import {
   computeAppliedLateralLean,

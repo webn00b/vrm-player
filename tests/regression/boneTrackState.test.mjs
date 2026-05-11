@@ -18,7 +18,7 @@ import {
   RELAX_MS,
   RECOVER_MS,
   BoneTracker,
-} from '../../.tmp-regression/boneTrackState.js';
+} from '../../.tmp-regression/trackers/boneTrackState.js';
 
 const IDENTITY = new THREE.Quaternion();
 const ROT_X_45 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 4);

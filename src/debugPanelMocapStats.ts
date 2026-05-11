@@ -1,6 +1,6 @@
-import type { MocapController } from './mocap/mocapController';
-import type { MocapDebugViz } from './mocap/mocapDebugViz';
-import { STAT_LANDMARKS } from './mocap/mocapDebugViz';
+import type { MocapController } from './mocap/pipeline/mocapController';
+import type { MocapDebugViz } from './mocap/diagnostics/mocapDebugViz';
+import { STAT_LANDMARKS } from './mocap/diagnostics/mocapDebugViz';
 
 export interface DebugPanelMocapStatsDeps {
   root: HTMLElement;

@@ -1,4 +1,4 @@
-import type { MocapController } from './mocap/mocapController';
+import type { MocapController } from './mocap/pipeline/mocapController';
 import {
   clearDiagBuffer,
   compareSnapshots,
@@ -6,8 +6,8 @@ import {
   formatReport,
   replayClipWithSnapshots,
   type PoseSnapshot,
-} from './mocap/bvhRoundtripVerifier';
-import { runProductionReplay } from './mocap/bvhRoundtripProductionReplay';
+} from './mocap/bvh/bvhRoundtripVerifier';
+import { runProductionReplay } from './mocap/bvh/bvhRoundtripProductionReplay';
 import { parseBVH } from './bvhLoader';
 import { retargetBvhToVrm } from './retarget';
 

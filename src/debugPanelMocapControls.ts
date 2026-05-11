@@ -1,7 +1,7 @@
 import type { VRM } from '@pixiv/three-vrm';
-import type { MocapController, MocapState } from './mocap/mocapController';
+import type { MocapController, MocapState } from './mocap/pipeline/mocapController';
 import type { AnimationController } from './animationController';
-import type { MocapDebugRecorder } from './mocap/mocapDebugRecorder';
+import type { MocapDebugRecorder } from './mocap/diagnostics/mocapDebugRecorder';
 import { exportClipAsBvh, type BvhExportHandle } from './bvhExportRecorder';
 
 export interface DebugPanelMocapControlsDeps {

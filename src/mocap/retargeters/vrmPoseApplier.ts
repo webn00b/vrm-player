@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import { Pose as KalidoPose, Hand as KalidoHand } from 'kalidokit';
-import type { PoseFrame } from './poseDetector';
+import type { PoseFrame } from '../pipeline/poseDetector';
 
 // ── Bone name mappings ────────────────────────────────────────────────────────
 

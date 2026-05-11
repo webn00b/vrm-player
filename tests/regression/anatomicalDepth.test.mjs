@@ -9,7 +9,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recoverWristZ } from '../../.tmp-regression/anatomicalDepth.js';
+import { recoverWristZ } from '../../.tmp-regression/solvers/anatomicalDepth.js';
 
 function dist(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);

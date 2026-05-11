@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import type { AnimationController } from './animationController';
-import { downloadBvh } from './mocap/bvhRecorder';
-import { createBvhRecorderForVrm } from './mocap/bvhRecorderFactory';
+import { downloadBvh } from './mocap/bvh/bvhRecorder';
+import { createBvhRecorderForVrm } from './mocap/bvh/bvhRecorderFactory';
 import { renderLoopHooks } from './renderLoopHooks';
 
 export interface BvhExportHandle {

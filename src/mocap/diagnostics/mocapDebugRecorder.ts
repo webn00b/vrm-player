@@ -13,8 +13,8 @@
 
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
-import type { PoseFrame } from './poseDetector';
-import type { MocapCalibration } from './mocapCalibration';
+import type { PoseFrame } from '../pipeline/poseDetector';
+import type { MocapCalibration } from '../trackers/mocapCalibration';
 import type { MocapDebugTargets } from './mocapDiagnostics';
 
 // Compact types for minimal file size

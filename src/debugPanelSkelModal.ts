@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import type { MocapController } from './mocap/mocapController';
+import type { MocapController } from './mocap/pipeline/mocapController';
 import type { BoneValidator } from './validation/boneValidator';
-import type { PoseFrame, Landmark3D } from './mocap/poseDetector';
-import type { ArmSolverDiagnostics, TorsoSolverDiagnostics } from './mocap/mocapDiagnostics';
+import type { PoseFrame, Landmark3D } from './mocap/pipeline/poseDetector';
+import type { ArmSolverDiagnostics, TorsoSolverDiagnostics } from './mocap/diagnostics/mocapDiagnostics';
 
 // ── SkelModal context ─────────────────────────────────────────────────────────
 

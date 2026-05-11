@@ -5,7 +5,7 @@ import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSyst
 import {
   MOCAP_VALIDATION_EXCLUDED_BONES,
   CLIP_VALIDATION_EXCLUDED_BONES,
-} from './mocap/mocapValidationBones';
+} from './mocap/diagnostics/mocapValidationBones';
 import { renderLoopHooks } from './renderLoopHooks';
 
 type CleanupFn = () => void;

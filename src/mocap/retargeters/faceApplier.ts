@@ -1,5 +1,5 @@
 import type { VRM } from '@pixiv/three-vrm';
-import type { Landmark3D } from './poseDetector';
+import type { Landmark3D } from '../pipeline/poseDetector';
 
 // ── Eye landmarks for EAR (Eye Aspect Ratio) blink detection ─────────────────
 // Indices into the 478-point MediaPipe face mesh.

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import { BvhRecorder } from './bvhRecorder';
-import { getCachedHumanoidRestAxes } from '../humanoidRestPose';
+import { getCachedHumanoidRestAxes } from '../../humanoidRestPose';
 
 /**
  * Build a `BvhRecorder` configured to write a self-consistent BVH file from

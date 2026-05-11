@@ -9,7 +9,7 @@ import {
   computeHandsTogetherBlend,
   computeMidpointBlend,
   computePrayerBlend,
-} from '../../.tmp-regression/solverHeuristics.js';
+} from '../../.tmp-regression/solvers/solverHeuristics.js';
 
 function approxEqual(actual, expected, tolerance, message) {
   assert.ok(

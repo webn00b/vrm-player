@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { PoseFrame } from './poseDetector';
+import type { PoseFrame } from '../pipeline/poseDetector';
 import type { MocapDebugTargets } from './mocapDiagnostics';
 
 // Body connections to draw lines between joints
