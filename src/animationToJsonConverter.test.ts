@@ -15,7 +15,9 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { clipToFbxJson, fbxBufferToJson } from './fbxToJsonConverter';
+import { clipToJson, fbxBufferToJson, detectFormat } from './animationToJsonConverter';
+// `clipToFbxJson` is preserved as a backward-compat alias for the rename.
+const clipToFbxJson = clipToJson;
 
 /** Build a synthetic clip with a rotation track on one bone + position
  *  track on another, at 30 fps for 1 second. */
@@ -161,3 +163,20 @@ test('JSON output: stringify round-trip preserves shape', () => {
     animation.tracks[0].values[0],
   );
 });
+
+// ── Format detection ────────────────────────────────────────────────────────
+
+test('detectFormat: maps known extensions, returns null for unsupported', () => {
+  assert.equal(detectFormat('mocap.fbx'),      'fbx');
+  assert.equal(detectFormat('Take 001.bvh'),   'bvh');
+  assert.equal(detectFormat('avatar.glb'),     'glb');
+  assert.equal(detectFormat('scene.gltf'),     'gltf');
+  assert.equal(detectFormat('idle.vrma'),      'vrma');
+  // Case-insensitive
+  assert.equal(detectFormat('IDLE.FBX'),       'fbx');
+  // Unsupported
+  assert.equal(detectFormat('model.obj'),      null);
+  assert.equal(detectFormat('texture.png'),    null);
+  assert.equal(detectFormat('no-extension'),   null);
+});
+

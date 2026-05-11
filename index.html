@@ -585,22 +585,19 @@
             <!-- (no queue-specific header at the moment) -->
           </div>
           <div class="dbg-tab-panel" data-panel="exports">
-            <div class="exports-tools" style="font-size:11px;margin-bottom:8px;padding:6px 8px;background:rgba(110,168,255,0.06);border-radius:3px">
+            <div class="exports-tools" style="font-size:11px;margin-bottom:8px;padding:8px 10px;background:rgba(110,168,255,0.06);border-radius:3px">
               <div style="font-weight:600;opacity:.7;margin-bottom:4px">File-to-file converters</div>
-              <div style="display:flex;flex-direction:column;gap:4px">
-                <label for="fbx-to-json-input"
-                       title="Convert raw FBX file to portable JSON. No avatar / no retargeting — preserves original FBX bone names."
-                       style="cursor:pointer;color:#6ea8ff;text-decoration:underline">
-                  🔄 FBX → JSON
-                </label>
-                <input type="file" accept=".fbx" id="fbx-to-json-input" style="display:none">
-                <a href="/exports.html" target="_blank" rel="noopener"
-                   style="color:#6ea8ff;text-decoration:underline">
-                  🪟 Open converter window (no avatar / lightweight)
-                </a>
+              <a href="/exports.html" target="_blank" rel="noopener"
+                 style="display:inline-block;padding:6px 10px;margin:4px 0;color:#fff;background:#3b5bdb;border-radius:3px;text-decoration:none;font-weight:600;font-size:11px">
+                🛠 Open converter window
+              </a>
+              <div style="opacity:.55;font-size:10px;margin-top:4px">
+                Standalone page — no avatar, lightweight. Supports
+                <code>.fbx</code> / <code>.bvh</code> / <code>.glb</code> /
+                <code>.gltf</code> / <code>.vrma</code> → JSON.
               </div>
-              <div style="font-weight:600;opacity:.7;margin-top:8px">Per-clip downloads</div>
-              <div style="opacity:.6;font-size:10px">Click ⬇bvh / ⬇glb / ⬇ next to each item below</div>
+              <div style="font-weight:600;opacity:.7;margin-top:10px">Per-clip downloads</div>
+              <div style="opacity:.55;font-size:10px">Click ⬇bvh / ⬇glb / ⬇ next to each item below</div>
             </div>
           </div>
           <!-- The queue items list lives OUTSIDE both tab panels so it's

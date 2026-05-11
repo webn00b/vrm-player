@@ -7,7 +7,6 @@ import type { ParsedBVH } from './bvhLoader';
 import { loadAnimationFile, isSupportedAnimationFile } from './animationImport';
 import { exportClipAsBvh } from './bvhExportRecorder';
 import { exportClipAsGlb } from './gltfExportRecorder';
-import { convertFbxFileToJson } from './fbxToJsonConverter';
 import { AnimationController } from './animationController';
 import { PriorityAnimator } from './priorityAnimator';
 import { MicroAnimations } from './microAnimations';
@@ -305,29 +304,8 @@ async function main() {
     });
   }
 
-  // ── FBX → JSON converter (standalone tool, no avatar / no retargeting) ─────
-  // Triggered by the "🔄 FBX → JSON" file picker in the Exports tab. Reads
-  // the raw FBX, dumps animation tracks as portable JSON preserving original
-  // bone names. Independent of the playback pipeline.
-  const fbxToJsonInput = document.getElementById('fbx-to-json-input') as HTMLInputElement | null;
-  if (fbxToJsonInput) {
-    const onFbxToJsonChange = async (): Promise<void> => {
-      const file = fbxToJsonInput.files?.[0];
-      if (!file) return;
-      setStatus(`converting ${file.name}…`);
-      try {
-        const filename = await convertFbxFileToJson(file);
-        setStatus(`saved ${filename}`);
-      } catch (e) {
-        setStatus(`FBX → JSON failed: ${(e as Error).message}`);
-      } finally {
-        // Reset the input so picking the same file again triggers a change.
-        fbxToJsonInput.value = '';
-      }
-    };
-    fbxToJsonInput.addEventListener('change', onFbxToJsonChange);
-    registerCleanup(() => fbxToJsonInput.removeEventListener('change', onFbxToJsonChange));
-  }
+  // File-to-file converters (FBX/BVH/GLB/VRMA → JSON) now live in the
+  // standalone /exports.html page. The Exports tab here just links to it.
 
   // ── Mocap → auto-replay recorded BVH ───────────────────────────────────────
   // Debugging aid: immediately retargets the just-recorded BVH and plays it on

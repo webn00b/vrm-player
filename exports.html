@@ -75,7 +75,7 @@
     }
     /* The file <input> sits as a sibling of the drop-zone (not nested),
        so we just hide it globally rather than via descendant selector. */
-    #fbx-to-json-input { display: none; }
+    .tool input[type="file"] { display: none; }
     .status {
       margin-top: 8px;
       font-size: 11px;
@@ -101,24 +101,29 @@
       Standalone tools — no avatar, no playback, no retargeting. Input file → output file.
     </p>
 
-    <!-- ── FBX → JSON ────────────────────────────────────────────────────── -->
+    <!-- ── Animation → JSON (FBX / BVH / GLB / VRMA) ───────────────────── -->
     <div class="tool">
-      <div class="tool-title">🔄 FBX → JSON</div>
+      <div class="tool-title">🔄 Animation → JSON</div>
       <div class="tool-desc">
-        Extracts animation tracks from an FBX file into portable JSON.
-        Preserves original bone names (e.g. <code>mixamorigHips</code>).
-        Per-track schema with seconds-based timestamps.
+        Extracts animation tracks from any supported file into portable
+        JSON. Preserves original bone names (e.g.
+        <code>mixamorigHips</code>) — no retargeting. Per-track schema
+        with seconds-based timestamps.
+        <br><br>
+        <strong>Supported inputs:</strong> <code>.fbx</code>,
+        <code>.bvh</code>, <code>.glb</code>, <code>.gltf</code>,
+        <code>.vrma</code>
       </div>
       <!-- Drop zone is a <div>, not a <label>. Wrapping a hidden file <input>
            inside a <label> causes some browsers to route drop events to the
            input element (or quietly drop them on the floor); a div with its
            own click → input.click() handler is the reliable pattern. -->
-      <div class="drop-zone" id="fbx-to-json-zone" tabindex="0" role="button"
-           aria-label="Choose or drop an FBX file">
-        Drop a .fbx file here, or click to pick
+      <div class="drop-zone" id="anim-to-json-zone" tabindex="0" role="button"
+           aria-label="Choose or drop an animation file">
+        Drop a .fbx / .bvh / .glb / .gltf / .vrma file here, or click to pick
       </div>
-      <input type="file" accept=".fbx" id="fbx-to-json-input">
-      <div class="status" id="fbx-to-json-status"></div>
+      <input type="file" accept=".fbx,.bvh,.glb,.gltf,.vrma" id="anim-to-json-input">
+      <div class="status" id="anim-to-json-status"></div>
     </div>
 
     <p class="footer-link">

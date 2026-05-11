@@ -13,7 +13,7 @@
  * `wireFileTool()` — same pattern, different converter callback.
  */
 
-import { convertFbxFileToJson } from './fbxToJsonConverter';
+import { convertAnimationFileToJson } from './animationToJsonConverter';
 
 // Diagnostic marker so the console shows the script ran. If you don't see
 // this line on /exports.html, the bundle isn't being executed at all
@@ -129,25 +129,21 @@ function init(): void {
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop',     (e) => e.preventDefault());
 
-  const fbxZone   = document.getElementById('fbx-to-json-zone')   as HTMLDivElement   | null;
-  const fbxInput  = document.getElementById('fbx-to-json-input')  as HTMLInputElement | null;
-  const fbxStatus = document.getElementById('fbx-to-json-status') as HTMLDivElement   | null;
+  const zone   = document.getElementById('anim-to-json-zone')   as HTMLDivElement   | null;
+  const input  = document.getElementById('anim-to-json-input')  as HTMLInputElement | null;
+  const status = document.getElementById('anim-to-json-status') as HTMLDivElement   | null;
   console.log('[exports] looking up DOM elements:', {
-    fbxZone:   !!fbxZone,
-    fbxInput:  !!fbxInput,
-    fbxStatus: !!fbxStatus,
+    zone:   !!zone, input: !!input, status: !!status,
   });
-  if (fbxZone && fbxInput && fbxStatus) {
+  if (zone && input && status) {
     wireFileTool({
-      zone:    fbxZone,
-      input:   fbxInput,
-      status:  fbxStatus,
-      label:   'FBX → JSON',
-      convert: (file) => convertFbxFileToJson(file),
+      zone, input, status,
+      label:   'Animation → JSON',
+      convert: (file) => convertAnimationFileToJson(file),
     });
-    console.log('[exports] FBX → JSON tool wired ✓');
+    console.log('[exports] Animation → JSON tool wired ✓');
   } else {
-    console.error('[exports] FAILED to find DOM elements for FBX → JSON tool — page HTML mismatch?');
+    console.error('[exports] FAILED to find DOM elements — page HTML mismatch?');
   }
 }
 
