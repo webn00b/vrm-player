@@ -285,8 +285,28 @@ async function main() {
     window.removeEventListener('drop', onWindowDrop);
   });
 
+  // ── Queue-panel tab switcher (Queue / Exports) ─────────────────────────────
+  // Drives a `data-tab` attribute on #queue-panel; CSS toggles per-item
+  // button visibility off that attribute. Same UX pattern as the debug
+  // panel's tabs — minimal new styling needed.
+  const queuePanelEl = document.getElementById('queue-panel');
+  if (queuePanelEl) {
+    const tabButtons = queuePanelEl.querySelectorAll<HTMLButtonElement>('.dbg-tabs .dbg-tab');
+    const tabPanels  = queuePanelEl.querySelectorAll<HTMLElement>('.dbg-tab-panel');
+    tabButtons.forEach((btn) => {
+      const handler = (): void => {
+        const name = btn.dataset.tab!;
+        queuePanelEl.dataset.tab = name;
+        tabButtons.forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+        tabPanels .forEach((p) => p.classList.toggle('active', p.dataset.panel === name));
+      };
+      btn.addEventListener('click', handler);
+      registerCleanup(() => btn.removeEventListener('click', handler));
+    });
+  }
+
   // ── FBX → JSON converter (standalone tool, no avatar / no retargeting) ─────
-  // Triggered by the "🔄 FBX → JSON" file picker in the queue panel. Reads
+  // Triggered by the "🔄 FBX → JSON" file picker in the Exports tab. Reads
   // the raw FBX, dumps animation tracks as portable JSON preserving original
   // bone names. Independent of the playback pipeline.
   const fbxToJsonInput = document.getElementById('fbx-to-json-input') as HTMLInputElement | null;
