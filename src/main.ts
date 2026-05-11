@@ -6,6 +6,7 @@ import { retargetBvhToVrm, exportBvhAsVrma } from './retarget';
 import type { ParsedBVH } from './bvhLoader';
 import { loadAnimationFile, isSupportedAnimationFile } from './animationImport';
 import { exportClipAsBvh } from './bvhExportRecorder';
+import { exportClipAsGlb } from './gltfExportRecorder';
 import { AnimationController } from './animationController';
 import { PriorityAnimator } from './priorityAnimator';
 import { MicroAnimations } from './microAnimations';
@@ -209,6 +210,16 @@ async function main() {
       handle.promise
         .then((filename) => setStatus(`saved ${filename}`))
         .catch((e) => setStatus(`bvh export failed: ${(e as Error).message}`));
+    },
+    onExportGlb: (qi) => {
+      const clip = controller.getClipAtQueuePos(qi);
+      if (!clip) { setStatus('no animation clip for this item'); return; }
+      const itemIdx = controller.getItemIndexAtQueuePos(qi);
+      const name = names[itemIdx] || 'export';
+      setStatus('exporting GLB…');
+      exportClipAsGlb(vrm, clip, name)
+        .then((filename) => setStatus(`saved ${filename}`))
+        .catch((e) => setStatus(`glb export failed: ${(e as Error).message}`));
     },
   });
 

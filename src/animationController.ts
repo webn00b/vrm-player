@@ -130,6 +130,21 @@ export class AnimationController {
     return this.queue[queueIndex];
   }
 
+  /** Return the underlying `THREE.AnimationClip` for a library item, or null.
+   *  Used by the glTF exporter to read clip tracks directly without having to
+   *  play the clip back through the render loop. */
+  getClipAtItemIndex(itemIndex: number): THREE.AnimationClip | null {
+    const item = this.items[itemIndex];
+    return item?.action.getClip() ?? null;
+  }
+
+  /** Convenience: get clip by queue position. Same lookup as
+   *  `getClipAtItemIndex(getItemIndexAtQueuePos(qi))`. */
+  getClipAtQueuePos(queueIndex: number): THREE.AnimationClip | null {
+    const idx = this.getItemIndexAtQueuePos(queueIndex);
+    return idx < 0 ? null : this.getClipAtItemIndex(idx);
+  }
+
   /** Jump to a position in the queue. */
   jumpTo(queueIndex: number): void {
     if (queueIndex < 0 || queueIndex >= this.queue.length) return;

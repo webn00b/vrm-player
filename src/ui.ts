@@ -48,6 +48,12 @@ export interface QueueOptions {
    * plays through the render loop.
    */
   onExportBvh?: (queueIndex: number) => void;
+  /**
+   * If provided, render a per-item ⬇glb button. glTF/GLB ships the raw
+   * AnimationClip tracks (not playback recording) — clean motion-capture
+   * data for Unity / Unreal / Blender retargeting pipelines.
+   */
+  onExportGlb?: (queueIndex: number) => void;
   /** If provided, double-click on the label opens an inline rename input. */
   onRename?:  (queueIndex: number, newDisplayName: string) => void;
 }
@@ -121,6 +127,14 @@ export function mountQueue(opts: QueueOptions): QueueHandle {
       exportBvhBtn.setAttribute('draggable', 'false');
       li.appendChild(exportBvhBtn);
     }
+    if (opts.onExportGlb) {
+      const exportGlbBtn = document.createElement('button');
+      exportGlbBtn.className = 'q-export-glb';
+      exportGlbBtn.textContent = '⬇glb';
+      exportGlbBtn.title = 'Download as glTF/GLB (Unity / Unreal / Blender)';
+      exportGlbBtn.setAttribute('draggable', 'false');
+      li.appendChild(exportGlbBtn);
+    }
     if (opts.onExport) {
       const exportBtn = document.createElement('button');
       exportBtn.className = 'q-export';
@@ -146,7 +160,8 @@ export function mountQueue(opts: QueueOptions): QueueHandle {
       const t = e.target as HTMLElement;
       if (t.classList.contains('q-remove')
        || t.classList.contains('q-export')
-       || t.classList.contains('q-export-bvh')) return;
+       || t.classList.contains('q-export-bvh')
+       || t.classList.contains('q-export-glb')) return;
       if (draggedIndex < 0) opts.onJump?.(getIndex());
     });
 
@@ -163,6 +178,11 @@ export function mountQueue(opts: QueueOptions): QueueHandle {
     li.querySelector('.q-export-bvh')?.addEventListener('click', (e) => {
       e.stopPropagation();
       opts.onExportBvh?.(getIndex());
+    });
+
+    li.querySelector('.q-export-glb')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      opts.onExportGlb?.(getIndex());
     });
 
     if (opts.onRename) {
