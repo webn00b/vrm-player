@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import fixtures from './solverHeuristics.fixtures.json' with { type: 'json' };
 import {
@@ -9,7 +9,7 @@ import {
   computeHandsTogetherBlend,
   computeMidpointBlend,
   computePrayerBlend,
-} from '../../.tmp-regression/solvers/solverHeuristics.js';
+} from '../../src/mocap/solvers/solverHeuristics';
 
 function approxEqual(actual, expected, tolerance, message) {
   assert.ok(

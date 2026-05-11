@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
@@ -10,7 +10,7 @@ import {
   quatDeltaDeg,
   quatToEuler,
   isQuatNaN,
-} from '../../.tmp-regression/diagnostics/skeletonLogger.js';
+} from '../../src/diagnostics/skeletonLogger';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

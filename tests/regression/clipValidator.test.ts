@@ -1,9 +1,9 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
-import { validateClip, clampClip } from '../../.tmp-regression/validation/clipValidator.js';
-import { DEFAULT_BONE_CONSTRAINTS, mergeConstraints } from '../../.tmp-regression/validation/boneConstraints.js';
+import { validateClip, clampClip } from '../../src/validation/clipValidator';
+import { DEFAULT_BONE_CONSTRAINTS, mergeConstraints } from '../../src/validation/boneConstraints';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
