@@ -54,9 +54,6 @@ export interface QueueOptions {
    * data for Unity / Unreal / Blender retargeting pipelines.
    */
   onExportGlb?: (queueIndex: number) => void;
-  /** If provided, render a per-item ⬇fbx button. FBX 7.4 ASCII writer
-   *  for Maya / 3ds Max / legacy DCC pipelines that mandate FBX. */
-  onExportFbx?: (queueIndex: number) => void;
   /** If provided, double-click on the label opens an inline rename input. */
   onRename?:  (queueIndex: number, newDisplayName: string) => void;
 }
@@ -138,14 +135,6 @@ export function mountQueue(opts: QueueOptions): QueueHandle {
       exportGlbBtn.setAttribute('draggable', 'false');
       li.appendChild(exportGlbBtn);
     }
-    if (opts.onExportFbx) {
-      const exportFbxBtn = document.createElement('button');
-      exportFbxBtn.className = 'q-export-fbx';
-      exportFbxBtn.textContent = '⬇fbx';
-      exportFbxBtn.title = 'Download as FBX 7.4 ASCII (Maya / 3ds Max / legacy DCC)';
-      exportFbxBtn.setAttribute('draggable', 'false');
-      li.appendChild(exportFbxBtn);
-    }
     if (opts.onExport) {
       const exportBtn = document.createElement('button');
       exportBtn.className = 'q-export';
@@ -172,8 +161,7 @@ export function mountQueue(opts: QueueOptions): QueueHandle {
       if (t.classList.contains('q-remove')
        || t.classList.contains('q-export')
        || t.classList.contains('q-export-bvh')
-       || t.classList.contains('q-export-glb')
-       || t.classList.contains('q-export-fbx')) return;
+       || t.classList.contains('q-export-glb')) return;
       if (draggedIndex < 0) opts.onJump?.(getIndex());
     });
 
@@ -195,11 +183,6 @@ export function mountQueue(opts: QueueOptions): QueueHandle {
     li.querySelector('.q-export-glb')?.addEventListener('click', (e) => {
       e.stopPropagation();
       opts.onExportGlb?.(getIndex());
-    });
-
-    li.querySelector('.q-export-fbx')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      opts.onExportFbx?.(getIndex());
     });
 
     if (opts.onRename) {
