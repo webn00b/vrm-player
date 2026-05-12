@@ -17,14 +17,26 @@
  */
 
 import { ref, reactive, onMounted, watch } from 'vue';
+import type { VRM } from '@pixiv/three-vrm';
 import type { MocapController } from '../mocap/pipeline/mocapController';
+import type { AnimationController } from '../animationController';
+import type { MocapDebugRecorder } from '../mocap/diagnostics/mocapDebugRecorder';
 import CalibrationBlock from './CalibrationBlock.vue';
 import BvhVerifyFold from './BvhVerifyFold.vue';
+import CaptureSection from './CaptureSection.vue';
 
 const props = defineProps<{
   getMocap: () => MocapController | null;
   /** Open the hip/leg diagnostics modal — forwarded to CalibrationBlock. */
   onHipDiag?: () => void;
+  /** Mocap + related systems for the Capture section (full migration of
+   *  the old wireMocapControls deps). */
+  mocap: MocapController;
+  mocapVrm: VRM;
+  getController: () => AnimationController | null;
+  dbgRecorder: MocapDebugRecorder;
+  /** Wired in main.ts: imports a picked .bvh/.vrma/.fbx onto the queue. */
+  onAnimFile?: (file: File) => Promise<void> | void;
 }>();
 
 const emit = defineEmits<{
@@ -85,48 +97,17 @@ onMounted(() => {
 
 <template>
   <div>
-    <p class="panel-title"><span>Capture</span></p>
-
-    <div class="dbg-section">
-      <div class="capture-source">
-        <button class="capture-src-btn" data-source="camera"   aria-pressed="true">📷 Camera</button>
-        <button class="capture-src-btn" data-source="video"    aria-pressed="false">📁 Video</button>
-        <button class="capture-src-btn" data-source="animfile" aria-pressed="false">🎬 Anim</button>
-      </div>
-
-      <button id="capture-primary-btn" class="capture-primary">Start camera</button>
-      <input type="file" id="mocap-file-input" accept="video/*" hidden>
-      <input type="file" id="anim-file-input" accept=".bvh,.vrma,.fbx" hidden>
-
-      <div class="capture-status">
-        <span id="mocap-status-label">📷 Camera off</span>
-        <span id="mocap-frames" style="opacity:.55"></span>
-      </div>
-      <div class="capture-status" style="margin-top:-2px">
-        <span id="mocap-source-info" style="opacity:.45;font-size:10px"></span>
-      </div>
-
-      <button id="capture-stop-cam-btn" class="dbg-toggle off"
-              style="display:none;width:100%">Stop camera</button>
-
-      <div class="dbg-row" id="mocap-playback-row"
-           style="display:none;gap:3px;justify-content:flex-start;margin-top:4px">
-        <button class="dbg-toggle" id="mocap-pause-btn" title="Pause / resume">⏸</button>
-        <button class="dbg-toggle off" id="mocap-step-back-btn" title="Step -1 frame">⏮</button>
-        <button class="dbg-toggle off" id="mocap-step-fwd-btn"  title="Step +1 frame">⏭</button>
-        <button class="dbg-toggle off" id="mocap-grab-btn"      title="Grab current pose">💾</button>
-        <button class="dbg-toggle off" id="mocap-flush-btn"     title="Download captured BVH">⬇</button>
-      </div>
-
-      <details class="capture-advanced">
-        <summary>Advanced…</summary>
-        <div class="dbg-row">
-          <span class="dbg-label">📤 Single pose</span>
-          <button class="dbg-toggle off" id="mocap-export-pose-btn"
-                  title="Download current avatar pose as a 1-frame BVH">Export .bvh</button>
-        </div>
-      </details>
-    </div>
+    <!-- Capture — fully migrated (CaptureSection.vue owns source-control,
+         primary CTA, file inputs, playback row, advanced fold, AND the
+         mocap state-change / error wiring). Replaces wireMocapControls. -->
+    <CaptureSection
+      :mocap="mocap"
+      :mocapVrm="mocapVrm"
+      :getMocap="getMocap"
+      :getController="getController"
+      :dbgRecorder="dbgRecorder"
+      :onAnimFile="onAnimFile"
+    />
 
     <div class="dbg-divider"></div>
 

@@ -4,7 +4,6 @@ import TuningPanel from './playerVue/TuningPanel.vue';
 import { installPrimeVueOn } from './playerVue/plugin';
 import { mountSkelModal } from './debugPanelSkelModal';
 import { mountBvhModal } from './debugPanelBvhModal';
-import { wireMocapControls } from './debugPanelMocapControls';
 import { mountHipDiagModal } from './debugPanelHipsModal';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 
@@ -37,15 +36,16 @@ export function mountDebugPanel(
     return id;
   };
 
-  // ── Mount Vue islands for the panel STRUCTURE ────────────────────────────
-  // The 11 wireXxx() calls below find their elements via getElementById on
-  // the DOM Vue renders. We use v-show for tabs + native <details> for folds
-  // so the id'd elements never unmount between rerenders.
+  // ── Mount Vue islands for the panel ──────────────────────────────────────
+  // The original 11 imperative wireXxx() pipelines have all migrated into
+  // Vue components. What remains: this debugPanel.ts file just composes
+  // the two Vue apps (#debug-panel + #mocap-tuning-panel), threads deps
+  // as props, and owns the mocap.onCalibrationChange callback (which has
+  // to coordinate between TuningPanel's CalibrationBlock and the modals).
   //
-  // Genuinely reactive parts inside the Vue components: tab switching,
-  // fold open-state + localStorage persistence, demo mode toggle,
-  // layer toggles (idle / breathing / etc.). Everything else stays
-  // imperatively wired post-mount.
+  // Three modals (Skel / BVH-diag / Hip-diag) still mount as separate Vue
+  // islands at <body> level — they aren't part of the panel structure so
+  // they have their own lifecycle.
   const debugApp: App = createApp(DebugPanelRoot, {
     pa, micro, idle, controller,
     // Live readouts: priority bars (StatsPanel), hip force (HipForcePanel),
@@ -83,6 +83,10 @@ export function mountDebugPanel(
   if (tuningRoot) {
     tuningApp = createApp(TuningPanel, {
       getMocap,
+      // CaptureSection (inside TuningPanel) owns mocap.onStateChange and
+      // mocap.onError; we only need to pass it the deps + the anim-file
+      // import callback.
+      mocap, mocapVrm: mocap.vrm, getController, dbgRecorder, onAnimFile,
       onHipDiag: () => hipDiag.open(),
       onCalibrationMounted: (handles: { calibStat: HTMLElement }) => {
         calibStat = handles.calibStat;
@@ -95,24 +99,13 @@ export function mountDebugPanel(
     tuningApp.mount(tuningRoot);
   }
 
-  // ── Mocap controls + capture-source state machine ────────────────────────
-  // All record/stop, source switching, and file-input handling lives in
-  // debugPanelMocapControls. Returns updateMocapUI + statusLbl that the
-  // tuning section below threads into mocap.onStateChange / .onError.
-  const { updateMocapUI, statusLbl } = wireMocapControls({
-    mocap, mocapVrm: mocap.vrm, getMocap, getController, dbgRecorder,
-    rememberInterval, rememberTimeout, onAnimFile,
-  });
-
-  // Wire state-change callback
+  // mocap.onCalibrationChange — separate channel from onStateChange/onError,
+  // wired here because the live status element comes from CalibrationBlock
+  // (bubbled up via the calibrationMounted prop handler above).
   const originalMocap = getMocap();
   if (originalMocap) {
-    originalMocap.onStateChange = updateMocapUI;
-    originalMocap.onError = (err) => {
-      statusLbl.textContent = `❌ ${err.message.slice(0, 30)}`;
-    };
     originalMocap.onCalibrationChange = (s) => {
-      if (!calibStat) return; // CalibrationBlock not mounted yet
+      if (!calibStat) return;
       if (s.calibrated) {
         const body = (s.bodyScale * 100).toFixed(0);
         const l = (s.leftArmScale * 100).toFixed(0);
