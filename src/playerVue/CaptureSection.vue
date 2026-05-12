@@ -429,16 +429,19 @@ onUnmounted(() => {
     <div class="capture-source">
       <button
         class="capture-src-btn"
+        data-testid="capture-src-camera"
         :aria-pressed="currentSource === 'camera' ? 'true' : 'false'"
         @click="setSource('camera')"
       >📷 Camera</button>
       <button
         class="capture-src-btn"
+        data-testid="capture-src-video"
         :aria-pressed="currentSource === 'video' ? 'true' : 'false'"
         @click="setSource('video')"
       >📁 Video</button>
       <button
         class="capture-src-btn"
+        data-testid="capture-src-animfile"
         :aria-pressed="currentSource === 'animfile' ? 'true' : 'false'"
         @click="setSource('animfile')"
       >🎬 Anim</button>
@@ -446,6 +449,7 @@ onUnmounted(() => {
 
     <button
       class="capture-primary"
+      data-testid="capture-primary"
       :class="{ recording: primaryRecording }"
       :disabled="primaryDisabled"
       @click="onPrimaryClick"
@@ -454,8 +458,8 @@ onUnmounted(() => {
     <input ref="animFileInputRef" type="file" accept=".bvh,.vrma,.fbx"  hidden @change="onAnimFileChange">
 
     <div class="capture-status">
-      <span>{{ statusText }}</span>
-      <span style="opacity:.55">{{ framesText }}</span>
+      <span data-testid="mocap-status">{{ statusText }}</span>
+      <span style="opacity:.55" data-testid="mocap-frames">{{ framesText }}</span>
     </div>
     <div class="capture-status" style="margin-top:-2px">
       <span style="opacity:.45;font-size:10px">{{ sourceInfo }}</span>
@@ -464,6 +468,7 @@ onUnmounted(() => {
     <button
       v-show="showStopCam"
       class="dbg-toggle off"
+      data-testid="capture-stop-cam"
       style="width:100%"
       @click="onStopCam"
     >Stop camera</button>

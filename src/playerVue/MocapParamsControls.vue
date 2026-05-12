@@ -115,21 +115,21 @@ function setDepth(v: 0 | 0.5 | 1): void {
 
   <div class="dbg-row">
     <span class="dbg-label">🪞 Mirror mode</span>
-    <button class="dbg-toggle" :class="{ off: !mirrorX }" @click="toggleMirror">
+    <button class="dbg-toggle" data-testid="mocap-mirror" :class="{ off: !mirrorX }" @click="toggleMirror">
       {{ mirrorX ? 'ON' : 'OFF' }}
     </button>
   </div>
 
   <div class="dbg-row">
     <span class="dbg-label">😶 Face tracking</span>
-    <button class="dbg-toggle" :class="{ off: !faceTracking }" @click="toggleFace">
+    <button class="dbg-toggle" data-testid="mocap-face" :class="{ off: !faceTracking }" @click="toggleFace">
       {{ faceTracking ? 'ON' : 'OFF' }}
     </button>
   </div>
 
   <div class="dbg-row">
     <span class="dbg-label">🚶 Hip position</span>
-    <button class="dbg-toggle" :class="{ off: !hipPosition }" @click="toggleHip">
+    <button class="dbg-toggle" data-testid="mocap-hip" :class="{ off: !hipPosition }" @click="toggleHip">
       {{ hipPosition ? 'ON' : 'OFF' }}
     </button>
   </div>
@@ -140,7 +140,7 @@ function setDepth(v: 0 | 0.5 | 1): void {
       style="font-size:11px"
       title="When ON: if one arm/leg becomes invisible and the other side is live, copy the visible side's local quaternions to the missing side. Works for bilaterally-symmetric poses (claps, mirror dance); produces wrong poses for asymmetric motion. Off by default."
     >🪟 Symmetry fallback</span>
-    <button class="dbg-toggle" :class="{ off: !symmetryFallback }" @click="toggleSymmetry">
+    <button class="dbg-toggle" data-testid="mocap-symmetry" :class="{ off: !symmetryFallback }" @click="toggleSymmetry">
       {{ symmetryFallback ? 'ON' : 'OFF' }}
     </button>
   </div>

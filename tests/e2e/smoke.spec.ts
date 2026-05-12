@@ -2,6 +2,10 @@
  * Page-load smoke. Verifies the dev server serves a working build and the
  * VRM scene mounts without runtime errors. Pre-requisite for every other
  * e2e test — if this is red, everything downstream is meaningless.
+ *
+ * Selectors here use `data-testid` because after the Vue migration most
+ * id'd elements have been removed in favour of class-based styling +
+ * Vue-bound state. See playerVue/CaptureSection.vue + DebugPanelRoot.vue.
  */
 
 import { test, expect } from '@playwright/test';
@@ -39,14 +43,21 @@ test('page loads, viewport canvas is mounted, no console errors', async ({ page 
 test('debug panel is rendered with expected mocap controls', async ({ page }) => {
   await page.goto('/');
 
-  // Wait for the debug panel to populate (its HTML is built by JS at runtime).
-  await expect(page.locator('#capture-primary-btn')).toBeVisible({ timeout: 10_000 });
+  // The primary CTA is the one universally-visible element in the tuning panel.
+  await expect(page.getByTestId('capture-primary')).toBeVisible({ timeout: 10_000 });
 
-  // Core mocap controls. The mirror/face/symmetry toggles live inside the
-  // Video tab (collapsed by default), so we only assert they EXIST in DOM —
-  // not that they're currently visible. The actual mocap test exercises
-  // them via clicks which auto-handle the tab switch.
-  await expect(page.locator('#mocap-mirror-btn')).toBeAttached();
-  await expect(page.locator('#mocap-face-btn')).toBeAttached();
-  await expect(page.locator('#mocap-symmetry-btn')).toBeAttached();
+  // The three source-segmented-control buttons.
+  await expect(page.getByTestId('capture-src-camera')).toBeVisible();
+  await expect(page.getByTestId('capture-src-video')).toBeVisible();
+  await expect(page.getByTestId('capture-src-animfile')).toBeVisible();
+
+  // Tab buttons (Main / Video) in the left-side debug panel.
+  await expect(page.getByTestId('dbg-tab-main')).toBeVisible();
+  await expect(page.getByTestId('dbg-tab-video')).toBeVisible();
+
+  // Mirror / face / symmetry toggles live in the Video tab (collapsed by
+  // default for tab visibility, but always-attached in DOM via v-show).
+  await expect(page.getByTestId('mocap-mirror')).toBeAttached();
+  await expect(page.getByTestId('mocap-face')).toBeAttached();
+  await expect(page.getByTestId('mocap-symmetry')).toBeAttached();
 });

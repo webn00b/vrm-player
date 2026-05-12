@@ -193,6 +193,7 @@ onUnmounted(() => {
     <span class="dbg-label">🟢 Performer skeleton</span>
     <button
       class="dbg-toggle"
+      data-testid="dbgskel-toggle"
       :class="{ off: !dbgSkelOn }"
       @click="toggleDbgSkel"
     >{{ dbgSkelOn ? 'ON' : 'OFF' }}</button>
@@ -217,6 +218,7 @@ onUnmounted(() => {
   <div
     v-show="dbgSkelOn"
     class="scalar-stats"
+    data-testid="mocap-scalar-stats"
   >
     <template v-if="stats && scalePct">
       <div class="stat-row">

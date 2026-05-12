@@ -137,11 +137,13 @@ onMounted(() => {
     <div class="dbg-tabs">
       <button
         class="dbg-tab"
+        data-testid="dbg-tab-main"
         :class="{ active: activeTab === 'main' }"
         @click="activeTab = 'main'"
       >Main</button>
       <button
         class="dbg-tab"
+        data-testid="dbg-tab-video"
         :class="{ active: activeTab === 'video' }"
         @click="activeTab = 'video'"
       >Video</button>
