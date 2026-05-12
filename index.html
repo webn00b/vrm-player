@@ -574,45 +574,11 @@
         <div id="mocap-preview-panel" class="panel" style="display:none">
           <canvas id="mocap-canvas" style="display:block;width:100%;border-radius:3px;background:#000"></canvas>
         </div>
-        <div id="queue-panel" class="panel" data-tab="queue">
-          <!-- Tabs: Queue (playback) / Exports (download formats + tools) -->
-          <div class="dbg-tabs">
-            <button class="dbg-tab active" data-tab="queue">Queue</button>
-            <button class="dbg-tab" data-tab="exports">Exports</button>
-          </div>
-          <!-- Tab-specific tool sections -->
-          <div class="dbg-tab-panel active" data-panel="queue">
-            <!-- (no queue-specific header at the moment) -->
-          </div>
-          <div class="dbg-tab-panel" data-panel="exports">
-            <div class="exports-tools" style="font-size:11px;margin-bottom:8px;padding:8px 10px;background:rgba(110,168,255,0.06);border-radius:3px">
-              <div style="font-weight:600;opacity:.7;margin-bottom:4px">File-to-file converters</div>
-              <a href="/exports.html" target="_blank" rel="noopener"
-                 style="display:inline-block;padding:6px 10px;margin:4px 0;color:#fff;background:#3b5bdb;border-radius:3px;text-decoration:none;font-weight:600;font-size:11px">
-                🛠 Open converter window
-              </a>
-              <div style="opacity:.55;font-size:10px;margin-top:4px">
-                Standalone page — no avatar, lightweight. Supports
-                <code>.fbx</code> / <code>.bvh</code> / <code>.glb</code> /
-                <code>.gltf</code> / <code>.vrma</code> → JSON.
-              </div>
-              <div style="font-weight:600;opacity:.7;margin-top:10px">Per-clip downloads</div>
-              <div style="opacity:.55;font-size:10px">Click ⬇bvh / ⬇glb / ⬇ next to each item below</div>
-            </div>
-          </div>
-          <!-- The queue items list lives OUTSIDE both tab panels so it's
-               always visible. The visible button set per <li> is controlled
-               by `#queue-panel[data-tab=...]` CSS rules. -->
-          <div id="queue-list-wrap">
-            <ul id="queue-list"></ul>
-            <div id="queue-empty">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M12 5v14M5 12l7-7 7 7"/>
-              </svg>
-              Drag animations here
-            </div>
-          </div>
-        </div>
+        <!-- Owned by the QueuePanel.vue Vue island — content is rendered
+             reactively from main.ts via createApp(QueuePanel, props).mount.
+             Keep the panel class for layout / border / scrolling rules in
+             the global stylesheet. -->
+        <div id="queue-panel" class="panel"></div>
       </div>
 
       <!-- ── Center column: transparent, canvas visible ── -->

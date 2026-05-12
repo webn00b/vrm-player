@@ -11,7 +11,10 @@ import { AnimationController } from './animationController';
 import { PriorityAnimator } from './priorityAnimator';
 import { MicroAnimations } from './microAnimations';
 import { IdleLoop } from './idleLoop';
-import { mountQueue, setStatus } from './ui';
+import { setStatus } from './ui';
+import { createApp } from 'vue';
+import QueuePanel from './playerVue/QueuePanel.vue';
+import { installPrimeVueOn } from './playerVue/plugin';
 import { mountDebugPanel } from './debugPanel';
 import { BonePosePanel } from './bonePosePanel';
 import { BoneDragController } from './boneDragController';
@@ -187,15 +190,26 @@ async function main() {
 
   vrm.scene.visible = false;
 
-  // ── Queue (playback) ───────────────────────────────────────────────────────
-  const queue = mountQueue({
-    onJump:    (qi)       => controller.jumpTo(qi),
-    onReorder: (from, to) => controller.reorderQueue(from, to),
-    onRemove:  (qi) => {
+  // ── Queue (playback) — Vue island on #queue-panel ─────────────────────────
+  // Replaced the imperative `mountQueue()` with QueuePanel.vue. The same
+  // QueueHandle shape (push/remove/setActive/reorder) is exposed via
+  // `defineExpose` inside the component, so the rest of main.ts uses the
+  // returned `queue` reference identically.
+  interface QueueHandle {
+    push(name: string): void;
+    remove(qi: number): void;
+    setActive(qi: number): void;
+    reorder(from: number, to: number): void;
+  }
+  const queueApp = createApp(QueuePanel, {
+    onJump:    (qi: number)              => controller.jumpTo(qi),
+    onReorder: (from: number, to: number) => controller.reorderQueue(from, to),
+    onRemove:  (qi: number) => {
       controller.removeFromQueue(qi);
-      queue.remove(qi);
+      // The component removes itself from its reactive list; we just sync
+      // the underlying controller state. No `queue.remove(qi)` needed.
     },
-    onExport: (qi) => {
+    onExportVrma: (qi: number) => {
       const itemIdx = controller.getItemIndexAtQueuePos(qi);
       const bvh = bvhByIndex.get(itemIdx);
       const name = names[itemIdx];
@@ -204,14 +218,14 @@ async function main() {
         .then(() => setStatus(`saved ${name}.vrma`))
         .catch((e) => setStatus(`vrma export failed: ${(e as Error).message}`));
     },
-    onExportBvh: (qi) => {
+    onExportBvh: (qi: number) => {
       setStatus('recording BVH…');
       const handle = exportClipAsBvh(qi, controller, vrm);
       handle.promise
         .then((filename) => setStatus(`saved ${filename}`))
         .catch((e) => setStatus(`bvh export failed: ${(e as Error).message}`));
     },
-    onExportGlb: (qi) => {
+    onExportGlb: (qi: number) => {
       const clip = controller.getClipAtQueuePos(qi);
       if (!clip) { setStatus('no animation clip for this item'); return; }
       const itemIdx = controller.getItemIndexAtQueuePos(qi);
@@ -221,7 +235,14 @@ async function main() {
         .then((filename) => setStatus(`saved ${filename}`))
         .catch((e) => setStatus(`glb export failed: ${(e as Error).message}`));
     },
+    onRename: (_qi: number, _name: string) => {
+      // Display alias is persisted to localStorage inside the component; the
+      // hook is here in case future logic wants the new name as well.
+    },
   });
+  installPrimeVueOn(queueApp);
+  const queue = queueApp.mount('#queue-panel') as unknown as QueueHandle;
+  registerCleanup(() => queueApp.unmount());
 
   const registerAndEnqueue = (
     name: string,

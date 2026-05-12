@@ -10,7 +10,7 @@ export function readLibraryAlias(rawName: string): string | undefined {
   } catch { return undefined; }
 }
 
-function writeLibraryAlias(rawName: string, alias: string | null): void {
+export function writeLibraryAlias(rawName: string, alias: string | null): void {
   try {
     const raw = localStorage.getItem(ALIAS_KEY);
     const obj = raw ? (JSON.parse(raw) as Record<string, string>) : {};
