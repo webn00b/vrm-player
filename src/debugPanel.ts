@@ -6,7 +6,7 @@ import { mountSkelModal } from './debugPanelSkelModal';
 import { mountBvhModal } from './debugPanelBvhModal';
 import { mountBvhVerifyModal } from './debugPanelBvhVerifyModal';
 import { wireMocapControls } from './debugPanelMocapControls';
-import { wireHipsEqualsAndDiagModal } from './debugPanelHipsModal';
+import { mountHipDiagModal } from './debugPanelHipsModal';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 
 export function mountDebugPanel(
@@ -69,13 +69,27 @@ export function mountDebugPanel(
   // textContent — replaces the destructured return from wireDebugPanelCalibration.
   let calibStat: HTMLElement | null = null;
 
+  // Hip/leg diagnostics modal lives at body level as its own Vue island.
+  // The 'Diag' button inside CalibrationBlock calls hipDiag.open(); the
+  // tuning panel also bubbles up hips=shoulders toggle state so the modal
+  // dump can include it.
+  let hipsEqualsState = { buttonState: 'OFF', prevSpreadBeforeToggle: null as number | null };
+  const hipDiag = mountHipDiagModal({
+    getMocap,
+    getHipsEqualsState: () => hipsEqualsState,
+  });
+
   let tuningApp: App | null = null;
   const tuningRoot = document.getElementById('mocap-tuning-panel');
   if (tuningRoot) {
     tuningApp = createApp(TuningPanel, {
       getMocap,
+      onHipDiag: () => hipDiag.open(),
       onCalibrationMounted: (handles: { calibStat: HTMLElement }) => {
         calibStat = handles.calibStat;
+      },
+      onHipsEqualsChanged: (s: { buttonState: string; prevSpreadBeforeToggle: number | null }) => {
+        hipsEqualsState = s;
       },
     });
     installPrimeVueOn(tuningApp);
@@ -90,10 +104,6 @@ export function mountDebugPanel(
     mocap, mocapVrm: mocap.vrm, getMocap, getController, dbgRecorder,
     rememberInterval, rememberTimeout, onAnimFile,
   });
-
-  // ── Hips-equals / hip-diag modal — still owns id'd buttons inside the
-  //    CalibrationBlock Vue component (rig-hip-equal-btn / hip-diag-btn). ──
-  wireHipsEqualsAndDiagModal({ getMocap, rememberTimeout });
 
   // Wire state-change callback
   const originalMocap = getMocap();
@@ -143,6 +153,7 @@ export function mountDebugPanel(
     cleanupSkelModal();
     cleanupBvhModal();
     cleanupBvhVerifyModal();
+    hipDiag.cleanup();
     for (const id of intervalIds) clearInterval(id);
     for (const id of timeoutIds) clearTimeout(id);
     listenerAbort.abort();

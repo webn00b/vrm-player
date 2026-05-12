@@ -22,16 +22,23 @@ import CalibrationBlock from './CalibrationBlock.vue';
 
 const props = defineProps<{
   getMocap: () => MocapController | null;
+  /** Open the hip/leg diagnostics modal — forwarded to CalibrationBlock. */
+  onHipDiag?: () => void;
 }>();
 
 const emit = defineEmits<{
   /** Bubble up the live calibration-status element from CalibrationBlock so
    *  debugPanel.ts can wire mocap.onCalibrationChange to its textContent. */
   (e: 'calibrationMounted', handles: { calibStat: HTMLElement }): void;
+  /** Bubble up the hips=shoulders toggle state for the hip diag modal. */
+  (e: 'hipsEqualsChanged', state: { buttonState: string; prevSpreadBeforeToggle: number | null }): void;
 }>();
 
 function onCalibrationMounted(handles: { calibStat: HTMLElement }): void {
   emit('calibrationMounted', handles);
+}
+function onHipsEqualsChanged(state: { buttonState: string; prevSpreadBeforeToggle: number | null }): void {
+  emit('hipsEqualsChanged', state);
 }
 
 // ── Smoothing / Depth sliders (inlined here instead of wrapped in a
@@ -125,7 +132,12 @@ onMounted(() => {
     <!-- Calibration block — fully migrated (CalibrationBlock.vue handles
          the static block + the Calibration-tuning fold + Recal/Reset
          buttons + readiness bars + override sliders). -->
-    <CalibrationBlock :getMocap="getMocap" @mounted="onCalibrationMounted" />
+    <CalibrationBlock
+      :getMocap="getMocap"
+      :onHipDiag="onHipDiag"
+      @mounted="onCalibrationMounted"
+      @hips-equals-changed="onHipsEqualsChanged"
+    />
 
     <details
       class="dbg-fold"

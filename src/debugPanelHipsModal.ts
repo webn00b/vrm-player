@@ -1,19 +1,33 @@
 import * as THREE from 'three';
+import { createApp, ref, type App } from 'vue';
+import HipDiagModal from './playerVue/HipDiagModal.vue';
+import { installPrimeVueOn } from './playerVue/plugin';
 import type { MocapController } from './mocap/pipeline/mocapController';
 
-export interface DebugPanelHipsModalDeps {
+export interface HipDiagModalDeps {
   getMocap: () => MocapController | null;
-  rememberTimeout: (fn: () => void, ms: number) => number;
+  /** Optional accessor for the hips-equals toggle state — shown in the dump. */
+  getHipsEqualsState?: () => { buttonState: string; prevSpreadBeforeToggle: number | null };
+}
+
+export interface HipDiagModalHandle {
+  /** Opens the modal and immediately refreshes its content. */
+  open(): void;
+  cleanup(): void;
 }
 
 /**
- * Wire the hips-equals-shoulders width-override toggle + the hip/leg
- * diagnostics modal that sits next to it in the tuning panel.
+ * Mounts the hip/leg diagnostics modal as a PrimeVue Dialog.
  *
- * The toggle and the modal share two pieces of state (`active`/`prevSpread`
- * for the toggle; the modal reads them via `hipEqualBtn.textContent` and
- * `prevSpread` directly when building its JSON dump), so they live in one
- * module rather than splitting hairs.
+ * The previous version owned BOTH the diagnostics modal AND the `rig-hip-
+ * equal-btn` width-override toggle. The toggle has since moved INTO
+ * CalibrationBlock.vue (so it can mutate the `legSpread` slider ref
+ * directly — the previous mirror-into-DOM hack stopped working when the
+ * slider became a Vue v-model'd ref).
+ *
+ * What stays here: the JSON dump builder (collects every quantity that
+ * influences leg IK: rig pose, calibration scales, IK debug targets,
+ * raw landmarks) + the Vue mount.
  *
  * Why this isn't pixel-translation of the leg roots:
  * The straightforward approach (translating leftUpperLeg/rightUpperLeg
@@ -28,93 +42,11 @@ export interface DebugPanelHipsModalDeps {
  * That fans the foot IK targets outward without touching any bone
  * geometry, so the rendered mesh stays consistent with its rest pose.
  */
-export function wireHipsEqualsAndDiagModal(deps: DebugPanelHipsModalDeps): void {
-  const { getMocap, rememberTimeout } = deps;
+export function mountHipDiagModal(deps: HipDiagModalDeps): HipDiagModalHandle {
+  const { getMocap, getHipsEqualsState } = deps;
 
-  const hipEqualBtn   = document.querySelector<HTMLButtonElement>('#rig-hip-equal-btn')!;
-  const spreadSlider  = document.querySelector<HTMLInputElement>('#mocap-legspread-slider');
-  const spreadValEl   = document.querySelector<HTMLElement>('#mocap-legspread-val');
-
-  let active = false;
-  let prevSpread: number | null = null;
-
-  const setSpread = (v: number): void => {
-    const m = getMocap();
-    m?.setLegSpreadX(v);
-    // Reflect into the slider/readout so the user can see what the toggle
-    // applied and tweak it from there if needed.
-    if (spreadSlider) spreadSlider.value = String(Math.max(0.5, Math.min(2, v)));
-    if (spreadValEl)  spreadValEl.textContent = v.toFixed(2);
-  };
-
-  hipEqualBtn.addEventListener('click', () => {
-    const m = getMocap();
-    if (!m) return;
-    const vrm = m.vrm;
-    const sL = vrm.humanoid.getNormalizedBoneNode('leftUpperArm' as any);
-    const sR = vrm.humanoid.getNormalizedBoneNode('rightUpperArm' as any);
-    if (!sL || !sR) {
-      const missing = [!sL && 'leftUpperArm', !sR && 'rightUpperArm'].filter(Boolean).join(', ');
-      console.warn(`[hip-equal] missing humanoid bone(s): ${missing}`);
-      hipEqualBtn.title = `Disabled — VRM missing: ${missing}`;
-      hipEqualBtn.disabled = true;
-      return;
-    }
-
-    active = !active;
-    if (active) {
-      // Compensate for performer↔avatar hip-width mismatch. The leg solver
-      // computes target.x as `avatarHipRoot.x + (performerAnkle.x -
-      // performerHip.x) * legScale * legSpreadX`. legScale is a *length*
-      // ratio, so the X-offset is carried over in absolute MediaPipe metres.
-      // If performer's hip half-width is bigger than the avatar's, even a
-      // narrow performer stance overshoots the avatar's leg root past the
-      // centerline → legs cross. Scaling the offset by the hip-width ratio
-      // preserves "foot displacement relative to hip width" between rigs:
-      // performer narrow → avatar narrow on its own scale, never crossed.
-      const cal = m.calibration as any;
-      const performerHipWidth = cal.performerHipWidth as number;
-      const avatarHipWidth    = m.calibration.avatarHipWidth;
-      if (performerHipWidth < 1e-4 || avatarHipWidth < 1e-4) {
-        console.warn('[hip-equal] hip width measurement unavailable; skipping');
-        active = false;
-        return;
-      }
-      const ratio = avatarHipWidth / performerHipWidth;
-      prevSpread = m.legSpreadX;
-      setSpread(ratio);
-    } else if (prevSpread != null) {
-      setSpread(prevSpread);
-      prevSpread = null;
-    }
-
-    hipEqualBtn.textContent = active ? 'ON' : 'OFF';
-    hipEqualBtn.classList.toggle('off', !active);
-  });
-
-  wireDiagModal({ getMocap, rememberTimeout, hipEqualBtn, getPrevSpread: () => prevSpread });
-}
-
-interface DiagModalDeps extends DebugPanelHipsModalDeps {
-  hipEqualBtn: HTMLButtonElement;
-  getPrevSpread: () => number | null;
-}
-
-/**
- * The hip/leg diagnostics modal — collects every quantity that influences
- * leg IK (rig pose, calibration scales, IK debug targets, raw landmarks)
- * into a single JSON dump for offline diffing. Triggered via the "?"
- * button next to the hips=shoulders toggle.
- */
-function wireDiagModal({
-  getMocap, rememberTimeout, hipEqualBtn, getPrevSpread,
-}: DiagModalDeps): void {
-  const diagBtn        = document.querySelector<HTMLButtonElement>('#hip-diag-btn')!;
-  const diagOverlay    = document.getElementById('hip-diag-modal-overlay')!;
-  const diagBody       = document.getElementById('hip-diag-modal-body')!;
-  const diagCopyBtn    = document.getElementById('hip-diag-modal-copy')!;
-  const diagRefreshBtn = document.getElementById('hip-diag-modal-refresh')!;
-  const diagCloseBtn   = document.getElementById('hip-diag-modal-close')!;
+  const isOpen  = ref(false);
+  const content = ref('');
 
   const r3 = (n: number): number => Math.round(n * 1000) / 1000;
   const vec3 = (v: THREE.Vector3): { x: number; y: number; z: number } => ({ x: r3(v.x), y: r3(v.y), z: r3(v.z) });
@@ -165,10 +97,9 @@ function wireDiagModal({
         chest:          boneRow('chest'),
         upperChest:     boneRow('upperChest'),
       },
-      hipsEqualsShoulders: {
-        buttonState: hipEqualBtn.textContent,
-        prevSpreadBeforeToggle: getPrevSpread(),
-      },
+      hipsEqualsShoulders: getHipsEqualsState
+        ? getHipsEqualsState()
+        : { buttonState: '(unknown)', prevSpreadBeforeToggle: null },
       calibration: {
         calibrated:           cal._calibrated ?? null,
         avatarHipWidth:       r3(cal.avatarHipWidth ?? NaN),
@@ -226,26 +157,35 @@ function wireDiagModal({
     return JSON.stringify(data, null, 2);
   };
 
-  const refreshDiag = (): void => { diagBody.textContent = buildDiag(); };
-  diagBtn.addEventListener('click', () => {
-    refreshDiag();
-    diagOverlay.style.display = 'flex';
+  const refresh = (): void => { content.value = buildDiag(); };
+
+  // Vue host (Dialog teleports itself; the host just anchors lifecycle).
+  const host = document.createElement('div');
+  host.id = 'hip-diag-modal-host';
+  document.body.appendChild(host);
+
+  const app: App = createApp({
+    components: { HipDiagModal },
+    setup() {
+      return { isOpen, content, refresh };
+    },
+    template: `
+      <HipDiagModal
+        v-model="isOpen"
+        :content="content"
+        @refresh="refresh"
+      />
+    `,
   });
-  diagRefreshBtn.addEventListener('click', refreshDiag);
-  diagCloseBtn.addEventListener('click', () => { diagOverlay.style.display = 'none'; });
-  diagOverlay.addEventListener('click', (e) => {
-    if (e.target === diagOverlay) diagOverlay.style.display = 'none';
-  });
-  let diagCopyResetId = 0;
-  diagCopyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(diagBody.textContent ?? '').then(() => {
-      diagCopyBtn.textContent = '✓ copied!';
-      diagCopyBtn.classList.add('copied');
-      clearTimeout(diagCopyResetId);
-      diagCopyResetId = rememberTimeout(() => {
-        diagCopyBtn.textContent = '📋 copy';
-        diagCopyBtn.classList.remove('copied');
-      }, 2000);
-    });
-  });
+  installPrimeVueOn(app);
+  app.mount(host);
+
+  return {
+    open: () => { refresh(); isOpen.value = true; },
+    cleanup: () => {
+      isOpen.value = false;
+      app.unmount();
+      host.remove();
+    },
+  };
 }

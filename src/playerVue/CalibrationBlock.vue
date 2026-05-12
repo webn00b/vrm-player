@@ -21,12 +21,18 @@ import type { MocapController } from '../mocap/pipeline/mocapController';
 
 const props = defineProps<{
   getMocap: () => MocapController | null;
+  /** Opens the hip/leg diagnostics modal. Provided by the host so the modal
+   *  can live as a sibling Vue island (mounted at <body> level). */
+  onHipDiag?: () => void;
 }>();
 
 const emit = defineEmits<{
   /** Bubbles up the live calibration-status text element so debugPanel.ts
    *  can wire mocap.onCalibrationChange to mutate its textContent. */
   (e: 'mounted', handles: { calibStat: HTMLElement }): void;
+  /** Fires whenever the hips=shoulders toggle changes, so the diagnostics
+   *  dump can include the current button state + prevSpread. */
+  (e: 'hipsEqualsChanged', state: { buttonState: string; prevSpreadBeforeToggle: number | null }): void;
 }>();
 
 // ── Readiness bars ────────────────────────────────────────────────────────
@@ -101,6 +107,64 @@ function onLaOver(): void    { props.getMocap()?.calibration.setOverride('leftAr
 function onRaOver(): void    { props.getMocap()?.calibration.setOverride('rightArm',  raOverride.value); }
 function onLegSpread(): void { props.getMocap()?.setLegSpreadX(legSpread.value); }
 
+// ── Hips = shoulders width-override toggle ───────────────────────────────
+// Was wireHipsEqualsAndDiagModal — pulled in here because it mutates the
+// `legSpread` slider above. See debugPanelHipsModal.ts for the why-not-
+// translate-bones explanation.
+const hipsEqualActive   = ref(false);
+const hipsEqualDisabled = ref(false);
+const hipsEqualTitle    = ref('Move upper-leg roots so hip width equals shoulder width');
+let prevSpread: number | null = null;
+
+function emitHipsEqualsState(): void {
+  emit('hipsEqualsChanged', {
+    buttonState: hipsEqualActive.value ? 'ON' : 'OFF',
+    prevSpreadBeforeToggle: prevSpread,
+  });
+}
+
+function applySpread(v: number): void {
+  legSpread.value = Math.max(0.5, Math.min(2, v));
+  props.getMocap()?.setLegSpreadX(v);
+}
+
+function toggleHipsEqual(): void {
+  const m = props.getMocap();
+  if (!m) return;
+  const vrm = m.vrm;
+  const sL = vrm.humanoid.getNormalizedBoneNode('leftUpperArm' as any);
+  const sR = vrm.humanoid.getNormalizedBoneNode('rightUpperArm' as any);
+  if (!sL || !sR) {
+    const missing = [!sL && 'leftUpperArm', !sR && 'rightUpperArm'].filter(Boolean).join(', ');
+    console.warn(`[hip-equal] missing humanoid bone(s): ${missing}`);
+    hipsEqualTitle.value = `Disabled — VRM missing: ${missing}`;
+    hipsEqualDisabled.value = true;
+    return;
+  }
+
+  hipsEqualActive.value = !hipsEqualActive.value;
+  if (hipsEqualActive.value) {
+    // See debugPanelHipsModal.ts for the legSpreadX-vs-bone-translation
+    // rationale.
+    const cal = m.calibration as any;
+    const performerHipWidth = cal.performerHipWidth as number;
+    const avatarHipWidth    = m.calibration.avatarHipWidth;
+    if (performerHipWidth < 1e-4 || avatarHipWidth < 1e-4) {
+      console.warn('[hip-equal] hip width measurement unavailable; skipping');
+      hipsEqualActive.value = false;
+      emitHipsEqualsState();
+      return;
+    }
+    const ratio = avatarHipWidth / performerHipWidth;
+    prevSpread = m.legSpreadX;
+    applySpread(ratio);
+  } else if (prevSpread != null) {
+    applySpread(prevSpread);
+    prevSpread = null;
+  }
+  emitHipsEqualsState();
+}
+
 function resetSliders(): void {
   const m = props.getMocap();
   shOverride.value = 1; m?.calibration.setOverride('shoulder', 1);
@@ -162,14 +226,23 @@ function onFoldToggle(e: Event): void {
   >
     <summary>Calibration tuning</summary>
     <div class="dbg-section">
-      <!-- Hips-equals / hip-diag — id'd, owned by wireHipsEqualsAndDiagModal. -->
+      <!-- Hips-equals toggle (was wireHipsEqualsAndDiagModal). Diag button
+           emits 'onHipDiag' upward so the modal Vue island can open. -->
       <div class="dbg-row">
         <span class="dbg-label">🦴 Hips = shoulders</span>
         <div style="display:flex;gap:3px">
-          <button class="dbg-toggle off" id="rig-hip-equal-btn"
-                  title="Move upper-leg roots so hip width equals shoulder width">OFF</button>
-          <button class="dbg-toggle off" id="hip-diag-btn"
-                  title="Dump rig + mocap state for the leg/hip pipeline">🔬 Diag</button>
+          <button
+            class="dbg-toggle"
+            :class="{ off: !hipsEqualActive }"
+            :disabled="hipsEqualDisabled"
+            :title="hipsEqualTitle"
+            @click="toggleHipsEqual"
+          >{{ hipsEqualActive ? 'ON' : 'OFF' }}</button>
+          <button
+            class="dbg-toggle off"
+            title="Dump rig + mocap state for the leg/hip pipeline"
+            @click="onHipDiag?.()"
+          >🔬 Diag</button>
         </div>
       </div>
       <div class="dbg-row">
