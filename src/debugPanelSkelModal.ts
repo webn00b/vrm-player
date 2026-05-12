@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { createApp, ref, type App } from 'vue';
+import SkelModal from './playerVue/SkelModal.vue';
+import { installPrimeVueOn } from './playerVue/plugin';
 import type { MocapController } from './mocap/pipeline/mocapController';
 import type { BoneValidator } from './validation/boneValidator';
 import type { PoseFrame, Landmark3D } from './mocap/pipeline/poseDetector';
@@ -28,13 +31,14 @@ type ArmDebugTargets = {
 // ── Mount ─────────────────────────────────────────────────────────────────────
 
 export function mountSkelModal(ctx: SkelModalContext): () => void {
-  const { getMocap, validator, signal, rememberInterval, rememberTimeout } = ctx;
+  const { getMocap, validator, signal, rememberInterval } = ctx;
 
-  const skelInfoBtn   = document.querySelector<HTMLButtonElement>('#skel-info-btn');
-  const modalOverlay  = document.getElementById('skel-modal-overlay')!;
-  const modalBody     = document.getElementById('skel-modal-body')!;
-  const modalCloseBtn = document.getElementById('skel-modal-close')!;
-  const modalCopyBtn  = document.getElementById('skel-modal-copy')!;
+  const skelInfoBtn = document.querySelector<HTMLButtonElement>('#skel-info-btn');
+
+  // Reactive state shared with the Vue modal component below.
+  const isOpen        = ref(false);
+  const contentHtml   = ref('');
+  const clipboardText = ref('');
 
   let modalTimer = 0;
 
@@ -918,45 +922,65 @@ export function mountSkelModal(ctx: SkelModalContext): () => void {
     ].join('\n');
   };
 
-  // ── Modal open / close / refresh ────────────────────────────────────────────
+  // ── Modal open / close / refresh — driven by reactive refs ─────────────────
+  //
+  // PrimeVue's <Dialog> handles ESC, focus trap, and click-outside-to-close
+  // (via :dismissable-mask) for free. We just toggle `isOpen` and feed the
+  // content + clipboard text via reactive refs. A 500ms timer refreshes the
+  // content while the modal is open — same cadence as the previous version.
 
-  const refreshModal = (): void => { modalBody.innerHTML = buildModalContent(); };
-
-  const openModal = (): void => {
-    modalOverlay.classList.add('open');
-    refreshModal();
-    modalTimer = rememberInterval(refreshModal, 500);
+  const refresh = (): void => {
+    contentHtml.value   = buildModalContent();
+    clipboardText.value = buildClipboardText();
   };
 
-  const closeModal = (): void => {
-    modalOverlay.classList.remove('open');
-    clearInterval(modalTimer);
-  };
+  // Mount a Vue app at body level holding the Dialog. Dialog teleports its
+  // own DOM to <body> internally, so the host element just anchors the Vue
+  // root (and lifecycle hooks).
+  const modalHost = document.createElement('div');
+  modalHost.id = 'skel-modal-host';
+  document.body.appendChild(modalHost);
+  const modalApp: App = createApp({
+    components: { SkelModal },
+    setup() {
+      // Watch isOpen → start/stop the refresh timer. Done here so the timer
+      // lifecycle is colocated with the Vue reactive system that drives it.
+      const onChange = (): void => {
+        clearInterval(modalTimer);
+        if (isOpen.value) {
+          refresh();
+          modalTimer = rememberInterval(refresh, 500);
+        }
+      };
+      // Vue's `watch` would also work; this is fine since isOpen is only
+      // mutated by us imperatively below.
+      return { isOpen, contentHtml, clipboardText, onChange };
+    },
+    template: `
+      <SkelModal
+        v-model="isOpen"
+        :content="contentHtml"
+        :clipboardText="clipboardText"
+        @update:modelValue="onChange"
+      />
+    `,
+  });
+  installPrimeVueOn(modalApp);
+  modalApp.mount(modalHost);
 
+  // Bind the "View" button in the calibration-tuning panel to open the modal.
   const modalListenerOpts: AddEventListenerOptions = { signal };
-  skelInfoBtn?.addEventListener('click', openModal, modalListenerOpts);
-  modalCloseBtn.addEventListener('click', closeModal, modalListenerOpts);
-  modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); }, modalListenerOpts);
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalOverlay.classList.contains('open')) closeModal();
-  }, modalListenerOpts);
-
-  let copyResetTimer = 0;
-  modalCopyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(buildClipboardText()).then(() => {
-      modalCopyBtn.textContent = '✓ copied!';
-      modalCopyBtn.classList.add('copied');
-      clearTimeout(copyResetTimer);
-      copyResetTimer = rememberTimeout(() => {
-        modalCopyBtn.textContent = '📋 copy';
-        modalCopyBtn.classList.remove('copied');
-      }, 2000);
-    });
+  skelInfoBtn?.addEventListener('click', () => {
+    isOpen.value = true;
+    refresh();
+    clearInterval(modalTimer);
+    modalTimer = rememberInterval(refresh, 500);
   }, modalListenerOpts);
 
   return () => {
     clearInterval(modalTimer);
-    clearTimeout(copyResetTimer);
-    closeModal();
+    isOpen.value = false;
+    modalApp.unmount();
+    modalHost.remove();
   };
 }

@@ -476,46 +476,14 @@
         overflow: hidden; text-overflow: ellipsis;
       }
 
-      /* ── Skeleton info modal ── */
-      #skel-modal-overlay {
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.55);
-        z-index: 1000;
-        align-items: center;
-        justify-content: center;
-        backdrop-filter: blur(4px);
-      }
-      #skel-modal-overlay.open { display: flex; }
-      #skel-modal {
-        background: #131313;
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 12px;
-        padding: 18px 20px 16px;
-        width: 540px;
-        max-height: 82vh;
-        overflow-y: auto;
-        font-family: ui-monospace, monospace;
-        font-size: 11px;
-        color: #e0e0e0;
-        box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255,255,255,.1) transparent;
-      }
-      #skel-modal-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 14px;
-      }
-      #skel-modal-title {
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.03em;
-        opacity: 0.9;
-      }
+      /* ── Skeleton info modal ──
+         Shell (overlay / header / close-button) is rendered by PrimeVue
+         <Dialog> in SkelModal.vue. The skel-* class rules below still
+         style the BODY content because the existing 600-LOC builder
+         produces HTML using those class names. */
       .skel-close {
+        /* Kept for backward-compat: other modals (BVH diag, hip diag,
+           BVH verify) still use this button class. */
         background: none;
         border: 1px solid rgba(255,255,255,0.1);
         color: rgba(255,255,255,0.45);
@@ -528,8 +496,7 @@
         transition: color 100ms, background 100ms;
       }
       .skel-close:hover { color: #fff; background: rgba(255,255,255,0.07); }
-      #skel-modal-copy { margin-right: 6px; }
-      #skel-modal-copy.copied { color: #4ade80; border-color: rgba(74,222,128,0.35); }
+      #bvh-modal-copy.copied { color: #4ade80; border-color: rgba(74,222,128,0.35); }
       .skel-cols {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -649,19 +616,9 @@
       })();
     </script>
 
-    <!-- Skeleton info modal -->
-    <div id="skel-modal-overlay">
-      <div id="skel-modal">
-        <div id="skel-modal-header">
-          <span id="skel-modal-title">🦴 Skeleton info</span>
-          <span style="display:flex;gap:6px">
-            <button class="skel-close" id="skel-modal-copy">📋 copy</button>
-            <button class="skel-close" id="skel-modal-close">✕ close</button>
-          </span>
-        </div>
-        <div id="skel-modal-body"></div>
-      </div>
-    </div>
+    <!-- Skeleton info modal: now rendered by SkelModal.vue (PrimeVue Dialog).
+         The Vue app mounts a host div at body level and the Dialog teleports
+         its own DOM elsewhere internally. No static markup needed here. -->
 
     <!-- BVH diagnostic modal -->
     <div id="bvh-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1001;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
