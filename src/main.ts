@@ -305,25 +305,9 @@ async function main() {
     window.removeEventListener('drop', onWindowDrop);
   });
 
-  // ── Queue-panel tab switcher (Queue / Exports) ─────────────────────────────
-  // Drives a `data-tab` attribute on #queue-panel; CSS toggles per-item
-  // button visibility off that attribute. Same UX pattern as the debug
-  // panel's tabs — minimal new styling needed.
-  const queuePanelEl = document.getElementById('queue-panel');
-  if (queuePanelEl) {
-    const tabButtons = queuePanelEl.querySelectorAll<HTMLButtonElement>('.dbg-tabs .dbg-tab');
-    const tabPanels  = queuePanelEl.querySelectorAll<HTMLElement>('.dbg-tab-panel');
-    tabButtons.forEach((btn) => {
-      const handler = (): void => {
-        const name = btn.dataset.tab!;
-        queuePanelEl.dataset.tab = name;
-        tabButtons.forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
-        tabPanels .forEach((p) => p.classList.toggle('active', p.dataset.panel === name));
-      };
-      btn.addEventListener('click', handler);
-      registerCleanup(() => btn.removeEventListener('click', handler));
-    });
-  }
+  // Queue-panel tabs (Queue / Exports) live entirely inside QueuePanel.vue
+  // — the component owns its own activeTab ref + click handlers + scoped
+  // CSS rules driving per-item button visibility.
 
   // File-to-file converters (FBX/BVH/GLB/VRMA → JSON) now live in the
   // standalone /exports.html page. The Exports tab here just links to it.

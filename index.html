@@ -233,13 +233,8 @@
       }
       .q-export-bvh, .q-export-glb { font-size: 9px; padding: 0 4px; letter-spacing: 0.05em; }
 
-      /* Per-tab button visibility: Queue tab hides export buttons; Exports
-         tab hides the remove button. The shared list lives outside the
-         tab panels so we drive visibility off `#queue-panel[data-tab=...]`. */
-      #queue-panel[data-tab="queue"]   .q-export,
-      #queue-panel[data-tab="queue"]   .q-export-bvh,
-      #queue-panel[data-tab="queue"]   .q-export-glb { display: none; }
-      #queue-panel[data-tab="exports"] .q-remove     { display: none; }
+      /* Per-tab button visibility is now scoped inside QueuePanel.vue
+         (.queue-panel-root[data-tab=...] .q-* rules). */
 
       /* ── Debug / Layers panel (left) ── */
       #debug-panel {
