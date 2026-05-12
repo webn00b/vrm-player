@@ -100,7 +100,11 @@ function toggleDemo(): void {
 }
 
 // ── Layer toggles (idle / breathing / headSway / eyeSaccades / blink / weightShift) ─
-type LayerKey = 'idle' | 'breathing' | 'headSway' | 'eyeSaccades' | 'blink' | 'weightShift';
+/** Keys on MicroAnimations that are simple boolean enable flags. Picking
+ *  them explicitly gives us a type-safe `(props.micro)[key]` index access
+ *  without `as any`. */
+type MicroKey = 'breathing' | 'headSway' | 'eyeSaccades' | 'blink' | 'weightShift';
+type LayerKey = 'idle' | MicroKey;
 const layers = reactive<Record<LayerKey, boolean>>({
   idle: false, breathing: false, headSway: false,
   eyeSaccades: false, blink: false, weightShift: false,
@@ -111,7 +115,7 @@ function toggleLayer(key: LayerKey): void {
     props.idle.enabled = layers[key];
     if (!layers[key]) props.pa.reset();
   } else {
-    (props.micro as any)[key] = layers[key];
+    props.micro[key as MicroKey] = layers[key];
   }
 }
 

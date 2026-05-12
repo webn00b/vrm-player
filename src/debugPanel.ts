@@ -142,7 +142,7 @@ export function mountDebugPanel(
     for (const id of intervalIds) clearInterval(id);
     for (const id of timeoutIds) clearTimeout(id);
     listenerAbort.abort();
-    if ((window as any).dumpSkeleton) delete (window as any).dumpSkeleton;
+    if (window.dumpSkeleton) delete window.dumpSkeleton;
     // Unmounting the Vue apps tears down their event listeners + reactive
     // effects. The previous `root.innerHTML = ''` did the same for vanilla.
     debugApp.unmount();

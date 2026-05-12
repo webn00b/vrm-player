@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createApp, ref, type App } from 'vue';
+import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import HipDiagModal from './playerVue/HipDiagModal.vue';
 import { installPrimeVueOn } from './playerVue/plugin';
 import type { MocapController } from './mocap/pipeline/mocapController';
@@ -57,11 +58,11 @@ export function mountHipDiagModal(deps: HipDiagModalDeps): HipDiagModalHandle {
     const m = getMocap();
     if (!m) return '(mocap not initialised)';
     const vrm = m.vrm;
-    const get = (n: string) => vrm.humanoid.getNormalizedBoneNode(n as any);
-    const getRaw = (n: string) => vrm.humanoid.getRawBoneNode(n as any);
+    const get    = (n: VRMHumanBoneName) => vrm.humanoid.getNormalizedBoneNode(n);
+    const getRaw = (n: VRMHumanBoneName) => vrm.humanoid.getRawBoneNode(n);
     vrm.scene.updateMatrixWorld(true);
 
-    const boneRow = (name: string) => {
+    const boneRow = (name: VRMHumanBoneName) => {
       const norm = get(name);
       const raw = getRaw(name);
       if (!norm) return { name, missing: true };
@@ -77,50 +78,50 @@ export function mountHipDiagModal(deps: HipDiagModalDeps): HipDiagModalHandle {
       };
     };
 
-    const cal = m.calibration as any;
+    const cal = m.calibration;
     const frame = m.latestFrame;
-    const dt = m.debugTargets as any;
+    const dt = m.debugTargets;
 
     const data = {
       timestamp: new Date().toISOString(),
       rig: {
-        leftUpperLeg:   boneRow('leftUpperLeg'),
-        rightUpperLeg:  boneRow('rightUpperLeg'),
-        leftLowerLeg:   boneRow('leftLowerLeg'),
-        rightLowerLeg:  boneRow('rightLowerLeg'),
-        leftFoot:       boneRow('leftFoot'),
-        rightFoot:      boneRow('rightFoot'),
-        leftUpperArm:   boneRow('leftUpperArm'),
-        rightUpperArm:  boneRow('rightUpperArm'),
-        hips:           boneRow('hips'),
-        spine:          boneRow('spine'),
-        chest:          boneRow('chest'),
-        upperChest:     boneRow('upperChest'),
+        leftUpperLeg:   boneRow(VRMHumanBoneName.LeftUpperLeg),
+        rightUpperLeg:  boneRow(VRMHumanBoneName.RightUpperLeg),
+        leftLowerLeg:   boneRow(VRMHumanBoneName.LeftLowerLeg),
+        rightLowerLeg:  boneRow(VRMHumanBoneName.RightLowerLeg),
+        leftFoot:       boneRow(VRMHumanBoneName.LeftFoot),
+        rightFoot:      boneRow(VRMHumanBoneName.RightFoot),
+        leftUpperArm:   boneRow(VRMHumanBoneName.LeftUpperArm),
+        rightUpperArm: boneRow(VRMHumanBoneName.RightUpperArm),
+        hips:           boneRow(VRMHumanBoneName.Hips),
+        spine:          boneRow(VRMHumanBoneName.Spine),
+        chest:          boneRow(VRMHumanBoneName.Chest),
+        upperChest:     boneRow(VRMHumanBoneName.UpperChest),
       },
       hipsEqualsShoulders: getHipsEqualsState
         ? getHipsEqualsState()
         : { buttonState: '(unknown)', prevSpreadBeforeToggle: null },
       calibration: {
-        calibrated:           cal._calibrated ?? null,
-        avatarHipWidth:       r3(cal.avatarHipWidth ?? NaN),
-        avatarLeftUpperArm:   r3(cal.avatarLeftUpperArm ?? NaN),
-        avatarLeftUpperLeg:   r3(cal.avatarLeftUpperLeg ?? NaN),
-        avatarLeftLowerLeg:   r3(cal.avatarLeftLowerLeg ?? NaN),
-        avatarRightUpperLeg:  r3(cal.avatarRightUpperLeg ?? NaN),
-        avatarRightLowerLeg:  r3(cal.avatarRightLowerLeg ?? NaN),
-        performerHipWidth:    r3(cal.performerHipWidth ?? NaN),
-        performerShoulderWidth: r3(cal.performerShoulderWidth ?? NaN),
-        performerLegLen:      r3(cal.performerLegLen ?? NaN),
-        bodyScale:             r3(m.calibration.bodyScale()),
-        legScale:              r3(m.calibration.legScale()),
-        armScaleL:             r3(m.calibration.armScale('left')),
-        armScaleR:             r3(m.calibration.armScale('right')),
-        scaleRef:              m.calibration.scaleRef,
-        hipVisGate:            r3(m.calibration.hipVisGate),
-        readiness:             m.calibration.readiness(),
+        calibrated:             cal.calibrated,
+        avatarHipWidth:         r3(cal.avatarHipWidth),
+        avatarLeftUpperArm:     r3(cal.avatarLeftUpperArm),
+        avatarLeftUpperLeg:     r3(cal.avatarLeftUpperLeg),
+        avatarLeftLowerLeg:     r3(cal.avatarLeftLowerLeg),
+        avatarRightUpperLeg:    r3(cal.avatarRightUpperLeg),
+        avatarRightLowerLeg:    r3(cal.avatarRightLowerLeg),
+        performerHipWidth:      r3(cal.performerHipWidthMetric),
+        performerShoulderWidth: r3(cal.performerShoulderWidthMetric),
+        performerLegLen:        r3(cal.performerLegLenMetric),
+        bodyScale:              r3(cal.bodyScale()),
+        legScale:               r3(cal.legScale()),
+        armScaleL:              r3(cal.armScale('left')),
+        armScaleR:              r3(cal.armScale('right')),
+        scaleRef:               cal.scaleRef,
+        hipVisGate:             r3(cal.hipVisGate),
+        readiness:              cal.readiness(),
       },
       applier: {
-        mirrorX:        (m as any).applier?._mirrorX ?? null,
+        mirrorX:        m.mirrorX,
         legSpreadX:     r3(m.legSpreadX),
         shoulderSpread: r3(m.shoulderSpread),
       },
@@ -145,12 +146,12 @@ export function mountHipDiagModal(deps: HipDiagModalDeps): HipDiagModalHandle {
         },
       } : null,
       ikDebugTargets: {
-        leftFootTarget:  dt?.leftFootTarget  ? vec3(dt.leftFootTarget)  : null,
-        rightFootTarget: dt?.rightFootTarget ? vec3(dt.rightFootTarget) : null,
-        leftKneeTarget:  dt?.leftKneeTarget  ? vec3(dt.leftKneeTarget)  : null,
-        rightKneeTarget: dt?.rightKneeTarget ? vec3(dt.rightKneeTarget) : null,
-        leftFootLocked:  dt?.leftFootLocked  ?? null,
-        rightFootLocked: dt?.rightFootLocked ?? null,
+        // MocapDebugTargets exposes ankle targets, not foot/knee — the
+        // solver constructs foot/knee from ankle + leg pose internally.
+        leftAnkleTarget:  dt.hasLeg ? vec3(dt.leftAnkleTarget)  : null,
+        rightAnkleTarget: dt.hasLeg ? vec3(dt.rightAnkleTarget) : null,
+        leftFootLocked:   dt.leftFootLocked,
+        rightFootLocked:  dt.rightFootLocked,
       },
     };
 

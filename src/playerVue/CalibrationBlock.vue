@@ -17,6 +17,7 @@
  */
 
 import { ref, reactive, onMounted, onUnmounted, watch } from 'vue';
+import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import type { MocapController } from '../mocap/pipeline/mocapController';
 
 const props = defineProps<{
@@ -61,11 +62,11 @@ onMounted(() => {
   }, 200);
 
   if (calibStatRef.value) emit('mounted', { calibStat: calibStatRef.value });
-  (window as any).dumpSkeleton = doDump;
+  window.dumpSkeleton = doDump;
 });
 onUnmounted(() => {
   clearInterval(pollTimer);
-  if ((window as any).dumpSkeleton === doDump) delete (window as any).dumpSkeleton;
+  if (window.dumpSkeleton === doDump) delete window.dumpSkeleton;
 });
 
 // ── Static actions ────────────────────────────────────────────────────────
@@ -132,8 +133,8 @@ function toggleHipsEqual(): void {
   const m = props.getMocap();
   if (!m) return;
   const vrm = m.vrm;
-  const sL = vrm.humanoid.getNormalizedBoneNode('leftUpperArm' as any);
-  const sR = vrm.humanoid.getNormalizedBoneNode('rightUpperArm' as any);
+  const sL = vrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm);
+  const sR = vrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm);
   if (!sL || !sR) {
     const missing = [!sL && 'leftUpperArm', !sR && 'rightUpperArm'].filter(Boolean).join(', ');
     console.warn(`[hip-equal] missing humanoid bone(s): ${missing}`);
@@ -146,8 +147,7 @@ function toggleHipsEqual(): void {
   if (hipsEqualActive.value) {
     // See debugPanelHipsModal.ts for the legSpreadX-vs-bone-translation
     // rationale.
-    const cal = m.calibration as any;
-    const performerHipWidth = cal.performerHipWidth as number;
+    const performerHipWidth = m.calibration.performerHipWidthMetric;
     const avatarHipWidth    = m.calibration.avatarHipWidth;
     if (performerHipWidth < 1e-4 || avatarHipWidth < 1e-4) {
       console.warn('[hip-equal] hip width measurement unavailable; skipping');

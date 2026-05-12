@@ -206,6 +206,14 @@ export class MocapCalibration {
 
   get calibrated(): boolean { return this._calibrated; }
 
+  // ── Public read-only accessors for the running EMA measurements ──────────
+  // (Live performer-side metrics, exposed for diagnostics + tooling. The
+  // backing fields stay private so external code can't mutate them.)
+  get performerHipWidthMetric():      number { return this.performerHipWidth; }
+  get performerShoulderWidthMetric(): number { return this.performerShoulderWidth; }
+  get performerHeadWidthMetric():     number { return this.performerHeadWidth; }
+  get performerLegLenMetric():        number { return this.performerLegLen; }
+
   /** Reset the running measurements; they'll refill on next good frames. */
   recalibrate(): void {
     this.performerHipWidth      = 0;
