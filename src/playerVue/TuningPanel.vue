@@ -133,19 +133,19 @@ onMounted(() => {
           <span class="dbg-label">🌀 Spine {{ spineSm.toFixed(2) }}</span>
           <input type="range" min="0.01" max="1" step="0.01"
                  v-model.number="spineSm" @input="onSpineSm"
-                 style="flex:1;margin-left:8px">
+                 class="dbg-slider">
         </div>
         <div class="dbg-row">
           <span class="dbg-label">🫨 Limb {{ limbSm.toFixed(2) }}</span>
           <input type="range" min="0.01" max="1" step="0.01"
                  v-model.number="limbSm" @input="onLimbSm"
-                 style="flex:1;margin-left:8px">
+                 class="dbg-slider">
         </div>
         <div class="dbg-row">
           <span class="dbg-label">🧲 Pole {{ poleSm.toFixed(2) }}</span>
           <input type="range" min="0.01" max="1" step="0.01"
                  v-model.number="poleSm" @input="onPoleSm"
-                 style="flex:1;margin-left:8px">
+                 class="dbg-slider">
         </div>
       </div>
     </details>
@@ -162,25 +162,25 @@ onMounted(() => {
           <span class="dbg-label">🫙 Arm Z target {{ armZ.toFixed(2) }}</span>
           <input type="range" min="0" max="1" step="0.01"
                  v-model.number="armZ" @input="onArmZ"
-                 style="flex:1;margin-left:8px">
+                 class="dbg-slider">
         </div>
         <div class="dbg-row">
           <span class="dbg-label">🧭 Arm pole Z {{ armPoleZ.toFixed(2) }}</span>
           <input type="range" min="0" max="1" step="0.01"
                  v-model.number="armPoleZ" @input="onArmPoleZ"
-                 style="flex:1;margin-left:8px">
+                 class="dbg-slider">
         </div>
         <div class="dbg-row">
           <span class="dbg-label">👁 Vis threshold {{ visThresh.toFixed(2) }}</span>
           <input type="range" min="0" max="1" step="0.01"
                  v-model.number="visThresh" @input="onVisThresh"
-                 style="flex:1;margin-left:8px">
+                 class="dbg-slider">
         </div>
         <div class="dbg-row">
           <span class="dbg-label">↔ Shoulder spread {{ shoulderSpread.toFixed(0) }}°</span>
           <input type="range" min="-20" max="20" step="1"
                  v-model.number="shoulderSpread" @input="onShoulderSpread"
-                 style="flex:1;margin-left:8px">
+                 class="dbg-slider">
         </div>
       </div>
     </details>

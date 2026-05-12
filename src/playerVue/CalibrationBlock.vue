@@ -194,7 +194,7 @@ function onFoldToggle(e: Event): void {
   <div class="dbg-section">
     <div class="dbg-row">
       <span class="dbg-label">📏 Calibration</span>
-      <div style="display:flex;gap:3px">
+      <div class="dbg-btn-group">
         <button class="dbg-toggle off" @click="recalibrate">Recal</button>
         <button class="dbg-toggle off" title="Reset sliders to 1.00" @click="resetSliders">Reset</button>
       </div>
@@ -230,7 +230,7 @@ function onFoldToggle(e: Event): void {
            emits 'onHipDiag' upward so the modal Vue island can open. -->
       <div class="dbg-row">
         <span class="dbg-label">🦴 Hips = shoulders</span>
-        <div style="display:flex;gap:3px">
+        <div class="dbg-btn-group">
           <button
             class="dbg-toggle"
             :class="{ off: !hipsEqualActive }"
@@ -271,7 +271,7 @@ function onFoldToggle(e: Event): void {
         <input
           type="range" min="0.1" max="0.9" step="0.05"
           v-model.number="hipGate" @input="onHipGate"
-          style="flex:1;margin-left:8px"
+          class="dbg-slider"
         >
       </div>
       <div class="dbg-row">
@@ -279,7 +279,7 @@ function onFoldToggle(e: Event): void {
         <input
           type="range" min="0.5" max="2" step="0.05"
           v-model.number="shOverride" @input="onShOver"
-          style="flex:1;margin-left:8px"
+          class="dbg-slider"
         >
       </div>
       <div class="dbg-row">
@@ -287,7 +287,7 @@ function onFoldToggle(e: Event): void {
         <input
           type="range" min="0.5" max="2" step="0.05"
           v-model.number="laOverride" @input="onLaOver"
-          style="flex:1;margin-left:8px"
+          class="dbg-slider"
         >
       </div>
       <div class="dbg-row">
@@ -295,7 +295,7 @@ function onFoldToggle(e: Event): void {
         <input
           type="range" min="0.5" max="2" step="0.05"
           v-model.number="raOverride" @input="onRaOver"
-          style="flex:1;margin-left:8px"
+          class="dbg-slider"
         >
       </div>
       <div class="dbg-row">
@@ -303,7 +303,7 @@ function onFoldToggle(e: Event): void {
         <input
           type="range" min="0.5" max="2" step="0.05"
           v-model.number="legSpread" @input="onLegSpread"
-          style="flex:1;margin-left:8px"
+          class="dbg-slider"
           title="Fan feet outward — compensates avatars whose rest hips are wider than the performer's projected hips"
         >
       </div>

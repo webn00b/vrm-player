@@ -262,14 +262,22 @@
       .dbg-toggle:active { transform: translateY(0); }
       .dbg-toggle.off { background: #7f1d1d; }
 
-      .dbg-row > div[style*="gap:3px"] .dbg-toggle.off {
+      /* Compact grouping of two-or-three side-by-side dbg-toggle buttons
+         (Recal/Reset, prev/next, Live/Video, etc.). Used in the dbg-row
+         right-hand slot. Replaces hand-rolled `style="display:flex;gap:3px"`
+         everywhere it was previously inline. */
+      .dbg-btn-group { display: flex; gap: 3px; }
+      .dbg-btn-group .dbg-toggle.off {
         background: rgba(255,255,255,0.06);
         color: rgba(255,255,255,0.55);
       }
-      .dbg-row > div[style*="gap:3px"] .dbg-toggle:not(.off) {
+      .dbg-btn-group .dbg-toggle:not(.off) {
         background: #3b5bdb;
         box-shadow: 0 0 0 1px rgba(255,255,255,0.15) inset;
       }
+
+      /* Slider row: fills the right-hand space next to a dbg-label. */
+      .dbg-slider { flex: 1; margin-left: 8px; }
 
       /* ── Unified Capture card ── */
       .capture-source {

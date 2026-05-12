@@ -101,7 +101,7 @@ function setDepth(v: 0 | 0.5 | 1): void {
 <template>
   <div class="dbg-row">
     <span class="dbg-label">🎯 Pose model</span>
-    <div style="display:flex;gap:3px">
+    <div class="dbg-btn-group">
       <button
         v-for="q in (['lite', 'full', 'heavy'] as const)"
         :key="q"
@@ -147,7 +147,7 @@ function setDepth(v: 0 | 0.5 | 1): void {
 
   <div class="dbg-row">
     <span class="dbg-label">📐 Depth</span>
-    <div style="display:flex;gap:3px">
+    <div class="dbg-btn-group">
       <button class="dbg-toggle" :class="{ off: depthScale !== 0 }"   @click="setDepth(0)">2D</button>
       <button class="dbg-toggle" :class="{ off: depthScale !== 0.5 }" @click="setDepth(0.5)">mid</button>
       <button class="dbg-toggle" :class="{ off: depthScale !== 1 }"   @click="setDepth(1)">3D</button>

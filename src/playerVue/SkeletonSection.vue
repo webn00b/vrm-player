@@ -97,7 +97,7 @@ function resetDrag(): void {
   </div>
   <div class="dbg-row">
     <span class="dbg-label">🎯 Drag bones</span>
-    <div style="display:flex;gap:3px">
+    <div class="dbg-btn-group">
       <button
         class="dbg-toggle"
         :class="{ off: !dragOn }"

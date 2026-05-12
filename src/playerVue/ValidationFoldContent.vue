@@ -99,7 +99,7 @@ function downloadLog(): void {
 
   <div class="dbg-row" style="margin-top:6px">
     <span class="dbg-label">📋 Skel log</span>
-    <div style="display:flex;gap:3px">
+    <div class="dbg-btn-group">
       <button
         class="dbg-toggle"
         :class="{ off: !logActive }"

@@ -249,7 +249,7 @@ onUnmounted(() => {
     <div class="dbg-section">
       <div class="dbg-row">
         <span class="dbg-label">Source</span>
-        <div style="display:flex;gap:3px">
+        <div class="dbg-btn-group">
           <button
             class="dbg-toggle off"
             :disabled="state !== 'idle'"
@@ -267,7 +267,7 @@ onUnmounted(() => {
       </div>
       <div class="dbg-row">
         <span class="dbg-label" style="opacity:.7;font-size:11px">↳ replay mode</span>
-        <div style="display:flex;gap:3px">
+        <div class="dbg-btn-group">
           <button
             class="dbg-toggle"
             :class="{ off: replayMode !== 'prod' }"
