@@ -10,8 +10,10 @@
  * key the other folds use, so user preferences stay coherent.
  */
 
-import { ref, reactive, onMounted, onUnmounted, watch } from 'vue';
-import BvhVerifyModal from './BvhVerifyModal.vue';
+import { ref, reactive, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue';
+// Lazy-load the modal body — only loaded when the user clicks Live/Video.
+// Defers ~6 KB + PrimeVue Dialog out of the initial debug-panel bundle.
+const BvhVerifyModal = defineAsyncComponent(() => import('./BvhVerifyModal.vue'));
 import type { MocapController } from '../mocap/pipeline/mocapController';
 import {
   clearDiagBuffer,

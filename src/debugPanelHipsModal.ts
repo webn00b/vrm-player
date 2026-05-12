@@ -1,9 +1,11 @@
 import * as THREE from 'three';
-import { createApp, ref, type App } from 'vue';
+import { createApp, defineAsyncComponent, ref, type App } from 'vue';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
-import HipDiagModal from './playerVue/HipDiagModal.vue';
 import { installPrimeVueOn } from './playerVue/plugin';
 import type { MocapController } from './mocap/pipeline/mocapController';
+
+// Lazy-load the modal body — pulled in only on first "🔬 Diag" click.
+const HipDiagModal = defineAsyncComponent(() => import('./playerVue/HipDiagModal.vue'));
 
 export interface HipDiagModalDeps {
   getMocap: () => MocapController | null;

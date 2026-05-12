@@ -1,7 +1,11 @@
-import { createApp, ref, type App } from 'vue';
-import BvhDiagModal from './playerVue/BvhDiagModal.vue';
+import { createApp, defineAsyncComponent, ref, type App } from 'vue';
 import { installPrimeVueOn } from './playerVue/plugin';
 import type { MocapController } from './mocap/pipeline/mocapController';
+
+// Lazy-load the modal body. The user only sees it if they click the
+// "🔬 Inspect" button in the Mocap-advanced fold — for everyone else
+// this ~6 KB of code stays out of the initial bundle.
+const BvhDiagModal = defineAsyncComponent(() => import('./playerVue/BvhDiagModal.vue'));
 
 export interface BvhModalContext {
   getMocap: () => MocapController | null;

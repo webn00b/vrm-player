@@ -1,11 +1,14 @@
 import * as THREE from 'three';
-import { createApp, ref, type App } from 'vue';
-import SkelModal from './playerVue/SkelModal.vue';
+import { createApp, defineAsyncComponent, ref, type App } from 'vue';
 import { installPrimeVueOn } from './playerVue/plugin';
 import type { MocapController } from './mocap/pipeline/mocapController';
 import type { BoneValidator } from './validation/boneValidator';
 import type { PoseFrame, Landmark3D } from './mocap/pipeline/poseDetector';
 import type { ArmSolverDiagnostics, TorsoSolverDiagnostics } from './mocap/diagnostics/mocapDiagnostics';
+
+// Lazy-load the modal body — pulled in only when the user clicks the
+// "📊 Skeleton info → View" button in the calibration-tuning fold.
+const SkelModal = defineAsyncComponent(() => import('./playerVue/SkelModal.vue'));
 
 // ── SkelModal context ─────────────────────────────────────────────────────────
 
