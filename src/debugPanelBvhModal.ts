@@ -1,70 +1,74 @@
+import { createApp, ref, type App } from 'vue';
+import BvhDiagModal from './playerVue/BvhDiagModal.vue';
+import { installPrimeVueOn } from './playerVue/plugin';
 import type { MocapController } from './mocap/pipeline/mocapController';
 
 export interface BvhModalContext {
   getMocap: () => MocapController | null;
   signal: AbortSignal;
-  rememberTimeout: (fn: () => void, ms: number) => number;
+  /** Kept for API parity with the previous version (no longer used). */
+  rememberTimeout?: (fn: () => void, ms: number) => number;
 }
 
+/**
+ * Mounts the BVH-diagnostic modal as a PrimeVue Dialog inside a tiny Vue app.
+ *
+ * The previous version owned a hand-rolled overlay (manual ESC handler,
+ * click-outside listener, copy-button text mutation). PrimeVue Dialog gives
+ * us ESC / focus-trap / dismissable-mask for free.
+ *
+ * The `#bvh-diag-btn` button (inside the Mocap-advanced fold rendered by
+ * DebugPanelRoot.vue) still uses `document.querySelector` for binding —
+ * it's a leaf interaction with no business logic, not worth wiring up
+ * an event bus or prop chain for.
+ */
 export function mountBvhModal(ctx: BvhModalContext): () => void {
-  const { getMocap, signal, rememberTimeout } = ctx;
+  const { getMocap, signal } = ctx;
 
-  const diagBtn     = document.querySelector<HTMLButtonElement>('#bvh-diag-btn');
-  const overlay     = document.getElementById('bvh-modal-overlay')!;
-  const body        = document.getElementById('bvh-modal-body')!;
-  const copyBtn     = document.getElementById('bvh-modal-copy')!;
-  const refreshBtn  = document.getElementById('bvh-modal-refresh')!;
-  const closeBtn    = document.getElementById('bvh-modal-close')!;
-
-  let lastText = '';
+  const isOpen  = ref(false);
+  const content = ref('');
 
   const refresh = (): void => {
     const m = getMocap();
-    if (!m) {
-      body.textContent = 'Mocap not initialized.';
-      return;
-    }
-    body.textContent = 'Computing…';
+    if (!m) { content.value = 'Mocap not initialized.'; return; }
     try {
-      lastText = m.getBvhDiagnosticText();
-      body.textContent = lastText;
+      content.value = m.getBvhDiagnosticText();
     } catch (e) {
-      lastText = `Error: ${(e as Error).message}`;
-      body.textContent = lastText;
+      content.value = `Error: ${(e as Error).message}`;
     }
   };
 
-  const open = (): void => {
-    overlay.style.display = 'flex';
+  // Vue host (Dialog teleports itself to <body>, the host just anchors lifecycle).
+  const host = document.createElement('div');
+  host.id = 'bvh-modal-host';
+  document.body.appendChild(host);
+
+  const app: App = createApp({
+    components: { BvhDiagModal },
+    setup() {
+      return { isOpen, content, refresh };
+    },
+    template: `
+      <BvhDiagModal
+        v-model="isOpen"
+        :content="content"
+        @refresh="refresh"
+      />
+    `,
+  });
+  installPrimeVueOn(app);
+  app.mount(host);
+
+  // Open-on-click wiring for the trigger button in the Mocap-advanced fold.
+  const diagBtn = document.querySelector<HTMLButtonElement>('#bvh-diag-btn');
+  diagBtn?.addEventListener('click', () => {
     refresh();
-  };
-
-  const close = (): void => {
-    overlay.style.display = 'none';
-  };
-
-  const opts: AddEventListenerOptions = { signal };
-
-  diagBtn?.addEventListener('click', open, opts);
-  closeBtn.addEventListener('click', close, opts);
-  refreshBtn.addEventListener('click', refresh, opts);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); }, opts);
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && overlay.style.display === 'flex') close();
-  }, opts);
-
-  let copyResetTimer = 0;
-  copyBtn.addEventListener('click', () => {
-    if (!lastText) return;
-    navigator.clipboard.writeText(lastText).then(() => {
-      copyBtn.textContent = '✓ copied!';
-      clearTimeout(copyResetTimer);
-      copyResetTimer = rememberTimeout(() => { copyBtn.textContent = '📋 copy'; }, 2000);
-    });
-  }, opts);
+    isOpen.value = true;
+  }, { signal });
 
   return () => {
-    clearTimeout(copyResetTimer);
-    close();
+    isOpen.value = false;
+    app.unmount();
+    host.remove();
   };
 }
