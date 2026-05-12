@@ -16,7 +16,42 @@
  * both panels.
  */
 
-import { reactive, onMounted, watch } from 'vue';
+import { ref, reactive, onMounted, watch } from 'vue';
+import type { MocapController } from '../mocap/pipeline/mocapController';
+import CalibrationBlock from './CalibrationBlock.vue';
+
+const props = defineProps<{
+  getMocap: () => MocapController | null;
+}>();
+
+const emit = defineEmits<{
+  /** Bubble up the live calibration-status element from CalibrationBlock so
+   *  debugPanel.ts can wire mocap.onCalibrationChange to its textContent. */
+  (e: 'calibrationMounted', handles: { calibStat: HTMLElement }): void;
+}>();
+
+function onCalibrationMounted(handles: { calibStat: HTMLElement }): void {
+  emit('calibrationMounted', handles);
+}
+
+// ── Smoothing / Depth sliders (inlined here instead of wrapped in a
+// separate component — they're independent triples of `<input range>`
+// with a value setter; nothing meaningful to factor out). ───────────────
+const spineSm   = ref(0.25);
+const limbSm    = ref(0.70);
+const poleSm    = ref(0.60);
+const armZ      = ref(1.00);
+const armPoleZ  = ref(0.50);
+const visThresh = ref(0.30);
+const shoulderSpread = ref(0);
+
+function onSpineSm(): void   { props.getMocap()?.setSpineSmoothing(spineSm.value); }
+function onLimbSm(): void    { props.getMocap()?.setBodySmoothing(limbSm.value); }
+function onPoleSm(): void    { props.getMocap()?.setPoleSmoothing(poleSm.value); }
+function onArmZ(): void      { props.getMocap()?.setArmZAttenuation(armZ.value); }
+function onArmPoleZ(): void  { props.getMocap()?.setArmPoleZ(armPoleZ.value); }
+function onVisThresh(): void { props.getMocap()?.setVisibilityThreshold(visThresh.value); }
+function onShoulderSpread(): void { props.getMocap()?.setShoulderSpread(shoulderSpread.value); }
 
 const FOLD_KEY = 'vrm-player.dbg-fold';
 const foldOpen = reactive<Record<string, boolean>>({});
@@ -87,89 +122,10 @@ onMounted(() => {
 
     <div class="dbg-divider"></div>
 
-    <div class="dbg-section">
-      <div class="dbg-row">
-        <span class="dbg-label">📏 Calibration</span>
-        <div style="display:flex;gap:3px">
-          <button class="dbg-toggle off" id="mocap-recal-btn">Recal</button>
-          <button class="dbg-toggle off" id="cal-reset-btn" title="Reset sliders to 1.00">Reset</button>
-        </div>
-      </div>
-      <div class="dbg-hint">Auto-scales each frame from hip width — no T-pose needed</div>
-      <div class="dbg-stat" id="mocap-calib-stat">—</div>
-
-      <div id="cal-readiness" style="margin-top:8px;display:flex;flex-direction:column;gap:3px"></div>
-    </div>
-
-    <details
-      class="dbg-fold"
-      id="fold-cal-tuning"
-      :open="foldOpen['fold-cal-tuning']"
-      @toggle="onFoldToggle('fold-cal-tuning', $event)"
-    >
-      <summary>Calibration tuning</summary>
-      <div class="dbg-section">
-        <div class="dbg-row">
-          <span class="dbg-label">🦴 Hips = shoulders</span>
-          <div style="display:flex;gap:3px">
-            <button class="dbg-toggle off" id="rig-hip-equal-btn"
-                    title="Move upper-leg roots so hip width equals shoulder width">OFF</button>
-            <button class="dbg-toggle off" id="hip-diag-btn"
-                    title="Dump rig + mocap state for the leg/hip pipeline">🔬 Diag</button>
-          </div>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🔗 Unify arm max</span>
-          <button class="dbg-toggle off" id="cal-unify-btn"
-                  title="Share performer arm max between L/R">OFF</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">📍 Scale ref</span>
-          <div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end">
-            <button class="dbg-toggle"     data-ref="auto">auto</button>
-            <button class="dbg-toggle off" data-ref="median">med</button>
-            <button class="dbg-toggle off" data-ref="head">head</button>
-            <button class="dbg-toggle off" data-ref="shoulders">shlds</button>
-            <button class="dbg-toggle off" data-ref="hips">hips</button>
-          </div>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🚪 Hip vis gate <span id="cal-hipgate-val">0.40</span></span>
-          <input type="range" id="cal-hipgate-slider" min="0.1" max="0.9" step="0.05" value="0.4"
-                 style="flex:1;margin-left:8px">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">📐 Shoulder × <span id="cal-sh-val">1.00</span></span>
-          <input type="range" id="cal-sh-slider" min="0.5" max="2" step="0.05" value="1"
-                 style="flex:1;margin-left:8px">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🦾 L arm × <span id="cal-la-val">1.00</span></span>
-          <input type="range" id="cal-la-slider" min="0.5" max="2" step="0.05" value="1"
-                 style="flex:1;margin-left:8px">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🦾 R arm × <span id="cal-ra-val">1.00</span></span>
-          <input type="range" id="cal-ra-slider" min="0.5" max="2" step="0.05" value="1"
-                 style="flex:1;margin-left:8px">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🦵 Leg spread × <span id="mocap-legspread-val">1.00</span></span>
-          <input type="range" id="mocap-legspread-slider" min="0.5" max="2" step="0.05" value="1"
-                 style="flex:1;margin-left:8px"
-                 title="Fan feet outward — compensates avatars whose rest hips are wider than the performer's projected hips">
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🔍 Dump to console</span>
-          <button class="dbg-toggle" id="cal-dump-btn"
-                  title="Log full performer+avatar skeleton comparison">Dump</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">📊 Skeleton info</span>
-          <button class="dbg-toggle off" id="skel-info-btn">View</button>
-        </div>
-      </div>
-    </details>
+    <!-- Calibration block — fully migrated (CalibrationBlock.vue handles
+         the static block + the Calibration-tuning fold + Recal/Reset
+         buttons + readiness bars + override sliders). -->
+    <CalibrationBlock :getMocap="getMocap" @mounted="onCalibrationMounted" />
 
     <details
       class="dbg-fold"
@@ -180,18 +136,21 @@ onMounted(() => {
       <summary>Smoothing</summary>
       <div class="dbg-section">
         <div class="dbg-row">
-          <span class="dbg-label">🌀 Spine <span id="mocap-spine-val">0.25</span></span>
-          <input type="range" id="mocap-spine-slider" min="0.01" max="1" step="0.01" value="0.25"
+          <span class="dbg-label">🌀 Spine {{ spineSm.toFixed(2) }}</span>
+          <input type="range" min="0.01" max="1" step="0.01"
+                 v-model.number="spineSm" @input="onSpineSm"
                  style="flex:1;margin-left:8px">
         </div>
         <div class="dbg-row">
-          <span class="dbg-label">🫨 Limb <span id="mocap-smooth-val">0.70</span></span>
-          <input type="range" id="mocap-smooth-slider" min="0.01" max="1" step="0.01" value="0.7"
+          <span class="dbg-label">🫨 Limb {{ limbSm.toFixed(2) }}</span>
+          <input type="range" min="0.01" max="1" step="0.01"
+                 v-model.number="limbSm" @input="onLimbSm"
                  style="flex:1;margin-left:8px">
         </div>
         <div class="dbg-row">
-          <span class="dbg-label">🧲 Pole <span id="mocap-pole-val">0.60</span></span>
-          <input type="range" id="mocap-pole-slider" min="0.01" max="1" step="0.01" value="0.6"
+          <span class="dbg-label">🧲 Pole {{ poleSm.toFixed(2) }}</span>
+          <input type="range" min="0.01" max="1" step="0.01"
+                 v-model.number="poleSm" @input="onPoleSm"
                  style="flex:1;margin-left:8px">
         </div>
       </div>
@@ -206,23 +165,27 @@ onMounted(() => {
       <summary>Depth &amp; pose shape</summary>
       <div class="dbg-section">
         <div class="dbg-row">
-          <span class="dbg-label">🫙 Arm Z target <span id="mocap-armz-val">1.00</span></span>
-          <input type="range" id="mocap-armz-slider" min="0" max="1" step="0.01" value="1"
+          <span class="dbg-label">🫙 Arm Z target {{ armZ.toFixed(2) }}</span>
+          <input type="range" min="0" max="1" step="0.01"
+                 v-model.number="armZ" @input="onArmZ"
                  style="flex:1;margin-left:8px">
         </div>
         <div class="dbg-row">
-          <span class="dbg-label">🧭 Arm pole Z <span id="mocap-polez-val">0.50</span></span>
-          <input type="range" id="mocap-polez-slider" min="0" max="1" step="0.01" value="0.5"
+          <span class="dbg-label">🧭 Arm pole Z {{ armPoleZ.toFixed(2) }}</span>
+          <input type="range" min="0" max="1" step="0.01"
+                 v-model.number="armPoleZ" @input="onArmPoleZ"
                  style="flex:1;margin-left:8px">
         </div>
         <div class="dbg-row">
-          <span class="dbg-label">👁 Vis threshold <span id="mocap-vis-val">0.30</span></span>
-          <input type="range" id="mocap-vis-slider" min="0" max="1" step="0.01" value="0.3"
+          <span class="dbg-label">👁 Vis threshold {{ visThresh.toFixed(2) }}</span>
+          <input type="range" min="0" max="1" step="0.01"
+                 v-model.number="visThresh" @input="onVisThresh"
                  style="flex:1;margin-left:8px">
         </div>
         <div class="dbg-row">
-          <span class="dbg-label">↔ Shoulder spread <span id="mocap-spread-val">0°</span></span>
-          <input type="range" id="mocap-spread-slider" min="-20" max="20" step="1" value="0"
+          <span class="dbg-label">↔ Shoulder spread {{ shoulderSpread.toFixed(0) }}°</span>
+          <input type="range" min="-20" max="20" step="1"
+                 v-model.number="shoulderSpread" @input="onShoulderSpread"
                  style="flex:1;margin-left:8px">
         </div>
       </div>

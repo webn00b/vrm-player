@@ -5,10 +5,7 @@ import { installPrimeVueOn } from './playerVue/plugin';
 import { mountSkelModal } from './debugPanelSkelModal';
 import { mountBvhModal } from './debugPanelBvhModal';
 import { mountBvhVerifyModal } from './debugPanelBvhVerifyModal';
-import { wireDebugPanelTools } from './debugPanelTools';
-import { wireDebugPanelCalibration } from './debugPanelCalibration';
 import { wireMocapControls } from './debugPanelMocapControls';
-import { wireDebugPanelMocapParams } from './debugPanelMocapParams';
 import { wireHipsEqualsAndDiagModal } from './debugPanelHipsModal';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 
@@ -58,14 +55,29 @@ export function mountDebugPanel(
     // `wireDebugPanelMocapStats` imperative pipelines.
     hipForce, hipBalance,
     getMocap, mocapDebugViz,
+    // Tools sections (Skeleton / Validation / Mocap-advanced / Debug record)
+    // — fully migrated into the Vue tree. Replaces `wireDebugPanelTools` +
+    // `wireDebugPanelMocapParams`.
+    validator, skelViz, boneDrag, skeletonLogger, mocap,
+    getController, setModelVisible, dbgRecorder,
   });
   installPrimeVueOn(debugApp);
   debugApp.mount(root);
 
+  // CalibrationBlock (inside TuningPanel) emits 'calibrationMounted' with the
+  // live status element so we can wire mocap.onCalibrationChange to its
+  // textContent — replaces the destructured return from wireDebugPanelCalibration.
+  let calibStat: HTMLElement | null = null;
+
   let tuningApp: App | null = null;
   const tuningRoot = document.getElementById('mocap-tuning-panel');
   if (tuningRoot) {
-    tuningApp = createApp(TuningPanel);
+    tuningApp = createApp(TuningPanel, {
+      getMocap,
+      onCalibrationMounted: (handles: { calibStat: HTMLElement }) => {
+        calibStat = handles.calibStat;
+      },
+    });
     installPrimeVueOn(tuningApp);
     tuningApp.mount(tuningRoot);
   }
@@ -79,12 +91,8 @@ export function mountDebugPanel(
     rememberInterval, rememberTimeout, onAnimFile,
   });
 
-  // ── Mocap parameter toggles + sliders (quality, mirror, face, hip,
-  //    handprio, spread, filter, depth). See debugPanelMocapParams.ts.
-  wireDebugPanelMocapParams({ root, getMocap });
-
-  // ── Tuning-panel wiring (all elements live in #mocap-tuning-panel) ───────
-  const { calibStat } = wireDebugPanelCalibration({ getMocap, rememberInterval });
+  // ── Hips-equals / hip-diag modal — still owns id'd buttons inside the
+  //    CalibrationBlock Vue component (rig-hip-equal-btn / hip-diag-btn). ──
   wireHipsEqualsAndDiagModal({ getMocap, rememberTimeout });
 
   // Wire state-change callback
@@ -95,6 +103,7 @@ export function mountDebugPanel(
       statusLbl.textContent = `❌ ${err.message.slice(0, 30)}`;
     };
     originalMocap.onCalibrationChange = (s) => {
+      if (!calibStat) return; // CalibrationBlock not mounted yet
       if (s.calibrated) {
         const body = (s.bodyScale * 100).toFixed(0);
         const l = (s.leftArmScale * 100).toFixed(0);
@@ -105,13 +114,6 @@ export function mountDebugPanel(
       }
     };
   }
-
-  // ── Bottom-of-panel tooling rows (validation, skel-logger, skel toggles,
-  //    bone-drag, debug recorder). See debugPanelTools.ts for details.
-  wireDebugPanelTools({
-    root, validator, skelViz, boneDrag, skeletonLogger, dbgRecorder, mocap,
-    getController, setModelVisible, rememberInterval,
-  });
 
   // ── Skeleton info modal ───────────────────────────────────────────────────
 

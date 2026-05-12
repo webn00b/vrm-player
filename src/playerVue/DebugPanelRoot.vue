@@ -38,9 +38,19 @@ import type { HipForceTracker } from '../physics/hipForce';
 import type { HipBalanceCorrector } from '../physics/hipBalanceCorrector';
 import type { MocapController } from '../mocap/pipeline/mocapController';
 import type { MocapDebugViz } from '../mocap/diagnostics/mocapDebugViz';
+import type { MocapDebugRecorder } from '../mocap/diagnostics/mocapDebugRecorder';
+import type { BoneValidator } from '../validation/boneValidator';
+import type { SkeletonVisualizer } from '../skeletonVisualizer';
+import type { BoneDragController } from '../boneDragController';
+import type { SkeletonLogger } from '../diagnostics/skeletonLogger';
 import StatsPanel from './StatsPanel.vue';
 import HipForcePanel from './HipForcePanel.vue';
 import MocapStatsPanel from './MocapStatsPanel.vue';
+import SkeletonSection from './SkeletonSection.vue';
+import ValidationFoldContent from './ValidationFoldContent.vue';
+import MocapParamsControls from './MocapParamsControls.vue';
+import MocapAdvancedRows from './MocapAdvancedRows.vue';
+import DebugRecorderRow from './DebugRecorderRow.vue';
 
 const props = defineProps<{
   pa:    PriorityAnimator;
@@ -51,6 +61,15 @@ const props = defineProps<{
   hipBalance: HipBalanceCorrector;
   getMocap:      () => MocapController | null;
   mocapDebugViz: MocapDebugViz;
+  // Props for the Vue-migrated tools sections (Skeleton, Validation, etc).
+  validator:       BoneValidator;
+  skelViz:         SkeletonVisualizer;
+  boneDrag:        BoneDragController;
+  skeletonLogger:  SkeletonLogger;
+  mocap:           MocapController;
+  getController:   () => AnimationController | null;
+  setModelVisible: (v: boolean) => void;
+  dbgRecorder:     MocapDebugRecorder;
 }>();
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
@@ -144,33 +163,14 @@ onMounted(() => {
 
       <div class="dbg-divider"></div>
 
-      <!-- Skeleton section (ids consumed by wireDebugPanelTools) ─────────── -->
+      <!-- Skeleton section — fully migrated to Vue (SkeletonSection.vue) ─── -->
       <h2>Skeleton</h2>
       <div class="dbg-section">
-        <div class="dbg-row">
-          <span class="dbg-label">👤 Show model</span>
-          <button class="dbg-toggle off" id="model-toggle">OFF</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🦴 Show skeleton</span>
-          <button class="dbg-toggle" id="skel-toggle">ON</button>
-        </div>
-        <div class="dbg-row" id="skel-options" style="display:flex">
-          <span class="dbg-label" style="opacity:.6;font-size:11px">🩵 Body &nbsp;&nbsp; 💛 Fingers</span>
-          <div style="display:flex;gap:4px">
-            <button class="dbg-toggle" id="skel-body">ON</button>
-            <button class="dbg-toggle" id="skel-fingers">ON</button>
-          </div>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🎯 Drag bones</span>
-          <div style="display:flex;gap:3px">
-            <button class="dbg-toggle off" id="bone-drag-toggle"
-                    title="Click joints in 3D to attach a rotation gizmo">OFF</button>
-            <button class="dbg-toggle off" id="bone-drag-reset"
-                    title="Clear all drag offsets">Reset</button>
-          </div>
-        </div>
+        <SkeletonSection
+          :skelViz="skelViz"
+          :boneDrag="boneDrag"
+          :setModelVisible="setModelVisible"
+        />
       </div>
 
       <div class="dbg-divider"></div>
@@ -202,7 +202,7 @@ onMounted(() => {
         </div>
       </details>
 
-      <!-- Validation fold (id'd elements for wireDebugPanelTools) ─────────── -->
+      <!-- Validation fold — fully migrated to Vue (ValidationFoldContent.vue) -->
       <details
         class="dbg-fold"
         id="fold-validation"
@@ -211,26 +211,12 @@ onMounted(() => {
       >
         <summary>Validation (ROM)</summary>
         <div class="dbg-section">
-          <div class="dbg-row">
-            <span class="dbg-label">🦴 Clamp bone rotations</span>
-            <button class="dbg-toggle" id="val-toggle">ON</button>
-          </div>
-          <div class="dbg-stat" id="val-stat">clamped/frame: 0</div>
-          <div class="dbg-stat" id="val-worst">worst: —</div>
-          <div class="dbg-row">
-            <span class="dbg-label" style="opacity:.6;font-size:11px">dump defaults to console</span>
-            <button class="dbg-toggle off" id="val-dump">Dump</button>
-          </div>
-          <div class="dbg-row" style="margin-top:6px">
-            <span class="dbg-label">📋 Skel log</span>
-            <div style="display:flex;gap:3px">
-              <button class="dbg-toggle off" id="skel-log-btn"
-                      title="Toggle compact per-frame skeleton diagnostics. Stop → console digest.">⏺ Rec</button>
-              <button class="dbg-toggle off" id="skel-log-dl"
-                      title="Download last digest as .txt">⬇</button>
-            </div>
-          </div>
-          <div class="dbg-stat" id="skel-log-stat"></div>
+          <ValidationFoldContent
+            :validator="validator"
+            :skeletonLogger="skeletonLogger"
+            :mocap="mocap"
+            :getController="getController"
+          />
         </div>
       </details>
 
@@ -270,42 +256,9 @@ onMounted(() => {
     <!-- ── VIDEO TAB ──────────────────────────────────────────────────────── -->
     <div v-show="activeTab === 'video'" class="dbg-tab-panel active" data-panel="video">
 
+      <!-- Pose / mirror / face / hip / symmetry / depth — fully migrated. -->
       <div class="dbg-section">
-        <div class="dbg-row">
-          <span class="dbg-label">🎯 Pose model</span>
-          <div style="display:flex;gap:3px">
-            <button class="dbg-toggle off" data-quality="lite">lite</button>
-            <button class="dbg-toggle"     data-quality="full">full</button>
-            <button class="dbg-toggle off" data-quality="heavy">heavy</button>
-          </div>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🪞 Mirror mode</span>
-          <button class="dbg-toggle" id="mocap-mirror-btn">ON</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">😶 Face tracking</span>
-          <button class="dbg-toggle" id="mocap-face-btn">ON</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">🚶 Hip position</span>
-          <button class="dbg-toggle" id="mocap-hip-btn">ON</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label" style="font-size:11px"
-                title="When ON: if one arm/leg becomes invisible and the other side is live, copy the visible side's local quaternions to the missing side. Works for bilaterally-symmetric poses (claps, mirror dance); produces wrong poses for asymmetric motion. Off by default.">
-            🪟 Symmetry fallback
-          </span>
-          <button class="dbg-toggle off" id="mocap-symmetry-btn">OFF</button>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label">📐 Depth</span>
-          <div style="display:flex;gap:3px">
-            <button class="dbg-toggle off" data-depth="0">2D</button>
-            <button class="dbg-toggle off" data-depth="0.5">mid</button>
-            <button class="dbg-toggle"     data-depth="1">3D</button>
-          </div>
-        </div>
+        <MocapParamsControls :getMocap="getMocap" />
       </div>
 
       <div class="dbg-divider"></div>
@@ -318,28 +271,19 @@ onMounted(() => {
       >
         <summary>Mocap advanced</summary>
         <div class="dbg-section">
-          <div class="dbg-row">
-            <span class="dbg-label">🌊 1€ smoothing</span>
-            <button class="dbg-toggle" id="mocap-filter-btn">ON</button>
-          </div>
-          <div class="dbg-row">
-            <label class="dbg-label" for="mocap-handprio-box">✋ Wrist + fingers priority</label>
-            <input type="checkbox" id="mocap-handprio-box" checked
-                   style="width:14px;height:14px;accent-color:#6ea8ff">
-          </div>
+          <!-- 1€ smoothing + Wrist+fingers priority — fully migrated. -->
+          <MocapAdvancedRows :getMocap="getMocap" />
 
-          <!-- Performer skeleton toggle + per-landmark visibility + scalar
-               stats — fully migrated to Vue (MocapStatsPanel.vue). Replaces
-               the old #mocap-dbgskel-btn / #mocap-vis-stats / #mocap-scalar-
-               stats id'd containers + wireDebugPanelMocapStats wiring. -->
+          <!-- Performer skeleton overlay + per-landmark visibility + scalar
+               stats — fully migrated (MocapStatsPanel.vue). -->
           <MocapStatsPanel :getMocap="getMocap" :mocapDebugViz="mocapDebugViz" />
 
-          <div class="dbg-row">
-            <span class="dbg-label">📊 Debug record <span id="dbgrec-frames" style="opacity:.5"></span></span>
-            <button class="dbg-toggle off" id="dbgrec-btn">⏺ Rec</button>
-          </div>
+          <!-- Debug record row — fully migrated (DebugRecorderRow.vue). -->
+          <DebugRecorderRow :dbgRecorder="dbgRecorder" />
+
           <div class="dbg-row">
             <span class="dbg-label">🔬 BVH диагностика</span>
+            <!-- bvh-diag-btn — id'd, owned by mountBvhModal. -->
             <button class="dbg-toggle off" id="bvh-diag-btn">Inspect</button>
           </div>
         </div>
