@@ -34,12 +34,23 @@ import type { IdleLoop } from '../idleLoop';
 import type { PriorityAnimator } from '../priorityAnimator';
 import type { MicroAnimations } from '../microAnimations';
 import type { AnimationController } from '../animationController';
+import type { HipForceTracker } from '../physics/hipForce';
+import type { HipBalanceCorrector } from '../physics/hipBalanceCorrector';
+import type { MocapController } from '../mocap/pipeline/mocapController';
+import type { MocapDebugViz } from '../mocap/diagnostics/mocapDebugViz';
+import StatsPanel from './StatsPanel.vue';
+import HipForcePanel from './HipForcePanel.vue';
+import MocapStatsPanel from './MocapStatsPanel.vue';
 
 const props = defineProps<{
   pa:    PriorityAnimator;
   micro: MicroAnimations;
   idle:  IdleLoop;
   controller: AnimationController;
+  hipForce:   HipForceTracker;
+  hipBalance: HipBalanceCorrector;
+  getMocap:      () => MocapController | null;
+  mocapDebugViz: MocapDebugViz;
 }>();
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
@@ -223,7 +234,7 @@ onMounted(() => {
         </div>
       </details>
 
-      <!-- Diagnostics fold (id'd elements for wireDebugPanelStats) ────────── -->
+      <!-- Diagnostics fold — fully migrated to Vue (StatsPanel.vue) ─────── -->
       <details
         class="dbg-fold"
         id="fold-diagnostics"
@@ -232,26 +243,12 @@ onMounted(() => {
       >
         <summary>Diagnostics</summary>
         <div class="dbg-section">
-          <div class="dbg-levels">
-            <div class="dbg-level-row">
-              <span class="dbg-lv-label">Lv 1 – lower body</span>
-              <div class="dbg-bar-wrap"><div class="dbg-bar" id="dbg-bar-1"></div></div>
-            </div>
-            <div class="dbg-level-row">
-              <span class="dbg-lv-label">Lv 2 – upper body</span>
-              <div class="dbg-bar-wrap"><div class="dbg-bar" id="dbg-bar-2"></div></div>
-            </div>
-            <div class="dbg-level-row">
-              <span class="dbg-lv-label">Lv 5+ – gesture</span>
-              <div class="dbg-bar-wrap"><div class="dbg-bar" id="dbg-bar-5"></div></div>
-            </div>
-          </div>
-          <div class="dbg-stat" id="dbg-bones">Active bones: 0</div>
-          <div class="dbg-stat" id="dbg-clips">Idle clips: {{ idle.clipCount }}</div>
+          <StatsPanel :pa="pa" :idleClips="idle.clipCount" />
         </div>
       </details>
 
-      <!-- Hip force fold (id'd elements for wireDebugPanelStats) ──────────── -->
+      <!-- Hip force fold — fully migrated to Vue (HipForcePanel.vue). Polling
+           is skipped when the fold is collapsed via the `open` prop. -->
       <details
         class="dbg-fold"
         id="fold-hipforce"
@@ -260,17 +257,11 @@ onMounted(() => {
       >
         <summary>Hip force</summary>
         <div class="dbg-section">
-          <div class="dbg-stat" id="dbg-hipforce-mass">tracked mass: —</div>
-          <div class="dbg-stat" id="dbg-hipforce-total">|F_total|: —</div>
-          <div class="dbg-stat" id="dbg-hipforce-grav">|F_grav|:  —</div>
-          <div class="dbg-stat" id="dbg-hipforce-inert">|F_inert|: —</div>
-          <div class="dbg-stat" id="dbg-hipforce-tilt">tilt vs Y_hip: —</div>
-          <div class="dbg-stat" id="dbg-hipforce-gtilt">gravity tilt: —</div>
-          <div class="dbg-row" style="margin-top:6px">
-            <span class="dbg-label">⚖ Balance corrector</span>
-            <button class="dbg-toggle off" id="hipbal-btn">OFF</button>
-          </div>
-          <div class="dbg-stat" id="dbg-hipbal-angles">corr. angles: —</div>
+          <HipForcePanel
+            :hipForce="hipForce"
+            :hipBalance="hipBalance"
+            :open="!!foldOpen['fold-hipforce']"
+          />
         </div>
       </details>
 
@@ -336,17 +327,17 @@ onMounted(() => {
             <input type="checkbox" id="mocap-handprio-box" checked
                    style="width:14px;height:14px;accent-color:#6ea8ff">
           </div>
-          <div class="dbg-row">
-            <span class="dbg-label">🟢 Performer skeleton</span>
-            <button class="dbg-toggle off" id="mocap-dbgskel-btn">OFF</button>
-          </div>
+
+          <!-- Performer skeleton toggle + per-landmark visibility + scalar
+               stats — fully migrated to Vue (MocapStatsPanel.vue). Replaces
+               the old #mocap-dbgskel-btn / #mocap-vis-stats / #mocap-scalar-
+               stats id'd containers + wireDebugPanelMocapStats wiring. -->
+          <MocapStatsPanel :getMocap="getMocap" :mocapDebugViz="mocapDebugViz" />
+
           <div class="dbg-row">
             <span class="dbg-label">📊 Debug record <span id="dbgrec-frames" style="opacity:.5"></span></span>
             <button class="dbg-toggle off" id="dbgrec-btn">⏺ Rec</button>
           </div>
-          <div id="mocap-vis-stats" style="display:none;margin-top:4px"></div>
-          <div id="mocap-scalar-stats"
-               style="display:none;margin-top:6px;font-size:10px;font-family:ui-monospace,monospace;opacity:.75;line-height:1.5"></div>
           <div class="dbg-row">
             <span class="dbg-label">🔬 BVH диагностика</span>
             <button class="dbg-toggle off" id="bvh-diag-btn">Inspect</button>

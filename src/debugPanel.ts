@@ -6,11 +6,9 @@ import { mountSkelModal } from './debugPanelSkelModal';
 import { mountBvhModal } from './debugPanelBvhModal';
 import { mountBvhVerifyModal } from './debugPanelBvhVerifyModal';
 import { wireDebugPanelTools } from './debugPanelTools';
-import { wireDebugPanelStats } from './debugPanelStats';
 import { wireDebugPanelCalibration } from './debugPanelCalibration';
 import { wireMocapControls } from './debugPanelMocapControls';
 import { wireDebugPanelMocapParams } from './debugPanelMocapParams';
-import { wireDebugPanelMocapStats } from './debugPanelMocapStats';
 import { wireHipsEqualsAndDiagModal } from './debugPanelHipsModal';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 
@@ -52,7 +50,15 @@ export function mountDebugPanel(
   // fold open-state + localStorage persistence, demo mode toggle,
   // layer toggles (idle / breathing / etc.). Everything else stays
   // imperatively wired post-mount.
-  const debugApp: App = createApp(DebugPanelRoot, { pa, micro, idle, controller });
+  const debugApp: App = createApp(DebugPanelRoot, {
+    pa, micro, idle, controller,
+    // Live readouts: priority bars (StatsPanel), hip force (HipForcePanel),
+    // mocap stats (MocapStatsPanel) all live inside this Vue tree and own
+    // their own polling timers. Replaces the old `wireDebugPanelStats` +
+    // `wireDebugPanelMocapStats` imperative pipelines.
+    hipForce, hipBalance,
+    getMocap, mocapDebugViz,
+  });
   installPrimeVueOn(debugApp);
   debugApp.mount(root);
 
@@ -63,10 +69,6 @@ export function mountDebugPanel(
     installPrimeVueOn(tuningApp);
     tuningApp.mount(tuningRoot);
   }
-
-  // ── Per-frame readouts (priority bars + hip force). Pure poll-and-update,
-  //    no event handlers — see debugPanelStats.ts.
-  wireDebugPanelStats({ pa, hipForce, hipBalance, rememberInterval });
 
   // ── Mocap controls + capture-source state machine ────────────────────────
   // All record/stop, source switching, and file-input handling lives in
@@ -80,10 +82,6 @@ export function mountDebugPanel(
   // ── Mocap parameter toggles + sliders (quality, mirror, face, hip,
   //    handprio, spread, filter, depth). See debugPanelMocapParams.ts.
   wireDebugPanelMocapParams({ root, getMocap });
-
-  // ── Debug skeleton overlay toggle + visibility/scalar stats grid.
-  //    See debugPanelMocapStats.ts.
-  wireDebugPanelMocapStats({ root, getMocap, mocapDebugViz, rememberInterval });
 
   // ── Tuning-panel wiring (all elements live in #mocap-tuning-panel) ───────
   const { calibStat } = wireDebugPanelCalibration({ getMocap, rememberInterval });
