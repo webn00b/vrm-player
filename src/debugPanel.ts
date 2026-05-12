@@ -4,7 +4,6 @@ import TuningPanel from './playerVue/TuningPanel.vue';
 import { installPrimeVueOn } from './playerVue/plugin';
 import { mountSkelModal } from './debugPanelSkelModal';
 import { mountBvhModal } from './debugPanelBvhModal';
-import { mountBvhVerifyModal } from './debugPanelBvhVerifyModal';
 import { wireMocapControls } from './debugPanelMocapControls';
 import { mountHipDiagModal } from './debugPanelHipsModal';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
@@ -143,16 +142,9 @@ export function mountDebugPanel(
     rememberTimeout,
   });
 
-  const cleanupBvhVerifyModal = mountBvhVerifyModal({
-    getMocap,
-    signal: listenerAbort.signal,
-    rememberTimeout,
-  });
-
   return () => {
     cleanupSkelModal();
     cleanupBvhModal();
-    cleanupBvhVerifyModal();
     hipDiag.cleanup();
     for (const id of intervalIds) clearInterval(id);
     for (const id of timeoutIds) clearTimeout(id);

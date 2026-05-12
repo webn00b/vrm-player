@@ -19,6 +19,7 @@
 import { ref, reactive, onMounted, watch } from 'vue';
 import type { MocapController } from '../mocap/pipeline/mocapController';
 import CalibrationBlock from './CalibrationBlock.vue';
+import BvhVerifyFold from './BvhVerifyFold.vue';
 
 const props = defineProps<{
   getMocap: () => MocapController | null;
@@ -203,36 +204,9 @@ onMounted(() => {
       </div>
     </details>
 
-    <details
-      class="dbg-fold"
-      id="fold-roundtrip"
-      :open="foldOpen['fold-roundtrip']"
-      @toggle="onFoldToggle('fold-roundtrip', $event)"
-    >
-      <summary>Round-trip verify <span id="bvh-verify-state"
-        style="opacity:.5;text-transform:none;letter-spacing:0"></span></summary>
-      <div class="dbg-section">
-        <div class="dbg-row">
-          <span class="dbg-label">Source</span>
-          <div style="display:flex;gap:3px">
-            <button class="dbg-toggle off" id="bvh-verify-btn"
-                    title="Live camera: record 3s → replay the BVH → diff each frame">Live (3s)</button>
-            <button class="dbg-toggle off" id="bvh-verify-file-btn"
-                    title="Video file: process → replay BVH → diff each frame">Video…</button>
-            <input type="file" id="bvh-verify-file-input" accept="video/*" hidden>
-          </div>
-        </div>
-        <div class="dbg-row">
-          <span class="dbg-label" style="opacity:.7;font-size:11px">↳ replay mode</span>
-          <div style="display:flex;gap:3px">
-            <button class="dbg-toggle"     data-verify-mode="prod"
-                    title="Play through the live render loop (validator.clampAll + vrm.update). Catches production-path divergence.">prod</button>
-            <button class="dbg-toggle off" data-verify-mode="iso"
-                    title="Scratch mixer + synchronous replay. Isolates BVH encoding math.">iso</button>
-          </div>
-        </div>
-      </div>
-    </details>
+    <!-- Round-trip verify — fully migrated (BvhVerifyFold.vue owns fold +
+         state machine + inline PrimeVue Dialog). Replaces mountBvhVerifyModal. -->
+    <BvhVerifyFold :getMocap="getMocap" />
 
     <div class="dbg-hint">Recorded BVH auto-replays on the model for comparison</div>
   </div>
