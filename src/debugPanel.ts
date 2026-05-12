@@ -1,4 +1,7 @@
-import { buildMainPanelHtml, buildTuningPanelHtml } from './debugPanelHtml';
+import { createApp, type App } from 'vue';
+import DebugPanelRoot from './playerVue/DebugPanelRoot.vue';
+import TuningPanel from './playerVue/TuningPanel.vue';
+import { installPrimeVueOn } from './playerVue/plugin';
 import { mountSkelModal } from './debugPanelSkelModal';
 import { mountBvhModal } from './debugPanelBvhModal';
 import { mountBvhVerifyModal } from './debugPanelBvhVerifyModal';
@@ -40,84 +43,26 @@ export function mountDebugPanel(
     return id;
   };
 
-  root.innerHTML = buildMainPanelHtml(idle);
+  // ── Mount Vue islands for the panel STRUCTURE ────────────────────────────
+  // The 11 wireXxx() calls below find their elements via getElementById on
+  // the DOM Vue renders. We use v-show for tabs + native <details> for folds
+  // so the id'd elements never unmount between rerenders.
+  //
+  // Genuinely reactive parts inside the Vue components: tab switching,
+  // fold open-state + localStorage persistence, demo mode toggle,
+  // layer toggles (idle / breathing / etc.). Everything else stays
+  // imperatively wired post-mount.
+  const debugApp: App = createApp(DebugPanelRoot, { pa, micro, idle, controller });
+  installPrimeVueOn(debugApp);
+  debugApp.mount(root);
 
-  // ── Right-side mocap tuning panel ────────────────────────────────────────
+  let tuningApp: App | null = null;
   const tuningRoot = document.getElementById('mocap-tuning-panel');
   if (tuningRoot) {
-    tuningRoot.innerHTML = buildTuningPanelHtml();
+    tuningApp = createApp(TuningPanel);
+    installPrimeVueOn(tuningApp);
+    tuningApp.mount(tuningRoot);
   }
-
-  // ── Persist <details class="dbg-fold"> open/closed state ─────────────────
-  // Same pattern as the panel-title collapse mechanism in index.html, but per
-  // foldable subgroup. Hidden by default — only opens if the user previously
-  // expanded that group.
-  {
-    const FOLD_KEY = 'vrm-player.dbg-fold';
-    let foldState: Record<string, boolean> = {};
-    try { foldState = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {}; } catch { /* ignore */ }
-    const saveFolds = (): void => {
-      try { localStorage.setItem(FOLD_KEY, JSON.stringify(foldState)); } catch { /* ignore */ }
-    };
-    const folds = [
-      ...root.querySelectorAll<HTMLDetailsElement>('details.dbg-fold[id]'),
-      ...(tuningRoot?.querySelectorAll<HTMLDetailsElement>('details.dbg-fold[id]') ?? []),
-    ];
-    for (const d of folds) {
-      if (foldState[d.id]) d.open = true;
-      d.addEventListener('toggle', () => {
-        foldState[d.id] = d.open;
-        saveFolds();
-      });
-    }
-  }
-
-  // ── Tab switcher ─────────────────────────────────────────────────────────
-  root.querySelectorAll<HTMLButtonElement>('.dbg-tab').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const name = btn.dataset.tab!;
-      root.querySelectorAll<HTMLElement>('.dbg-tab').forEach((b) => {
-        b.classList.toggle('active', b.dataset.tab === name);
-      });
-      root.querySelectorAll<HTMLElement>('.dbg-tab-panel').forEach((p) => {
-        p.classList.toggle('active', p.dataset.panel === name);
-      });
-    });
-  });
-
-  // ── Demo mode ─────────────────────────────────────────────────────────────
-
-  let demoMode = false;
-  const demoBtn = root.querySelector<HTMLButtonElement>('#dbg-demo')!;
-  const hint    = root.querySelector<HTMLElement>('#dbg-hint')!;
-
-  demoBtn.addEventListener('click', () => {
-    demoMode = !demoMode;
-    demoBtn.textContent = demoMode ? 'ON' : 'OFF';
-    demoBtn.classList.toggle('off', !demoMode);
-    const ctrl = getController();
-    if (ctrl) ctrl.setMuted(demoMode);
-    if (!demoMode) pa.reset();
-    hint.style.opacity = demoMode ? '0' : '0.5';
-  });
-
-  // ── Layer toggles ─────────────────────────────────────────────────────────
-
-  const states: Record<string, boolean> = {
-    idle: false, breathing: false, headSway: false,
-    eyeSaccades: false, blink: false, weightShift: false,
-  };
-
-  root.querySelectorAll<HTMLButtonElement>('.dbg-toggle[data-key]').forEach((btn) => {
-    const key = btn.dataset.key!;
-    btn.addEventListener('click', () => {
-      states[key] = !states[key];
-      btn.textContent = states[key] ? 'ON' : 'OFF';
-      btn.classList.toggle('off', !states[key]);
-      if (key === 'idle') { idle.enabled = states[key]; if (!states[key]) pa.reset(); }
-      else (micro as any)[key] = states[key];
-    });
-  });
 
   // ── Per-frame readouts (priority bars + hip force). Pure poll-and-update,
   //    no event handlers — see debugPanelStats.ts.
@@ -202,6 +147,9 @@ export function mountDebugPanel(
     for (const id of timeoutIds) clearTimeout(id);
     listenerAbort.abort();
     if ((window as any).dumpSkeleton) delete (window as any).dumpSkeleton;
-    root.innerHTML = '';
+    // Unmounting the Vue apps tears down their event listeners + reactive
+    // effects. The previous `root.innerHTML = ''` did the same for vanilla.
+    debugApp.unmount();
+    tuningApp?.unmount();
   };
 }
