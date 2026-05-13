@@ -1,3 +1,5 @@
+import { ref } from 'vue';
+
 // ── Display name helpers ──────────────────────────────────────────────────────
 
 const ALIAS_KEY = 'vrm-player.library-aliases';
@@ -36,7 +38,10 @@ export function formatLibraryName(rawName: string): string {
 
 // ── Status bar ────────────────────────────────────────────────────────────────
 
+export const statusText = ref('booting…');
+
 export function setStatus(text: string): void {
+  statusText.value = text;
   const el = document.getElementById('status');
   if (el) el.textContent = text;
 }

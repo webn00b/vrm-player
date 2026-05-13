@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import './styles/player.css';
 import { createScene } from './scene';
 import { loadVRM } from './vrmLoader';
 import { parseBVH } from './bvhLoader';
@@ -13,8 +14,12 @@ import { MicroAnimations } from './microAnimations';
 import { IdleLoop } from './idleLoop';
 import { setStatus } from './ui';
 import { createApp } from 'vue';
+import PlayerShell from './playerVue/PlayerShell.vue';
 import QueuePanel from './playerVue/QueuePanel.vue';
+import BottomBar from './playerVue/BottomBar.vue';
+import RetargetLab from './playerVue/RetargetLab.vue';
 import { installPrimeVueOn } from './playerVue/plugin';
+import type { ManualFbxBoneMapping } from './animationLoaders/fbxBoneMapping';
 import { mountDebugPanel } from './debugPanel';
 import { BonePosePanel } from './bonePosePanel';
 import { BoneDragController } from './boneDragController';
@@ -28,7 +33,6 @@ import { HipBalanceCorrector } from './physics/hipBalanceCorrector';
 import { createSkeletonLogger } from './diagnostics/skeletonLogger';
 import { renderLoopHooks } from './renderLoopHooks';
 import { startRenderLoop } from './renderLoop';
-import { mountTransport } from './transport';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 
 /**
@@ -83,6 +87,12 @@ async function main() {
   if (!container) throw new Error('#app not found');
   const ctx = createScene(container);
 
+  const shellHost = document.getElementById('ui-shell');
+  if (!shellHost) throw new Error('#ui-shell not found');
+  const shellApp = createApp(PlayerShell);
+  installPrimeVueOn(shellApp);
+  shellApp.mount(shellHost);
+
   setStatus('loading VRM…');
   const vrm = await loadVRM(await resolveVrmUrl());
   // NOTE: mirror effect for mocap is applied at the landmark level in
@@ -116,8 +126,6 @@ async function main() {
 
   // ── Bone pose panel ────────────────────────────────────────────────────────
   const bonePanel = new BonePosePanel(vrm);
-  const bonePanelEl = document.getElementById('bone-panel');
-  if (bonePanelEl) bonePanel.mount(bonePanelEl);
 
   // ── Bone drag controller (in-scene rotation gizmo) ─────────────────────────
   const boneDrag = new BoneDragController(
@@ -140,6 +148,7 @@ async function main() {
     if ((window as any).__mocapDbg === dbgRecorder) delete (window as any).__mocapDbg;
   };
   registerCleanup(
+    () => shellApp.unmount(),
     () => mocap.dispose(),
     () => mocapDebugViz.dispose(),
     () => skelViz.dispose(),
@@ -151,6 +160,11 @@ async function main() {
   );
 
   const controller = new AnimationController(vrm);
+
+  const bottomBarApp = createApp(BottomBar, { controller });
+  installPrimeVueOn(bottomBarApp);
+  bottomBarApp.mount('#bottom-bar');
+  registerCleanup(() => bottomBarApp.unmount());
 
   // Per-item parsed BVH cache, keyed by library item index. Used by the ⬇
   // export-as-VRMA button so we can re-run convertBVHToVRMAnimation on demand
@@ -201,11 +215,16 @@ async function main() {
     setActive(qi: number): void;
     reorder(from: number, to: number): void;
   }
+  let reexportQueue: QueueHandle | null = null;
   const queueApp = createApp(QueuePanel, {
     onJump:    (qi: number)              => controller.jumpTo(qi),
-    onReorder: (from: number, to: number) => controller.reorderQueue(from, to),
+    onReorder: (from: number, to: number) => {
+      controller.reorderQueue(from, to);
+      reexportQueue?.reorder(from, to);
+    },
     onRemove:  (qi: number) => {
       controller.removeFromQueue(qi);
+      reexportQueue?.remove(qi);
       // The component removes itself from its reactive list; we just sync
       // the underlying controller state. No `queue.remove(qi)` needed.
     },
@@ -241,8 +260,47 @@ async function main() {
     },
   });
   installPrimeVueOn(queueApp);
-  const queue = queueApp.mount('#queue-panel') as unknown as QueueHandle;
+  const queue = queueApp.mount('#queue-panel-root') as unknown as QueueHandle;
   registerCleanup(() => queueApp.unmount());
+
+  const reexportRoot = document.getElementById('tools-reexport-root');
+  let reexportQueueApp: ReturnType<typeof createApp> | null = null;
+  if (reexportRoot) {
+    reexportQueueApp = createApp(QueuePanel, {
+      mode: 'exportsOnly',
+      onJump: (qi: number) => controller.jumpTo(qi),
+      onReorder: (from: number, to: number) => controller.reorderQueue(from, to),
+      onExportVrma: (qi: number) => {
+        const itemIdx = controller.getItemIndexAtQueuePos(qi);
+        const bvh = bvhByIndex.get(itemIdx);
+        const name = names[itemIdx];
+        if (!bvh || !name) { setStatus('no source BVH for this item — use ⬇bvh instead'); return; }
+        exportBvhAsVrma(vrm, bvh, name)
+          .then(() => setStatus(`saved ${name}.vrma`))
+          .catch((e) => setStatus(`vrma export failed: ${(e as Error).message}`));
+      },
+      onExportBvh: (qi: number) => {
+        setStatus('recording BVH…');
+        const handle = exportClipAsBvh(qi, controller, vrm);
+        handle.promise
+          .then((filename) => setStatus(`saved ${filename}`))
+          .catch((e) => setStatus(`bvh export failed: ${(e as Error).message}`));
+      },
+      onExportGlb: (qi: number) => {
+        const clip = controller.getClipAtQueuePos(qi);
+        if (!clip) { setStatus('no animation clip for this item'); return; }
+        const itemIdx = controller.getItemIndexAtQueuePos(qi);
+        const name = names[itemIdx] || 'export';
+        setStatus('exporting GLB…');
+        exportClipAsGlb(vrm, clip, name)
+          .then((filename) => setStatus(`saved ${filename}`))
+          .catch((e) => setStatus(`glb export failed: ${(e as Error).message}`));
+      },
+    });
+    installPrimeVueOn(reexportQueueApp);
+    reexportQueue = reexportQueueApp.mount(reexportRoot) as unknown as QueueHandle;
+    registerCleanup(() => reexportQueueApp?.unmount());
+  }
 
   const registerAndEnqueue = (
     name: string,
@@ -255,15 +313,19 @@ async function main() {
     if (bvh) bvhByIndex.set(itemIdx, bvh);
     controller.addToQueue(itemIdx);
     queue.push(name);
+    reexportQueue?.push(name);
   };
 
   // Single import path used by both Capture-panel file picker and window-drop.
   // Auto-plays via existing addToQueue → activate-first-item logic.
-  const handleAnimationFile = async (file: File): Promise<void> => {
+  const handleAnimationFile = async (
+    file: File,
+    manualFbxMapping: ManualFbxBoneMapping = {},
+  ): Promise<void> => {
     const baseName = file.name;
     setStatus(`loading ${baseName}…`);
     try {
-      const loaded = await loadAnimationFile(file, vrm);
+      const loaded = await loadAnimationFile(file, vrm, manualFbxMapping);
       registerAndEnqueue(loaded.name, loaded.parsedBvh, loaded.clip);
       setStatus(`▶ ${loaded.name}`);
     } catch (e) {
@@ -271,8 +333,17 @@ async function main() {
     }
   };
 
-  // ── Transport bar ─────────────────────────────────────────────────────────
-  registerCleanup(mountTransport(controller));
+  const retargetLabRoot = document.getElementById('retarget-lab-root');
+  let retargetLabApp: ReturnType<typeof createApp> | null = null;
+  if (retargetLabRoot) {
+    retargetLabApp = createApp(RetargetLab, {
+      vrm,
+      onImport: handleAnimationFile,
+    });
+    installPrimeVueOn(retargetLabApp);
+    retargetLabApp.mount(retargetLabRoot);
+    registerCleanup(() => retargetLabApp?.unmount());
+  }
 
   // ── Debug panel ────────────────────────────────────────────────────────────
   registerCleanup(
@@ -329,6 +400,7 @@ async function main() {
 
   controller.onChange((queuePos, item) => {
     queue.setActive(queuePos);
+    reexportQueue?.setActive(queuePos);
     setStatus(`${queuePos + 1}/${controller.queueLength} · ${item.name} · ${item.duration.toFixed(1)}s`);
     // Drop accumulated bone velocities — the new clip starts from a fresh pose
     // so any inertia computed across the boundary would be a teleport spike.

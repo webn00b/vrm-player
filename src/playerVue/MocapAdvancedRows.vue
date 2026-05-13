@@ -11,6 +11,8 @@
  */
 
 import { ref, onMounted } from 'vue';
+import Button from 'primevue/button';
+import Checkbox from 'primevue/checkbox';
 import type { MocapController } from '../mocap/pipeline/mocapController';
 
 const props = defineProps<{
@@ -31,14 +33,13 @@ function toggleFilter(): void {
   oneEuroFilter.value = !oneEuroFilter.value;
   props.getMocap()?.setFilterEnabled(oneEuroFilter.value);
 }
-function onHandPriorityChange(e: Event): void {
+function onHandPriorityChange(next: boolean): void {
   const m = props.getMocap();
   if (!m) {
     handPriority.value = true;
-    (e.target as HTMLInputElement).checked = true;
     return;
   }
-  handPriority.value = (e.target as HTMLInputElement).checked;
+  handPriority.value = next;
   m.setHandTrackingPriorityEnabled(handPriority.value);
 }
 </script>
@@ -46,18 +47,23 @@ function onHandPriorityChange(e: Event): void {
 <template>
   <div class="dbg-row">
     <span class="dbg-label">🌊 1€ smoothing</span>
-    <button class="dbg-toggle" :class="{ off: !oneEuroFilter }" @click="toggleFilter">
-      {{ oneEuroFilter ? 'ON' : 'OFF' }}
-    </button>
+    <Button class="dbg-toggle" :class="{ off: !oneEuroFilter }" :label="oneEuroFilter ? 'ON' : 'OFF'" text size="small" @click="toggleFilter" />
   </div>
   <div class="dbg-row">
     <label class="dbg-label" for="mocap-handprio-box">✋ Wrist + fingers priority</label>
-    <input
-      type="checkbox"
+    <Checkbox
       id="mocap-handprio-box"
-      :checked="handPriority"
-      style="width:14px;height:14px;accent-color:#6ea8ff"
-      @change="onHandPriorityChange"
-    >
+      v-model="handPriority"
+      binary
+      @update:modelValue="onHandPriorityChange"
+    />
   </div>
 </template>
+
+<style scoped>
+:deep(.p-button.dbg-toggle) {
+  min-width: 34px;
+  justify-content: center;
+  padding: 2px 8px;
+}
+</style>

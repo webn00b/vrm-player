@@ -33,6 +33,24 @@
 - [x] Оптимизировать `AnimationController`, чтобы не держать активными все `AnimationAction`.
 - [x] Добавить больше автоматических сценариев проверки ретаргета BVH -> VRM.
 
+## PrimeVue migration TODO
+
+- [-] Завершить перенос нативных контролов внутри Vue-компонентов на PrimeVue:
+  `SkeletonSection.vue`, `ValidationFoldContent.vue`, `HipForcePanel.vue`,
+  `MocapStatsPanel.vue`, `DebugRecorderRow.vue`, `BvhVerifyFold.vue` и оставшиеся
+  кнопки в `DebugPanelRoot.vue`.
+- [ ] Убрать DOM-мосты для модалок: заменить `querySelector`/id-кнопки
+  `#skel-info-btn` и `#bvh-diag-btn` на props/events или общий reactive modal API.
+- [ ] Решить, оставлять ли native `<details>/<summary>` для fold-секций или
+  переносить их на PrimeVue `Accordion`/`Panel` с сохранением localStorage-state.
+- [ ] Почистить старые глобальные CSS-правила под vanilla UI:
+  `.dbg-toggle`, `.dbg-tabs`, queue styles и `input[type="range"]`, когда
+  соответствующие элементы окончательно уйдут в PrimeVue.
+- [ ] Убрать остаточное прямое обновление DOM для статуса в `ui.ts`
+  (`document.getElementById('status')`) и оставить только реактивный `statusText`.
+- [ ] После каждого крупного UI-пакета прогонять `npm run build` и быстрый
+  Playwright screenshot для правой панели, main/video tab и modal flows.
+
 ## Что уже сделано в этом проходе
 
 - [x] Lifecycle file-mode стал безопаснее: solver теперь гарантированно выходит из `highQualityMode` даже при прерывании или ошибке.

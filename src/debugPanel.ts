@@ -16,10 +16,10 @@ export function mountDebugPanel(
 ): () => void {
   const { pa, micro, idle, controller } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
-  const { skelViz, validator, boneDrag, hipForce, hipBalance, skeletonLogger } = tooling;
+  const { skelViz, validator, bonePanel, boneDrag, hipForce, hipBalance, skeletonLogger } = tooling;
   const getController = () => controller;
   const getMocap = () => mocap;
-  const root = document.getElementById('debug-panel');
+  const root = document.getElementById('debug-panel-root');
   if (!root) return () => {};
 
   const listenerAbort = new AbortController();
@@ -57,7 +57,7 @@ export function mountDebugPanel(
     // Tools sections (Skeleton / Validation / Mocap-advanced / Debug record)
     // — fully migrated into the Vue tree. Replaces `wireDebugPanelTools` +
     // `wireDebugPanelMocapParams`.
-    validator, skelViz, boneDrag, skeletonLogger, mocap,
+    validator, skelViz, bonePanel, boneDrag, skeletonLogger, mocap,
     getController, setModelVisible, dbgRecorder,
   });
   installPrimeVueOn(debugApp);
@@ -79,7 +79,7 @@ export function mountDebugPanel(
   });
 
   let tuningApp: App | null = null;
-  const tuningRoot = document.getElementById('mocap-tuning-panel');
+  const tuningRoot = document.getElementById('mocap-tuning-panel-root');
   if (tuningRoot) {
     tuningApp = createApp(TuningPanel, {
       getMocap,

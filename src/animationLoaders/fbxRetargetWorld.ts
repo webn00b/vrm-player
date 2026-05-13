@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
-import { buildFbxToVrmMappings } from './fbxBoneMapping';
+import { buildFbxToVrmMappings, type ManualFbxBoneMapping } from './fbxBoneMapping';
 import { snapshotRestPose } from './fbxRestSnapshot';
 import { sampleFrames } from './fbxFrameSampler';
 import { buildTracksFromSamples } from './fbxTrackBuilder';
@@ -14,6 +14,8 @@ interface RetargetOptions {
    * dance clips with whip turns (e.g. Mixamo samba ~6-7s mark).
    */
   sampleFps?: number;
+  /** Optional source-bone overrides from the Retarget Lab mapping table. */
+  manualMapping?: ManualFbxBoneMapping;
 }
 
 /**
@@ -55,7 +57,7 @@ export function retargetFbxToVrmWorldSpace(
 ): THREE.AnimationClip {
   const sampleFps = opts.sampleFps ?? 60;
 
-  const mappings = buildFbxToVrmMappings(fbxRoot, vrm);
+  const mappings = buildFbxToVrmMappings(fbxRoot, vrm, opts.manualMapping);
   const rest     = snapshotRestPose(fbxRoot, vrm, mappings);
   const sampled  = sampleFrames(fbxRoot, fbxClip, mappings, rest, sampleFps);
   const built    = buildTracksFromSamples(mappings, sampled.trackData, fbxClip, vrm);

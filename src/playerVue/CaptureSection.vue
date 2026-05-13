@@ -17,6 +17,8 @@
  */
 
 import { ref, onMounted, onUnmounted } from 'vue';
+import Button from 'primevue/button';
+import SelectButton from 'primevue/selectbutton';
 import type { VRM } from '@pixiv/three-vrm';
 import type { MocapController, MocapState } from '../mocap/pipeline/mocapController';
 import type { AnimationController } from '../animationController';
@@ -39,6 +41,11 @@ type CaptureSource = 'camera' | 'video' | 'animfile';
 const SOURCE_KEY = 'vrm-player.capture-source';
 const validSource = (s: string | null): CaptureSource =>
   s === 'video' || s === 'animfile' ? s : 'camera';
+const sourceOptions: Array<{ label: string; value: CaptureSource }> = [
+  { label: 'Camera', value: 'camera' },
+  { label: 'Video', value: 'video' },
+  { label: 'Anim', value: 'animfile' },
+];
 
 const currentSource = ref<CaptureSource>(validSource(localStorage.getItem(SOURCE_KEY)));
 const statusText    = ref('📷 Camera off');
@@ -423,37 +430,27 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <p class="panel-title"><span>Capture</span></p>
-
   <div class="dbg-section">
-    <div class="capture-source">
-      <button
-        class="capture-src-btn"
-        data-testid="capture-src-camera"
-        :aria-pressed="currentSource === 'camera' ? 'true' : 'false'"
-        @click="setSource('camera')"
-      >📷 Camera</button>
-      <button
-        class="capture-src-btn"
-        data-testid="capture-src-video"
-        :aria-pressed="currentSource === 'video' ? 'true' : 'false'"
-        @click="setSource('video')"
-      >📁 Video</button>
-      <button
-        class="capture-src-btn"
-        data-testid="capture-src-animfile"
-        :aria-pressed="currentSource === 'animfile' ? 'true' : 'false'"
-        @click="setSource('animfile')"
-      >🎬 Anim</button>
-    </div>
+    <SelectButton
+      class="capture-source"
+      :modelValue="currentSource"
+      :options="sourceOptions"
+      optionLabel="label"
+      optionValue="value"
+      :allowEmpty="false"
+      data-testid="capture-source"
+      @update:modelValue="setSource"
+    />
 
-    <button
+    <Button
       class="capture-primary"
       data-testid="capture-primary"
       :class="{ recording: primaryRecording }"
       :disabled="primaryDisabled"
+      :label="primaryLabel"
+      size="small"
       @click="onPrimaryClick"
-    >{{ primaryLabel }}</button>
+    />
     <input ref="fileInputRef"     type="file" accept="video/*"          hidden @change="onVideoFileChange">
     <input ref="animFileInputRef" type="file" accept=".bvh,.vrma,.fbx"  hidden @change="onAnimFileChange">
 
@@ -465,41 +462,114 @@ onUnmounted(() => {
       <span style="opacity:.45;font-size:10px">{{ sourceInfo }}</span>
     </div>
 
-    <button
+    <Button
       v-show="showStopCam"
       class="dbg-toggle off"
       data-testid="capture-stop-cam"
+      label="Stop camera"
+      text
+      size="small"
       style="width:100%"
       @click="onStopCam"
-    >Stop camera</button>
+    />
 
     <div
       v-show="showPlayback"
       class="dbg-row"
       style="gap:3px;justify-content:flex-start;margin-top:4px"
     >
-      <button class="dbg-toggle"
+      <Button class="dbg-toggle"
               :class="{ off: paused }"
               title="Pause / resume"
+              :label="pauseLabel"
+              text
+              size="small"
               @click="onPauseClick"
-      >{{ pauseLabel }}</button>
-      <button class="dbg-toggle off" title="Step -1 frame" @click="onStepBack">⏮</button>
-      <button class="dbg-toggle off" title="Step +1 frame" @click="onStepFwd">⏭</button>
-      <button class="dbg-toggle off" title="Grab current pose" @click="onGrab">💾</button>
-      <button class="dbg-toggle off" title="Download captured BVH" @click="onFlush">⬇</button>
+      />
+      <Button class="dbg-toggle off" icon="pi pi-step-backward" text size="small" title="Step -1 frame" @click="onStepBack" />
+      <Button class="dbg-toggle off" icon="pi pi-step-forward" text size="small" title="Step +1 frame" @click="onStepFwd" />
+      <Button class="dbg-toggle off" icon="pi pi-save" text size="small" title="Grab current pose" @click="onGrab" />
+      <Button class="dbg-toggle off" icon="pi pi-download" text size="small" title="Download captured BVH" @click="onFlush" />
     </div>
 
     <details class="capture-advanced">
       <summary>Advanced…</summary>
       <div class="dbg-row">
         <span class="dbg-label">📤 Single pose</span>
-        <button
+        <Button
           class="dbg-toggle off"
           :disabled="exportPoseDisabled"
+          :label="exportPoseLabel"
           :title="exportPoseTitle"
+          text
+          size="small"
           @click="onExportPose"
-        >{{ exportPoseLabel }}</button>
+        />
       </div>
     </details>
   </div>
 </template>
+
+<style scoped>
+:deep(.capture-source) {
+  display: flex;
+  width: 100%;
+  margin-bottom: 8px;
+}
+:deep(.capture-source .p-togglebutton) {
+  flex: 1;
+  justify-content: center;
+  border-radius: 0;
+  background: transparent;
+  color: #ccc;
+  border-color: #2a2a2a;
+  font-size: 11px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  padding: 6px;
+}
+:deep(.capture-source .p-togglebutton:first-child) {
+  border-radius: 5px 0 0 5px;
+}
+:deep(.capture-source .p-togglebutton:last-child) {
+  border-radius: 0 5px 5px 0;
+}
+:deep(.capture-source .p-togglebutton-checked) {
+  background: #2a3550;
+  color: #fff;
+}
+:deep(.capture-source .p-togglebutton[data-p-checked="true"]) {
+  background: #2a3550;
+  color: #fff;
+}
+:deep(.capture-source .p-togglebutton .p-togglebutton-content) {
+  background: transparent;
+}
+:deep(.capture-source .p-togglebutton[data-p-checked="true"] .p-togglebutton-label) {
+  color: #fff;
+}
+:deep(.p-button.capture-primary) {
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 6px;
+  background: #3b5bdb;
+  border-color: #3b5bdb;
+  color: #fff;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px;
+}
+:deep(.p-button.capture-primary:hover) {
+  background: #4c6ce8;
+  border-color: #4c6ce8;
+}
+:deep(.p-button.capture-primary.recording) {
+  background: #c92a2a;
+  border-color: #c92a2a;
+}
+:deep(.p-button.dbg-toggle) {
+  min-width: 34px;
+  justify-content: center;
+  padding: 2px 8px;
+}
+</style>

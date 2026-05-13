@@ -3,10 +3,10 @@ import type { VRM } from '@pixiv/three-vrm';
 
 const DEG = Math.PI / 180;
 
-interface BoneAxis { axis: 'x' | 'y' | 'z'; min: number; max: number; label: string; }
-interface BoneDef  { vrm: string; label: string; axes: BoneAxis[]; }
+export interface BoneAxis { axis: 'x' | 'y' | 'z'; min: number; max: number; label: string; }
+export interface BoneDef  { vrm: string; label: string; axes: BoneAxis[]; }
 
-const BONES: BoneDef[] = [
+export const BONE_POSE_DEFS: BoneDef[] = [
   {
     vrm: 'head', label: 'Head',
     axes: [
@@ -153,15 +153,34 @@ export class BonePosePanel {
 
   constructor(vrm: VRM) {
     this._vrm = vrm;
-    for (const b of BONES) this._offsets.set(b.vrm, { x: 0, y: 0, z: 0 });
+    for (const b of BONE_POSE_DEFS) this._offsets.set(b.vrm, { x: 0, y: 0, z: 0 });
   }
 
   get enabled(): boolean { return this._enabled; }
 
+  setEnabled(enabled: boolean): void {
+    this._enabled = enabled;
+    if (!enabled) this.resetAll();
+  }
+
+  getAvailableBones(): BoneDef[] {
+    return BONE_POSE_DEFS.filter((b) => this._vrm.humanoid.getNormalizedBoneNode(b.vrm as any));
+  }
+
+  getOffset(bone: string, axis: BoneAxis['axis']): number {
+    return this._offsets.get(bone)?.[axis] ?? 0;
+  }
+
+  setOffset(bone: string, axis: BoneAxis['axis'], degrees: number): void {
+    const offsets = this._offsets.get(bone);
+    if (!offsets) return;
+    offsets[axis] = degrees;
+  }
+
   /** Post-multiply each bone's current quaternion with the stored Euler offset. */
   apply(): void {
     if (!this._enabled) return;
-    for (const b of BONES) {
+    for (const b of BONE_POSE_DEFS) {
       const off = this._offsets.get(b.vrm)!;
       if (off.x === 0 && off.y === 0 && off.z === 0) continue;
       const node = this._vrm.humanoid.getNormalizedBoneNode(b.vrm as any);
@@ -176,78 +195,4 @@ export class BonePosePanel {
     for (const off of this._offsets.values()) { off.x = 0; off.y = 0; off.z = 0; }
   }
 
-  mount(container: HTMLElement): void {
-    container.innerHTML = '';
-
-    const header = document.createElement('p');
-    header.className = 'panel-title';
-    header.innerHTML = `
-      <span>Bones</span>
-      <span style="display:flex;gap:6px;margin-left:auto">
-        <button id="bone-toggle" class="dbg-toggle">ON</button>
-        <button id="bone-reset"  class="dbg-toggle off">Reset</button>
-      </span>`;
-    // Prevent the button clicks from also triggering panel collapse.
-    header.querySelectorAll('button').forEach((b) =>
-      b.addEventListener('click', (ev) => ev.stopPropagation())
-    );
-    container.appendChild(header);
-
-    const toggleBtn = header.querySelector<HTMLButtonElement>('#bone-toggle')!;
-    toggleBtn.addEventListener('click', () => {
-      this._enabled = !this._enabled;
-      toggleBtn.textContent = this._enabled ? 'ON' : 'OFF';
-      toggleBtn.classList.toggle('off', !this._enabled);
-      if (!this._enabled) this.resetAll();
-    });
-
-    header.querySelector<HTMLButtonElement>('#bone-reset')!.addEventListener('click', () => {
-      this.resetAll();
-      container.querySelectorAll<HTMLInputElement>('input[type=range]').forEach((s) => {
-        s.value = '0';
-        const valEl = container.querySelector<HTMLElement>(`#${s.id}-val`);
-        if (valEl) valEl.textContent = '0°';
-      });
-    });
-
-    for (const bone of BONES) {
-      // Skip bones not present in this VRM
-      if (!this._vrm.humanoid.getNormalizedBoneNode(bone.vrm as any)) continue;
-
-      const section = document.createElement('div');
-      section.style.cssText = 'margin-bottom:8px';
-
-      const title = document.createElement('div');
-      title.style.cssText = 'font-size:10px;opacity:.45;margin-bottom:3px;font-weight:600';
-      title.textContent = bone.label;
-      section.appendChild(title);
-
-      for (const ax of bone.axes) {
-        const sliderId = `bone-${bone.vrm}-${ax.axis}`;
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:2px';
-        row.innerHTML = `
-          <span style="font-size:10px;opacity:.55;width:58px;flex-shrink:0">${ax.label}</span>
-          <input type="range" id="${sliderId}" min="${ax.min}" max="${ax.max}" step="1" value="0"
-                 style="flex:1;accent-color:#3b5bdb;height:3px">
-          <span id="${sliderId}-val" style="font-size:10px;font-family:ui-monospace,monospace;opacity:.6;width:28px;text-align:right">0°</span>`;
-        section.appendChild(row);
-
-        const slider = row.querySelector<HTMLInputElement>('input')!;
-        const valEl  = row.querySelector<HTMLElement>(`#${sliderId}-val`)!;
-        slider.addEventListener('input', () => {
-          const v = parseFloat(slider.value);
-          valEl.textContent = `${v}°`;
-          this._offsets.get(bone.vrm)![ax.axis] = v;
-        });
-      }
-
-      const divider = document.createElement('div');
-      divider.style.cssText = 'height:1px;background:rgba(255,255,255,.06);margin:6px 0 4px';
-      section.appendChild(divider);
-      container.appendChild(section);
-    }
-  }
 }
-
-const BTN_STYLE = 'font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;border:none;cursor:pointer;color:#fff;letter-spacing:.04em;';

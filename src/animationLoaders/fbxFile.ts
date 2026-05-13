@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import type { VRM } from '@pixiv/three-vrm';
-import { mapFbxBoneToVrm, countMappedBones } from './fbxBoneMap';
+import { mapFbxBoneToVrm } from './fbxBoneMap';
+import type { ManualFbxBoneMapping } from './fbxBoneMapping';
 import { retargetFbxToVrmWorldSpace } from './fbxRetargetWorld';
 
 /**
@@ -22,6 +23,7 @@ export async function loadFbxFromFile(
   file: File,
   vrm: VRM,
   name: string,
+  manualMapping: ManualFbxBoneMapping = {},
 ): Promise<THREE.AnimationClip> {
   const buffer = await file.arrayBuffer();
   const loader = new FBXLoader();
@@ -43,7 +45,10 @@ export async function loadFbxFromFile(
     const dot = track.name.indexOf('.');
     sourceBones.add(dot > 0 ? track.name.slice(0, dot) : track.name);
   }
-  const mappedCount = countMappedBones(sourceBones);
+  const mappedCount = new Set([
+    ...[...sourceBones].map((n) => mapFbxBoneToVrm(n)).filter(Boolean),
+    ...Object.keys(manualMapping).filter((k) => manualMapping[k as keyof ManualFbxBoneMapping]),
+  ]).size;
   if (mappedCount < 8) {
     const unmapped = [...sourceBones]
       .filter((n) => !mapFbxBoneToVrm(n))
@@ -75,7 +80,7 @@ export async function loadFbxFromFile(
   // Hand off to world-space retargeter. Walks the FBX skeleton frame-by-frame
   // via a private AnimationMixer, snapshots world rotations, re-expresses
   // them as VRM-local rotations using each bone's rest-pose correction.
-  const out = retargetFbxToVrmWorldSpace(root, sourceClip, vrm, name);
+  const out = retargetFbxToVrmWorldSpace(root, sourceClip, vrm, name, { manualMapping });
 
   // Track binding probe: verify each output target resolves under vrm.scene.
   const uniqueTargets = new Set<string>();

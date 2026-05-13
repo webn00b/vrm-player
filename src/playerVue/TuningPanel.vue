@@ -17,6 +17,7 @@
  */
 
 import { ref, reactive, onMounted, watch } from 'vue';
+import Slider from 'primevue/slider';
 import type { VRM } from '@pixiv/three-vrm';
 import type { MocapController } from '../mocap/pipeline/mocapController';
 import type { AnimationController } from '../animationController';
@@ -131,21 +132,15 @@ onMounted(() => {
       <div class="dbg-section">
         <div class="dbg-row">
           <span class="dbg-label">🌀 Spine {{ spineSm.toFixed(2) }}</span>
-          <input type="range" min="0.01" max="1" step="0.01"
-                 v-model.number="spineSm" @input="onSpineSm"
-                 class="dbg-slider">
+          <Slider class="dbg-slider" v-model="spineSm" :min="0.01" :max="1" :step="0.01" @update:modelValue="onSpineSm" />
         </div>
         <div class="dbg-row">
           <span class="dbg-label">🫨 Limb {{ limbSm.toFixed(2) }}</span>
-          <input type="range" min="0.01" max="1" step="0.01"
-                 v-model.number="limbSm" @input="onLimbSm"
-                 class="dbg-slider">
+          <Slider class="dbg-slider" v-model="limbSm" :min="0.01" :max="1" :step="0.01" @update:modelValue="onLimbSm" />
         </div>
         <div class="dbg-row">
           <span class="dbg-label">🧲 Pole {{ poleSm.toFixed(2) }}</span>
-          <input type="range" min="0.01" max="1" step="0.01"
-                 v-model.number="poleSm" @input="onPoleSm"
-                 class="dbg-slider">
+          <Slider class="dbg-slider" v-model="poleSm" :min="0.01" :max="1" :step="0.01" @update:modelValue="onPoleSm" />
         </div>
       </div>
     </details>
@@ -160,27 +155,19 @@ onMounted(() => {
       <div class="dbg-section">
         <div class="dbg-row">
           <span class="dbg-label">🫙 Arm Z target {{ armZ.toFixed(2) }}</span>
-          <input type="range" min="0" max="1" step="0.01"
-                 v-model.number="armZ" @input="onArmZ"
-                 class="dbg-slider">
+          <Slider class="dbg-slider" v-model="armZ" :min="0" :max="1" :step="0.01" @update:modelValue="onArmZ" />
         </div>
         <div class="dbg-row">
           <span class="dbg-label">🧭 Arm pole Z {{ armPoleZ.toFixed(2) }}</span>
-          <input type="range" min="0" max="1" step="0.01"
-                 v-model.number="armPoleZ" @input="onArmPoleZ"
-                 class="dbg-slider">
+          <Slider class="dbg-slider" v-model="armPoleZ" :min="0" :max="1" :step="0.01" @update:modelValue="onArmPoleZ" />
         </div>
         <div class="dbg-row">
           <span class="dbg-label">👁 Vis threshold {{ visThresh.toFixed(2) }}</span>
-          <input type="range" min="0" max="1" step="0.01"
-                 v-model.number="visThresh" @input="onVisThresh"
-                 class="dbg-slider">
+          <Slider class="dbg-slider" v-model="visThresh" :min="0" :max="1" :step="0.01" @update:modelValue="onVisThresh" />
         </div>
         <div class="dbg-row">
           <span class="dbg-label">↔ Shoulder spread {{ shoulderSpread.toFixed(0) }}°</span>
-          <input type="range" min="-20" max="20" step="1"
-                 v-model.number="shoulderSpread" @input="onShoulderSpread"
-                 class="dbg-slider">
+          <Slider class="dbg-slider" v-model="shoulderSpread" :min="-20" :max="20" :step="1" @update:modelValue="onShoulderSpread" />
         </div>
       </div>
     </details>

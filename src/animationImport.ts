@@ -4,6 +4,7 @@ import { parseBVH, type ParsedBVH } from './bvhLoader';
 import { retargetBvhToVrm } from './retarget';
 import { loadVrmaFromFile } from './animationLoaders/vrmaFile';
 import { loadFbxFromFile } from './animationLoaders/fbxFile';
+import type { ManualFbxBoneMapping } from './animationLoaders/fbxBoneMapping';
 
 export type ImportFormat = 'bvh' | 'vrma' | 'fbx';
 
@@ -40,7 +41,11 @@ export function isSupportedAnimationFile(filename: string): boolean {
  * window drag-drop handler. Detects format by extension, runs the matching
  * loader + retargeter, and returns a clip ready for AnimationController.register.
  */
-export async function loadAnimationFile(file: File, vrm: VRM): Promise<LoadedAnimation> {
+export async function loadAnimationFile(
+  file: File,
+  vrm: VRM,
+  manualFbxMapping: ManualFbxBoneMapping = {},
+): Promise<LoadedAnimation> {
   const fmt = detectFormat(file.name);
   if (!fmt) throw new Error(`Unsupported file extension: ${file.name}`);
   const baseName = file.name.replace(SUPPORTED_REGEX, '');
@@ -58,6 +63,6 @@ export async function loadAnimationFile(file: File, vrm: VRM): Promise<LoadedAni
   }
 
   // fbx
-  const clip = await loadFbxFromFile(file, vrm, baseName);
+  const clip = await loadFbxFromFile(file, vrm, baseName, manualFbxMapping);
   return { name: baseName, clip, parsedBvh: null, format: 'fbx' };
 }

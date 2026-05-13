@@ -41,12 +41,14 @@ import type { MocapDebugViz } from '../mocap/diagnostics/mocapDebugViz';
 import type { MocapDebugRecorder } from '../mocap/diagnostics/mocapDebugRecorder';
 import type { BoneValidator } from '../validation/boneValidator';
 import type { SkeletonVisualizer } from '../skeletonVisualizer';
+import type { BonePosePanel } from '../bonePosePanel';
 import type { BoneDragController } from '../boneDragController';
 import type { SkeletonLogger } from '../diagnostics/skeletonLogger';
 import StatsPanel from './StatsPanel.vue';
 import HipForcePanel from './HipForcePanel.vue';
 import MocapStatsPanel from './MocapStatsPanel.vue';
 import SkeletonSection from './SkeletonSection.vue';
+import BonePoseControls from './BonePoseControls.vue';
 import ValidationFoldContent from './ValidationFoldContent.vue';
 import MocapParamsControls from './MocapParamsControls.vue';
 import MocapAdvancedRows from './MocapAdvancedRows.vue';
@@ -64,6 +66,7 @@ const props = defineProps<{
   // Props for the Vue-migrated tools sections (Skeleton, Validation, etc).
   validator:       BoneValidator;
   skelViz:         SkeletonVisualizer;
+  bonePanel:       BonePosePanel;
   boneDrag:        BoneDragController;
   skeletonLogger:  SkeletonLogger;
   mocap:           MocapController;
@@ -180,6 +183,19 @@ onMounted(() => {
       </div>
 
       <div class="dbg-divider"></div>
+
+      <!-- Manual bone offsets — migrated from BonePosePanel.mount(). -->
+      <details
+        class="dbg-fold"
+        id="fold-bone-pose"
+        :open="foldOpen['fold-bone-pose']"
+        @toggle="onFoldToggle('fold-bone-pose', $event)"
+      >
+        <summary>Manual bone pose</summary>
+        <div class="dbg-section">
+          <BonePoseControls :bonePanel="bonePanel" />
+        </div>
+      </details>
 
       <!-- Idle poses fold ─────────────────────────────────────────────────── -->
       <details

@@ -18,6 +18,9 @@
 
 import { ref, reactive, onMounted, onUnmounted, watch } from 'vue';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
+import Button from 'primevue/button';
+import SelectButton from 'primevue/selectbutton';
+import Slider from 'primevue/slider';
 import type { MocapController } from '../mocap/pipeline/mocapController';
 
 const props = defineProps<{
@@ -88,12 +91,18 @@ function toggleUnify(): void {
 
 type ScaleRef = 'auto' | 'shoulders' | 'hips' | 'head' | 'median';
 const scaleRef = ref<ScaleRef>('auto');
-function setScaleRef(r: ScaleRef): void {
+const scaleRefOptions: Array<{ label: string; value: ScaleRef }> = [
+  { label: 'auto', value: 'auto' },
+  { label: 'med', value: 'median' },
+  { label: 'head', value: 'head' },
+  { label: 'shlds', value: 'shoulders' },
+  { label: 'hips', value: 'hips' },
+];
+function setScaleRef(r: ScaleRef | null): void {
+  if (!r) return;
   scaleRef.value = r;
   props.getMocap()?.calibration.setScaleRef(r);
 }
-const scaleRefLabel = (r: ScaleRef): string =>
-  r === 'shoulders' ? 'shlds' : r === 'median' ? 'med' : r;
 
 // ── Sliders ───────────────────────────────────────────────────────────────
 const hipGate    = ref(0.4);
@@ -195,8 +204,8 @@ function onFoldToggle(e: Event): void {
     <div class="dbg-row">
       <span class="dbg-label">📏 Calibration</span>
       <div class="dbg-btn-group">
-        <button class="dbg-toggle off" @click="recalibrate">Recal</button>
-        <button class="dbg-toggle off" title="Reset sliders to 1.00" @click="resetSliders">Reset</button>
+        <Button class="dbg-toggle off" label="Recal" text size="small" @click="recalibrate" />
+        <Button class="dbg-toggle off" label="Reset" text size="small" title="Reset sliders to 1.00" @click="resetSliders" />
       </div>
     </div>
     <div class="dbg-hint">Auto-scales each frame from hip width — no T-pose needed</div>
@@ -231,91 +240,86 @@ function onFoldToggle(e: Event): void {
       <div class="dbg-row">
         <span class="dbg-label">🦴 Hips = shoulders</span>
         <div class="dbg-btn-group">
-          <button
+          <Button
             class="dbg-toggle"
             :class="{ off: !hipsEqualActive }"
             :disabled="hipsEqualDisabled"
             :title="hipsEqualTitle"
+            :label="hipsEqualActive ? 'ON' : 'OFF'"
+            text
+            size="small"
             @click="toggleHipsEqual"
-          >{{ hipsEqualActive ? 'ON' : 'OFF' }}</button>
-          <button
+          />
+          <Button
             class="dbg-toggle off"
+            label="Diag"
             title="Dump rig + mocap state for the leg/hip pipeline"
+            text
+            size="small"
             @click="onHipDiag?.()"
-          >🔬 Diag</button>
+          />
         </div>
       </div>
       <div class="dbg-row">
         <span class="dbg-label">🔗 Unify arm max</span>
-        <button
+        <Button
           class="dbg-toggle"
           :class="{ off: !unifyArmMax }"
+          :label="unifyArmMax ? 'ON' : 'OFF'"
           title="Share performer arm max between L/R"
+          text
+          size="small"
           @click="toggleUnify"
-        >{{ unifyArmMax ? 'ON' : 'OFF' }}</button>
+        />
       </div>
       <div class="dbg-row">
         <span class="dbg-label">📍 Scale ref</span>
-        <div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end">
-          <button
-            v-for="r in (['auto', 'median', 'head', 'shoulders', 'hips'] as const)"
-            :key="r"
-            class="dbg-toggle"
-            :class="{ off: scaleRef !== r }"
-            @click="setScaleRef(r)"
-          >{{ scaleRefLabel(r) }}</button>
-        </div>
+        <SelectButton
+          class="prime-compact-select"
+          v-model="scaleRef"
+          :options="scaleRefOptions"
+          optionLabel="label"
+          optionValue="value"
+          :allowEmpty="false"
+          @update:modelValue="setScaleRef"
+        />
       </div>
       <div class="dbg-row">
         <span class="dbg-label">🚪 Hip vis gate {{ hipGate.toFixed(2) }}</span>
-        <input
-          type="range" min="0.1" max="0.9" step="0.05"
-          v-model.number="hipGate" @input="onHipGate"
-          class="dbg-slider"
-        >
+        <Slider class="dbg-slider" v-model="hipGate" :min="0.1" :max="0.9" :step="0.05" @update:modelValue="onHipGate" />
       </div>
       <div class="dbg-row">
         <span class="dbg-label">📐 Shoulder × {{ shOverride.toFixed(2) }}</span>
-        <input
-          type="range" min="0.5" max="2" step="0.05"
-          v-model.number="shOverride" @input="onShOver"
-          class="dbg-slider"
-        >
+        <Slider class="dbg-slider" v-model="shOverride" :min="0.5" :max="2" :step="0.05" @update:modelValue="onShOver" />
       </div>
       <div class="dbg-row">
         <span class="dbg-label">🦾 L arm × {{ laOverride.toFixed(2) }}</span>
-        <input
-          type="range" min="0.5" max="2" step="0.05"
-          v-model.number="laOverride" @input="onLaOver"
-          class="dbg-slider"
-        >
+        <Slider class="dbg-slider" v-model="laOverride" :min="0.5" :max="2" :step="0.05" @update:modelValue="onLaOver" />
       </div>
       <div class="dbg-row">
         <span class="dbg-label">🦾 R arm × {{ raOverride.toFixed(2) }}</span>
-        <input
-          type="range" min="0.5" max="2" step="0.05"
-          v-model.number="raOverride" @input="onRaOver"
-          class="dbg-slider"
-        >
+        <Slider class="dbg-slider" v-model="raOverride" :min="0.5" :max="2" :step="0.05" @update:modelValue="onRaOver" />
       </div>
       <div class="dbg-row">
         <span class="dbg-label">🦵 Leg spread × {{ legSpread.toFixed(2) }}</span>
-        <input
-          type="range" min="0.5" max="2" step="0.05"
-          v-model.number="legSpread" @input="onLegSpread"
+        <Slider
           class="dbg-slider"
+          v-model="legSpread"
+          :min="0.5"
+          :max="2"
+          :step="0.05"
           title="Fan feet outward — compensates avatars whose rest hips are wider than the performer's projected hips"
-        >
+          @update:modelValue="onLegSpread"
+        />
       </div>
       <div class="dbg-row">
         <span class="dbg-label">🔍 Dump to console</span>
-        <button class="dbg-toggle" @click="doDump"
-                title="Log full performer+avatar skeleton comparison">Dump</button>
+        <Button class="dbg-toggle" label="Dump" text size="small" title="Log full performer+avatar skeleton comparison" @click="doDump" />
       </div>
       <div class="dbg-row">
         <span class="dbg-label">📊 Skeleton info</span>
         <!-- skel-info-btn — id'd, owned by mountSkelModal. -->
-        <button class="dbg-toggle off" id="skel-info-btn">View</button>
+        <Button class="dbg-toggle off" id="skel-info-btn" label="View" text size="small" />
       </div>
     </div>
   </details>
@@ -337,4 +341,42 @@ function onFoldToggle(e: Event): void {
 .cal-r-value  { flex-shrink: 0; width: 32px; text-align: right;
                 font-family: ui-monospace, "SF Mono", Menlo, monospace;
                 font-size: 10px; opacity: 0.55; }
+:deep(.p-button.dbg-toggle) {
+  min-width: 34px;
+  justify-content: center;
+  padding: 2px 8px;
+}
+:deep(.prime-compact-select) {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px;
+}
+:deep(.prime-compact-select .p-togglebutton) {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.55);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+:deep(.prime-compact-select .p-togglebutton-checked) {
+  background: #3b5bdb;
+  color: #fff;
+}
+:deep(.prime-compact-select .p-togglebutton[data-p-checked="true"]) {
+  background: #3b5bdb;
+  color: #fff;
+}
+:deep(.prime-compact-select .p-togglebutton .p-togglebutton-content) {
+  background: transparent;
+}
+:deep(.prime-compact-select .p-togglebutton[data-p-checked="true"] .p-togglebutton-label) {
+  color: #fff;
+}
+:deep(.dbg-slider.p-slider) {
+  flex: 1;
+  margin-left: 8px;
+}
 </style>

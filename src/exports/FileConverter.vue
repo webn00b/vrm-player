@@ -159,6 +159,25 @@ const formatColor = (f: SourceFormat): 'info' | 'success' | 'warn' | 'secondary'
 .converter-card {
   background: rgba(255, 255, 255, 0.02);
 }
+:deep(.p-card) {
+  background: rgba(16, 16, 16, 0.92);
+  color: #e6e6e6;
+}
+:deep(.p-fileupload) {
+  color: #e6e6e6;
+}
+:deep(.p-fileupload-header),
+:deep(.p-fileupload-content) {
+  background: rgba(10, 10, 12, 0.92);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+:deep(.p-fileupload-content) {
+  min-height: 224px;
+}
+:deep(.p-fileupload-file),
+:deep(.p-fileupload-empty) {
+  color: #e6e6e6;
+}
 .empty-zone {
   text-align: center;
   padding: 24px 12px;

@@ -32,6 +32,7 @@ interface QueueItem {
 }
 
 const props = defineProps<{
+  mode?:         'full' | 'exportsOnly';
   onJump?:       (queueIndex: number) => void;
   onReorder?:    (fromIndex: number, toIndex: number) => void;
   onRemove?:     (queueIndex: number) => void;
@@ -51,7 +52,7 @@ const dropTarget   = ref(-1);
 const renamingIndex = ref(-1);
 const renameValue   = ref('');
 
-const activeTab = ref<'queue' | 'exports'>('queue');
+const activeTab = ref<'queue' | 'exports'>(props.mode === 'exportsOnly' ? 'exports' : 'queue');
 
 let nextId = 1;
 
@@ -113,6 +114,7 @@ function commitRename(qi: number, save: boolean): void {
 
 // ── Drag-and-drop reorder ────────────────────────────────────────────────────
 function onDragStart(e: DragEvent, qi: number): void {
+  if (props.mode === 'exportsOnly') return;
   draggedIndex.value = qi;
   e.dataTransfer!.effectAllowed = 'move';
   e.dataTransfer!.setData('text/plain', `queue:${qi}`);
@@ -122,6 +124,7 @@ function onDragEnd(): void {
   dropTarget.value = -1;
 }
 function onDragOver(e: DragEvent, qi: number): void {
+  if (props.mode === 'exportsOnly') return;
   if (draggedIndex.value < 0) return;
   e.preventDefault();
   if (qi === draggedIndex.value) return;
@@ -130,6 +133,7 @@ function onDragOver(e: DragEvent, qi: number): void {
   dropTarget.value = isTopHalf ? qi : qi + 1;
 }
 function onDrop(e: DragEvent): void {
+  if (props.mode === 'exportsOnly') return;
   if (draggedIndex.value < 0 || dropTarget.value < 0) return;
   e.preventDefault();
   const from = draggedIndex.value;
@@ -148,26 +152,36 @@ function dropClass(qi: number): string {
   if (dropTarget.value === qi + 1) return 'drop-after';
   return '';
 }
+
+const emptyText = computed(() =>
+  props.mode === 'exportsOnly'
+    ? 'Load animations on the Player page'
+    : 'Drag animations here',
+);
 </script>
 
 <template>
   <div class="queue-panel-root" :data-tab="activeTab">
     <!-- Tabs -->
-    <div class="dbg-tabs">
-      <button
+    <div v-if="mode !== 'exportsOnly'" class="dbg-tabs">
+      <Button
         class="dbg-tab"
+        label="Queue"
+        text
         :class="{ active: activeTab === 'queue' }"
         @click="activeTab = 'queue'"
-      >Queue</button>
-      <button
+      />
+      <Button
         class="dbg-tab"
+        label="Exports"
+        text
         :class="{ active: activeTab === 'exports' }"
         @click="activeTab = 'exports'"
-      >Exports</button>
+      />
     </div>
 
     <!-- Exports tab tools -->
-    <div v-show="activeTab === 'exports'" class="exports-tools">
+    <div v-if="mode !== 'exportsOnly'" v-show="activeTab === 'exports'" class="exports-tools">
       <div class="title">File-to-file converters</div>
       <a href="/exports.html" target="_blank" rel="noopener" class="converter-link">
         🛠 Open converter window
@@ -194,7 +208,7 @@ function dropClass(qi: number): string {
             dragging: qi === draggedIndex,
           },
         ]"
-        :draggable="renamingIndex !== qi"
+        :draggable="mode !== 'exportsOnly' && renamingIndex !== qi"
         @click="onItemClick($event, qi)"
         @dragstart="onDragStart($event, qi)"
         @dragend="onDragEnd"
@@ -221,31 +235,44 @@ function dropClass(qi: number): string {
         >{{ displayName(item.rawName) }}</span>
 
         <!-- Exports tab: per-format download buttons -->
-        <button
+        <Button
           v-if="onExportBvh"
           class="q-action q-export-bvh"
-          title="Record this clip as BVH (live playback)"
+          label="⬇bvh"
+          text
+          size="small"
+          aria-label="Record this clip as BVH"
           @click.stop="onExportBvh?.(qi)"
-        >⬇bvh</button>
-        <button
+        />
+        <Button
           v-if="onExportGlb"
           class="q-action q-export-glb"
-          title="Download as glTF/GLB"
+          label="⬇glb"
+          text
+          size="small"
+          aria-label="Download as glTF/GLB"
           @click.stop="onExportGlb?.(qi)"
-        >⬇glb</button>
-        <button
+        />
+        <Button
           v-if="onExportVrma"
           class="q-action q-export"
-          title="Download as VRMA"
+          label="⬇"
+          text
+          size="small"
+          aria-label="Download as VRMA"
           @click.stop="onExportVrma?.(qi)"
-        >⬇</button>
+        />
 
         <!-- Queue tab: remove only -->
-        <button
+        <Button
           class="q-action q-remove"
-          title="Remove from queue"
+          icon="pi pi-times"
+          text
+          rounded
+          size="small"
+          aria-label="Remove from queue"
           @click.stop="props.onRemove?.(qi); remove(qi)"
-        >✕</button>
+        />
       </li>
     </ul>
 
@@ -254,7 +281,7 @@ function dropClass(qi: number): string {
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M12 5v14M5 12l7-7 7 7"/>
       </svg>
-      Drag animations here
+      {{ emptyText }}
     </div>
   </div>
 </template>
@@ -293,6 +320,10 @@ function dropClass(qi: number): string {
   opacity: 0.4;
   transition: opacity 120ms, border-color 120ms;
   font-family: inherit;
+}
+:deep(.dbg-tab.p-button) {
+  justify-content: center;
+  border-radius: 0;
 }
 .dbg-tab:hover { opacity: 0.7; }
 .dbg-tab.active { opacity: 1; border-bottom-color: #3b5bdb; }
@@ -385,6 +416,10 @@ function dropClass(qi: number): string {
   cursor: pointer;
   font-family: inherit;
 }
+:deep(.q-action.p-button) {
+  min-width: 0;
+  height: 18px;
+}
 .q-action:hover { background: #2a3550; color: #fff; border-color: #3b5bdb; }
 .q-export-bvh, .q-export-glb { font-size: 9px; padding: 0 4px; letter-spacing: 0.05em; }
 .q-remove {
@@ -393,6 +428,9 @@ function dropClass(qi: number): string {
   padding: 2px 3px;
   font-size: 9px;
   line-height: 1;
+}
+:deep(.q-remove.p-button) {
+  width: 18px;
 }
 .q-remove:hover { color: #f87171; background: rgba(248, 113, 113, 0.1); border-color: transparent; }
 

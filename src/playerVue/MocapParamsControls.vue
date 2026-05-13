@@ -17,6 +17,8 @@
  */
 
 import { ref, onMounted } from 'vue';
+import Button from 'primevue/button';
+import SelectButton from 'primevue/selectbutton';
 import type { MocapController } from '../mocap/pipeline/mocapController';
 
 const props = defineProps<{
@@ -33,6 +35,16 @@ const hipPosition       = ref(true);
 const oneEuroFilter     = ref(true);
 const handPriority      = ref(true);
 const depthScale        = ref<0 | 0.5 | 1>(1);
+const qualityOptions: Array<{ label: string; value: 'lite' | 'full' | 'heavy' }> = [
+  { label: 'lite', value: 'lite' },
+  { label: 'full', value: 'full' },
+  { label: 'heavy', value: 'heavy' },
+];
+const depthOptions: Array<{ label: string; value: 0 | 0.5 | 1 }> = [
+  { label: '2D', value: 0 },
+  { label: 'mid', value: 0.5 },
+  { label: '3D', value: 1 },
+];
 
 onMounted(() => {
   const m = props.getMocap();
@@ -48,7 +60,8 @@ onMounted(() => {
 });
 
 // ── Pose quality (async — model swap takes time) ───────────────────────
-async function setQuality(q: 'lite' | 'full' | 'heavy'): Promise<void> {
+async function setQuality(q: 'lite' | 'full' | 'heavy' | null): Promise<void> {
+  if (!q) return;
   const m = props.getMocap();
   // Refuse mid-session swap — same guard as the original.
   if (!m || m.state !== 'off') return;
@@ -92,7 +105,8 @@ function onHandPriorityChange(e: Event): void {
   handPriority.value = (e.target as HTMLInputElement).checked;
   m.setHandTrackingPriorityEnabled(handPriority.value);
 }
-function setDepth(v: 0 | 0.5 | 1): void {
+function setDepth(v: 0 | 0.5 | 1 | null): void {
+  if (v == null) return;
   depthScale.value = v;
   props.getMocap()?.setDepthScale(v);
 }
@@ -101,37 +115,31 @@ function setDepth(v: 0 | 0.5 | 1): void {
 <template>
   <div class="dbg-row">
     <span class="dbg-label">🎯 Pose model</span>
-    <div class="dbg-btn-group">
-      <button
-        v-for="q in (['lite', 'full', 'heavy'] as const)"
-        :key="q"
-        class="dbg-toggle"
-        :class="{ off: poseQuality !== q }"
-        :disabled="poseQualityBusy"
-        @click="setQuality(q)"
-      >{{ poseQualityBusy && poseQuality === q ? '…' : q }}</button>
-    </div>
+    <SelectButton
+      class="prime-compact-select"
+      v-model="poseQuality"
+      :options="qualityOptions"
+      optionLabel="label"
+      optionValue="value"
+      :allowEmpty="false"
+      :disabled="poseQualityBusy"
+      @update:modelValue="setQuality"
+    />
   </div>
 
   <div class="dbg-row">
     <span class="dbg-label">🪞 Mirror mode</span>
-    <button class="dbg-toggle" data-testid="mocap-mirror" :class="{ off: !mirrorX }" @click="toggleMirror">
-      {{ mirrorX ? 'ON' : 'OFF' }}
-    </button>
+    <Button class="dbg-toggle" data-testid="mocap-mirror" :class="{ off: !mirrorX }" :label="mirrorX ? 'ON' : 'OFF'" text size="small" @click="toggleMirror" />
   </div>
 
   <div class="dbg-row">
     <span class="dbg-label">😶 Face tracking</span>
-    <button class="dbg-toggle" data-testid="mocap-face" :class="{ off: !faceTracking }" @click="toggleFace">
-      {{ faceTracking ? 'ON' : 'OFF' }}
-    </button>
+    <Button class="dbg-toggle" data-testid="mocap-face" :class="{ off: !faceTracking }" :label="faceTracking ? 'ON' : 'OFF'" text size="small" @click="toggleFace" />
   </div>
 
   <div class="dbg-row">
     <span class="dbg-label">🚶 Hip position</span>
-    <button class="dbg-toggle" data-testid="mocap-hip" :class="{ off: !hipPosition }" @click="toggleHip">
-      {{ hipPosition ? 'ON' : 'OFF' }}
-    </button>
+    <Button class="dbg-toggle" data-testid="mocap-hip" :class="{ off: !hipPosition }" :label="hipPosition ? 'ON' : 'OFF'" text size="small" @click="toggleHip" />
   </div>
 
   <div class="dbg-row">
@@ -140,18 +148,55 @@ function setDepth(v: 0 | 0.5 | 1): void {
       style="font-size:11px"
       title="When ON: if one arm/leg becomes invisible and the other side is live, copy the visible side's local quaternions to the missing side. Works for bilaterally-symmetric poses (claps, mirror dance); produces wrong poses for asymmetric motion. Off by default."
     >🪟 Symmetry fallback</span>
-    <button class="dbg-toggle" data-testid="mocap-symmetry" :class="{ off: !symmetryFallback }" @click="toggleSymmetry">
-      {{ symmetryFallback ? 'ON' : 'OFF' }}
-    </button>
+    <Button class="dbg-toggle" data-testid="mocap-symmetry" :class="{ off: !symmetryFallback }" :label="symmetryFallback ? 'ON' : 'OFF'" text size="small" @click="toggleSymmetry" />
   </div>
 
   <div class="dbg-row">
     <span class="dbg-label">📐 Depth</span>
-    <div class="dbg-btn-group">
-      <button class="dbg-toggle" :class="{ off: depthScale !== 0 }"   @click="setDepth(0)">2D</button>
-      <button class="dbg-toggle" :class="{ off: depthScale !== 0.5 }" @click="setDepth(0.5)">mid</button>
-      <button class="dbg-toggle" :class="{ off: depthScale !== 1 }"   @click="setDepth(1)">3D</button>
-    </div>
+    <SelectButton
+      class="prime-compact-select"
+      v-model="depthScale"
+      :options="depthOptions"
+      optionLabel="label"
+      optionValue="value"
+      :allowEmpty="false"
+      @update:modelValue="setDepth"
+    />
   </div>
 
 </template>
+
+<style scoped>
+:deep(.p-button.dbg-toggle) {
+  min-width: 34px;
+  justify-content: center;
+  padding: 2px 8px;
+}
+:deep(.prime-compact-select) {
+  display: flex;
+  gap: 3px;
+}
+:deep(.prime-compact-select .p-togglebutton) {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.55);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+:deep(.prime-compact-select .p-togglebutton-checked) {
+  background: #3b5bdb;
+  color: #fff;
+}
+:deep(.prime-compact-select .p-togglebutton[data-p-checked="true"]) {
+  background: #3b5bdb;
+  color: #fff;
+}
+:deep(.prime-compact-select .p-togglebutton .p-togglebutton-content) {
+  background: transparent;
+}
+:deep(.prime-compact-select .p-togglebutton[data-p-checked="true"] .p-togglebutton-label) {
+  color: #fff;
+}
+</style>
