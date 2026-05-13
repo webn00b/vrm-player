@@ -44,9 +44,10 @@ export function snapshotRestPose(
   // Save every humanoid bone's live local quaternion, swap to normalized
   // rest, sample, restore. `restPose` exposes per-bone authored rest values
   // when the rig has them; identity is the safe fallback.
-  const restPose = (vrm.humanoid as any).normalizedRestPose as
-    | Record<string, { rotation?: [number, number, number, number] }>
-    | undefined;
+  type RestPoseLike = {
+    [name: string]: { rotation?: [number, number, number, number] };
+  };
+  const restPose = (vrm.humanoid as { normalizedRestPose?: RestPoseLike }).normalizedRestPose;
   const savedLocals: Array<{ node: THREE.Object3D; q: THREE.Quaternion }> = [];
   for (const boneName of Object.values(VRMHumanBoneName)) {
     const node = vrm.humanoid.getNormalizedBoneNode(boneName);

@@ -23,7 +23,7 @@
  */
 
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 
 /**
@@ -72,8 +72,10 @@ export async function buildGlbBlobForClip(
   // First pass: clone each bone as a plain Object3D positioned at its
   // normalized rest. Skipping bones the VRM doesn't have.
   const cloned = new Map<string, THREE.Object3D>();
+  const getNode = (name: string): THREE.Object3D | null =>
+    vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
   for (const name of HUMANOID_BONES) {
-    const node = vrm.humanoid.getNormalizedBoneNode(name as any);
+    const node = getNode(name);
     if (!node) continue;
     const out = new THREE.Object3D();
     out.name = name;
@@ -87,13 +89,11 @@ export async function buildGlbBlobForClip(
   const root = new THREE.Group();
   root.name = 'mocap-skeleton';
   for (const [name, node] of cloned) {
-    const original = vrm.humanoid.getNormalizedBoneNode(name as any);
+    const original = getNode(name);
     let parent = original?.parent ?? null;
     let parentBoneName: string | null = null;
     while (parent) {
-      const matchName = [...cloned.keys()].find(
-        (n) => vrm.humanoid.getNormalizedBoneNode(n as any) === parent,
-      );
+      const matchName = [...cloned.keys()].find((n) => getNode(n) === parent);
       if (matchName) { parentBoneName = matchName; break; }
       parent = parent.parent;
     }

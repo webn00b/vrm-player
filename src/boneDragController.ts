@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import type { Object3D } from 'three';
@@ -27,7 +27,6 @@ interface HitSphere {
   /** The normalized bone we actually rotate. Cached for fast apply(). */
   node:  THREE.Object3D;
 }
-
 /**
  * Click-to-grab rotation gizmo for VRM humanoid bones.
  *
@@ -60,8 +59,9 @@ export class BoneDragController {
 
   // Bound listeners (so we can remove them in dispose)
   private _onPointerDown = (ev: PointerEvent): void => this.handlePointerDown(ev);
-  private _onDraggingChanged = (ev: { value: boolean }): void => {
-    this.orbit.enabled = !ev.value;
+  private _onDraggingChanged = (ev: { value: unknown }): void => {
+    const dragging = typeof ev.value === 'boolean' ? ev.value : false;
+    this.orbit.enabled = !dragging;
   };
 
   constructor(
@@ -80,8 +80,8 @@ export class BoneDragController {
     // Build hit-sphere children attached to raw bones (so they ride the
     // visible rig). Visible:false keeps them invisible but still pickable.
     for (const name of DRAG_BONES) {
-      const rawNode = vrm.humanoid.getRawBoneNode(name as any);
-      const normNode = vrm.humanoid.getNormalizedBoneNode(name as any);
+      const rawNode = vrm.humanoid.getRawBoneNode(name as VRMHumanBoneName);
+      const normNode = vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
       if (!rawNode || !normNode) continue;
       const radius = FINE_BONES.has(name) ? HIT_RADIUS_FINE : HIT_RADIUS_DEFAULT;
       const geo = new THREE.SphereGeometry(radius, 12, 8);
@@ -107,7 +107,7 @@ export class BoneDragController {
     this.scene.add(this.gizmoHelper);
 
     // While the user is dragging a ring, suspend OrbitControls.
-    this.gizmo.addEventListener('dragging-changed', this._onDraggingChanged as any);
+    this.gizmo.addEventListener('dragging-changed', this._onDraggingChanged);
     // Each gizmo nudge → store the proxy's quaternion as the delta for the
     // selected bone. Proxy was reset to identity on attach so this is the
     // *cumulative* drag relative to the snapshot, which is exactly what we
@@ -141,7 +141,7 @@ export class BoneDragController {
     // thing that visibly undoes the drag, since apply() with an empty map is
     // a no-op and nothing else rewrites bone.quaternion.
     for (const name of this.dragDeltas.keys()) {
-      const node = this.vrm.humanoid.getNormalizedBoneNode(name as any);
+      const node = this.vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
       node?.quaternion.identity();
     }
     this.dragDeltas.clear();
@@ -151,7 +151,7 @@ export class BoneDragController {
   /** Reposition the gizmo onto the currently selected bone (post-mocap). */
   update(): void {
     if (!this.selectedBone) return;
-    const node = this.vrm.humanoid.getNormalizedBoneNode(this.selectedBone as any);
+    const node = this.vrm.humanoid.getNormalizedBoneNode(this.selectedBone as VRMHumanBoneName);
     if (!node) return;
     node.getWorldPosition(this._v);
     this.proxy.position.copy(this._v);
@@ -163,7 +163,7 @@ export class BoneDragController {
   apply(): void {
     if (this.dragDeltas.size === 0) return;
     for (const [name, delta] of this.dragDeltas) {
-      const node = this.vrm.humanoid.getNormalizedBoneNode(name as any);
+      const node = this.vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
       if (!node) continue;
       node.quaternion.multiply(delta);
     }
@@ -171,7 +171,7 @@ export class BoneDragController {
 
   dispose(): void {
     this.domElement.removeEventListener('pointerdown', this._onPointerDown);
-    this.gizmo.removeEventListener('dragging-changed', this._onDraggingChanged as any);
+    this.gizmo.removeEventListener('dragging-changed', this._onDraggingChanged);
     this.gizmo.detach();
     this.gizmo.dispose();
     this.scene.remove(this.gizmoHelper);
@@ -214,7 +214,7 @@ export class BoneDragController {
 
   private selectBone(name: string): void {
     this.selectedBone = name;
-    const node = this.vrm.humanoid.getNormalizedBoneNode(name as any);
+    const node = this.vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
     if (!node) return;
     // Place proxy at the bone's world position with identity rotation. The
     // gizmo writes into proxy.quaternion; we read that as the delta to

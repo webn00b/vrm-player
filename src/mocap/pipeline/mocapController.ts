@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
+import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import { PoseDetector, type PoseModelQuality, type PoseFrame } from './poseDetector';
 import { DirectPoseApplier } from '../retargeters/directPoseApplier';
 import { FaceApplier } from '../retargeters/faceApplier';
@@ -9,6 +10,14 @@ import { getCachedHumanoidRestAxes } from '../../humanoidRestPose';
 import { captureSnapshot, type PoseSnapshot } from '../bvh/bvhRoundtripVerifier';
 
 export type MocapState = 'off' | 'live' | 'recording';
+
+type AvatarJointPositionMap = {
+  hips: THREE.Vector3;
+  leftUpperArm: THREE.Vector3;  leftLowerArm: THREE.Vector3;  leftHand: THREE.Vector3;
+  rightUpperArm: THREE.Vector3; rightLowerArm: THREE.Vector3; rightHand: THREE.Vector3;
+  leftUpperLeg: THREE.Vector3;  leftLowerLeg: THREE.Vector3;  leftFoot: THREE.Vector3;
+  rightUpperLeg: THREE.Vector3; rightLowerLeg: THREE.Vector3; rightFoot: THREE.Vector3;
+};
 
 /**
  * Orchestrates the webcam → pose → VRM → BVH pipeline.
@@ -126,7 +135,7 @@ export class MocapController {
 
   private _getBvhJointOffset(name: string): [number, number, number] | null {
     if (name === 'hips') return [0, 0, 0];
-    const node = this._vrm.humanoid.getNormalizedBoneNode(name as any);
+    const node = this._getNormalizedBoneNode(name);
     if (!node) return null;
     return [node.position.x, node.position.y, node.position.z];
   }
@@ -138,10 +147,36 @@ export class MocapController {
     // Reading world here would silently bake the parent transform into the BVH
     // and re-apply it on playback, producing a constant offset (~9cm in our
     // verifier on rigs where the normalized hips has any parent transform).
-    const hips = this._vrm.humanoid.getNormalizedBoneNode('hips' as any);
+    const hips = this._getNormalizedBoneNode(VRMHumanBoneName.Hips);
     if (!hips) return null;
     const p = hips.position;
     return [p.x, p.y, p.z];
+  }
+
+  private _getNormalizedBoneNode(name: string): THREE.Object3D | null {
+    if (!name) return null;
+    return this._vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
+  }
+
+  private _getNormBoneWorldPosition(name: VRMHumanBoneName): THREE.Vector3 {
+    const out = new THREE.Vector3();
+    const node = this._getNormalizedBoneNode(name);
+    node?.getWorldPosition(out);
+    return out;
+  }
+
+  private _addCurrentPoseFrame(recorder: BvhRecorder): void {
+    recorder.addFrame(
+      (name) => this.applier.getQuaternion(name),
+      () => this._getBvhHipsPosition(),
+    );
+  }
+
+  private _captureCurrentPoseFrame(recorder: BvhRecorder): void {
+    recorder.captureFrame(
+      (name) => this.applier.getQuaternion(name),
+      () => this._getBvhHipsPosition(),
+    );
   }
 
   // ── Debug knobs ────────────────────────────────────────────────────────────
@@ -227,10 +262,7 @@ export class MocapController {
     if (this._state !== 'recording') return;
     if (!this._latestFrame || this._frameRecorded) return;
 
-    this.liveRecorder.addFrame(
-      (name) => this.applier.getQuaternion(name),
-      () => this._getBvhHipsPosition(),
-    );
+    this._addCurrentPoseFrame(this.liveRecorder);
     this._frameRecorded = true;
 
     // Round-trip verification: snapshot a full pose only when the recorder
@@ -369,8 +401,8 @@ export class MocapController {
   getReachPercent(): { armL: number; armR: number; legL: number; legR: number } {
     const h = this._vrm.humanoid;
     const tmp = new THREE.Vector3();
-    const reach = (boneName: string, target: THREE.Vector3, limbLen: number): number => {
-      const n = h.getNormalizedBoneNode(boneName as any);
+    const reach = (boneName: VRMHumanBoneName, target: THREE.Vector3, limbLen: number): number => {
+      const n = h.getNormalizedBoneNode(boneName);
       if (!n || limbLen <= 0) return 0;
       n.getWorldPosition(tmp);
       return (tmp.distanceTo(target) / limbLen) * 100;
@@ -378,10 +410,10 @@ export class MocapController {
     const cal = this._calibration;
     const dt  = this.applier.debugTargets;
     return {
-      armL: dt.hasArm ? reach('leftUpperArm',  dt.leftWristTarget,  cal.avatarLeftUpperArm  + cal.avatarLeftLowerArm)   : 0,
-      armR: dt.hasArm ? reach('rightUpperArm', dt.rightWristTarget, cal.avatarRightUpperArm + cal.avatarRightLowerArm)  : 0,
-      legL: dt.hasLeg ? reach('leftUpperLeg',  dt.leftAnkleTarget,  cal.avatarLeftUpperLeg  + cal.avatarLeftLowerLeg)   : 0,
-      legR: dt.hasLeg ? reach('rightUpperLeg', dt.rightAnkleTarget, cal.avatarRightUpperLeg + cal.avatarRightLowerLeg)  : 0,
+      armL: dt.hasArm ? reach(VRMHumanBoneName.LeftUpperArm, dt.leftWristTarget,  cal.avatarLeftUpperArm  + cal.avatarLeftLowerArm)   : 0,
+      armR: dt.hasArm ? reach(VRMHumanBoneName.RightUpperArm, dt.rightWristTarget, cal.avatarRightUpperArm + cal.avatarRightLowerArm)  : 0,
+      legL: dt.hasLeg ? reach(VRMHumanBoneName.LeftUpperLeg, dt.leftAnkleTarget,  cal.avatarLeftUpperLeg  + cal.avatarLeftLowerLeg)   : 0,
+      legR: dt.hasLeg ? reach(VRMHumanBoneName.RightUpperLeg, dt.rightAnkleTarget, cal.avatarRightUpperLeg + cal.avatarRightLowerLeg)  : 0,
     };
   }
 
@@ -393,7 +425,7 @@ export class MocapController {
   dumpSkeleton(): void {
     const frame = this._latestFrame;
     const cal   = this._calibration;
-    const h     = this._vrm.humanoid;
+    const calMe = cal.performerMeasurements();
 
     console.group('%cSkeleton dump', 'color:#6186ff;font-weight:bold');
 
@@ -405,12 +437,13 @@ export class MocapController {
 
     // ── Performer measurements (raw MediaPipe world meters) ────────────────
     const lms = frame.worldLandmarks;
-    const dist = (a: any, b: any): number => {
+    const dist = (a: PoseFrame['worldLandmarks'][number] | undefined, b: PoseFrame['worldLandmarks'][number] | undefined): number => {
       if (!a || !b) return NaN;
       const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
       return Math.sqrt(dx*dx + dy*dy + dz*dz);
     };
-    const vis = (l: any): string => l?.visibility != null ? `${(l.visibility*100).toFixed(0)}%` : '?';
+    const vis = (l: PoseFrame['worldLandmarks'][number] | undefined): string =>
+      l?.visibility != null ? `${(l.visibility*100).toFixed(0)}%` : '?';
 
     const ls = lms[11], rs = lms[12];           // shoulders
     const lh = lms[23], rh = lms[24];           // hips
@@ -432,19 +465,18 @@ export class MocapController {
       'Right upper leg': { value: dist(rh, rk).toFixed(3), vis: `${vis(rh)}/${vis(rk)}` },
       'Right lower leg': { value: dist(rk, ra).toFixed(3), vis: `${vis(rk)}/${vis(ra)}` },
     });
-    console.log('Shoulder→Wrist L (max accum):', cal.unifyArmMax
-      ? Math.max((cal as any).performerLeftArmMax, (cal as any).performerRightArmMax).toFixed(3)
-      : (cal as any).performerRightArmMax?.toFixed?.(3));
-    console.log('Shoulder→Wrist R (max accum):', (cal as any).performerLeftArmMax?.toFixed?.(3));
+    const leftWristArmMax = cal.unifyArmMax
+      ? Math.max(calMe.leftArmMax, calMe.rightArmMax)
+      : calMe.rightArmMax;
+    const rightWristArmMax = cal.unifyArmMax
+      ? Math.max(calMe.leftArmMax, calMe.rightArmMax)
+      : calMe.leftArmMax;
+    console.log('Shoulder→Wrist L (max accum):', leftWristArmMax ? leftWristArmMax.toFixed(3) : 'n/a');
+    console.log('Shoulder→Wrist R (max accum):', rightWristArmMax ? rightWristArmMax.toFixed(3) : 'n/a');
     console.groupEnd();
 
     // ── Avatar measurements (rest-pose bone lengths) ───────────────────────
-    const boneWorld = (name: string): THREE.Vector3 => {
-      const n = h.getNormalizedBoneNode(name as any);
-      const v = new THREE.Vector3();
-      n?.getWorldPosition(v);
-      return v;
-    };
+    const boneWorld = (name: VRMHumanBoneName): THREE.Vector3 => this._getNormBoneWorldPosition(name);
 
     const avatarShoulderW = boneWorld('leftUpperArm').distanceTo(boneWorld('rightUpperArm'));
     const avatarHipW      = boneWorld('leftUpperLeg').distanceTo(boneWorld('rightUpperLeg'));
@@ -452,12 +484,12 @@ export class MocapController {
     console.table({
       'Shoulder width':  { value: avatarShoulderW.toFixed(3) },
       'Hip width':       { value: avatarHipW.toFixed(3) },
-      'L upper arm':     { value: cal.avatarLeftUpperArm.toFixed(3)  },
-      'L lower arm':     { value: cal.avatarLeftLowerArm.toFixed(3)  },
+      'L upper arm':     { value: cal.avatarLeftUpperArm.toFixed(3) },
+      'L lower arm':     { value: cal.avatarLeftLowerArm.toFixed(3) },
       'R upper arm':     { value: cal.avatarRightUpperArm.toFixed(3) },
       'R lower arm':     { value: cal.avatarRightLowerArm.toFixed(3) },
-      'L upper leg':     { value: cal.avatarLeftUpperLeg.toFixed(3)  },
-      'L lower leg':     { value: cal.avatarLeftLowerLeg.toFixed(3)  },
+      'L upper leg':     { value: cal.avatarLeftUpperLeg.toFixed(3) },
+      'L lower leg':     { value: cal.avatarLeftLowerLeg.toFixed(3) },
       'R upper leg':     { value: cal.avatarRightUpperLeg.toFixed(3) },
       'R lower leg':     { value: cal.avatarRightLowerLeg.toFixed(3) },
     });
@@ -517,66 +549,41 @@ export class MocapController {
     leftHand: THREE.Vector3; rightHand: THREE.Vector3;
     leftFoot: THREE.Vector3; rightFoot: THREE.Vector3;
   } {
-    const h = this._vrm.humanoid;
-    const get = (name: string): THREE.Vector3 => {
-      const node = h.getNormalizedBoneNode(name as any);
-      const out  = new THREE.Vector3();
-      node?.getWorldPosition(out);
-      return out;
-    };
+    const get = (name: VRMHumanBoneName): THREE.Vector3 => this._getNormBoneWorldPosition(name);
     return {
-      leftHand:  get('leftHand'),
-      rightHand: get('rightHand'),
-      leftFoot:  get('leftFoot'),
-      rightFoot: get('rightFoot'),
+      leftHand:  get(VRMHumanBoneName.LeftHand),
+      rightHand: get(VRMHumanBoneName.RightHand),
+      leftFoot:  get(VRMHumanBoneName.LeftFoot),
+      rightFoot: get(VRMHumanBoneName.RightFoot),
     };
   }
 
   /** World positions of key avatar joints for side-by-side pose diagnostics. */
-  getAvatarJointPositions(): {
-    hips: THREE.Vector3;
-    leftUpperArm: THREE.Vector3;  leftLowerArm: THREE.Vector3;  leftHand: THREE.Vector3;
-    rightUpperArm: THREE.Vector3; rightLowerArm: THREE.Vector3; rightHand: THREE.Vector3;
-    leftUpperLeg: THREE.Vector3;  leftLowerLeg: THREE.Vector3;  leftFoot: THREE.Vector3;
-    rightUpperLeg: THREE.Vector3; rightLowerLeg: THREE.Vector3; rightFoot: THREE.Vector3;
-  };
-  getAvatarJointPositions(kind: 'normalized' | 'raw'): {
-    hips: THREE.Vector3;
-    leftUpperArm: THREE.Vector3;  leftLowerArm: THREE.Vector3;  leftHand: THREE.Vector3;
-    rightUpperArm: THREE.Vector3; rightLowerArm: THREE.Vector3; rightHand: THREE.Vector3;
-    leftUpperLeg: THREE.Vector3;  leftLowerLeg: THREE.Vector3;  leftFoot: THREE.Vector3;
-    rightUpperLeg: THREE.Vector3; rightLowerLeg: THREE.Vector3; rightFoot: THREE.Vector3;
-  };
-  getAvatarJointPositions(kind: 'normalized' | 'raw' = 'normalized'): {
-    hips: THREE.Vector3;
-    leftUpperArm: THREE.Vector3;  leftLowerArm: THREE.Vector3;  leftHand: THREE.Vector3;
-    rightUpperArm: THREE.Vector3; rightLowerArm: THREE.Vector3; rightHand: THREE.Vector3;
-    leftUpperLeg: THREE.Vector3;  leftLowerLeg: THREE.Vector3;  leftFoot: THREE.Vector3;
-    rightUpperLeg: THREE.Vector3; rightLowerLeg: THREE.Vector3; rightFoot: THREE.Vector3;
-  } {
-    const h = this._vrm.humanoid;
-    const get = (name: string): THREE.Vector3 => {
+  getAvatarJointPositions(): AvatarJointPositionMap;
+  getAvatarJointPositions(kind: 'normalized' | 'raw'): AvatarJointPositionMap;
+  getAvatarJointPositions(kind: 'normalized' | 'raw' = 'normalized'): AvatarJointPositionMap {
+    const get = (name: VRMHumanBoneName): THREE.Vector3 => {
       const node = kind === 'raw'
-        ? h.getRawBoneNode(name as any) ?? h.getNormalizedBoneNode(name as any)
-        : h.getNormalizedBoneNode(name as any);
+        ? this._vrm.humanoid.getRawBoneNode(name) ?? this._getNormalizedBoneNode(name)
+        : this._getNormalizedBoneNode(name);
       const out  = new THREE.Vector3();
       node?.getWorldPosition(out);
       return out;
     };
     return {
-      hips:          get('hips'),
-      leftUpperArm:  get('leftUpperArm'),
-      leftLowerArm:  get('leftLowerArm'),
-      leftHand:      get('leftHand'),
-      rightUpperArm: get('rightUpperArm'),
-      rightLowerArm: get('rightLowerArm'),
-      rightHand:     get('rightHand'),
-      leftUpperLeg:  get('leftUpperLeg'),
-      leftLowerLeg:  get('leftLowerLeg'),
-      leftFoot:      get('leftFoot'),
-      rightUpperLeg: get('rightUpperLeg'),
-      rightLowerLeg: get('rightLowerLeg'),
-      rightFoot:     get('rightFoot'),
+      hips:          get(VRMHumanBoneName.Hips),
+      leftUpperArm:  get(VRMHumanBoneName.LeftUpperArm),
+      leftLowerArm:  get(VRMHumanBoneName.LeftLowerArm),
+      leftHand:      get(VRMHumanBoneName.LeftHand),
+      rightUpperArm: get(VRMHumanBoneName.RightUpperArm),
+      rightLowerArm: get(VRMHumanBoneName.RightLowerArm),
+      rightHand:     get(VRMHumanBoneName.RightHand),
+      leftUpperLeg:  get(VRMHumanBoneName.LeftUpperLeg),
+      leftLowerLeg:  get(VRMHumanBoneName.LeftLowerLeg),
+      leftFoot:      get(VRMHumanBoneName.LeftFoot),
+      rightUpperLeg: get(VRMHumanBoneName.RightUpperLeg),
+      rightLowerLeg: get(VRMHumanBoneName.RightLowerLeg),
+      rightFoot:     get(VRMHumanBoneName.RightFoot),
     };
   }
   /** Clear calibration samples — next high-visibility frames re-calibrate. */
@@ -608,10 +615,7 @@ export class MocapController {
    * independent of the live "recording" auto-append.
    */
   grabFrame(): void {
-    this.grabRecorder.captureFrame(
-      (name) => this.applier.getQuaternion(name),
-      () => this._getBvhHipsPosition(),
-    );
+    this._captureCurrentPoseFrame(this.grabRecorder);
   }
 
   /**
@@ -632,10 +636,7 @@ export class MocapController {
    */
   exportCurrentPoseBvh(): string {
     const poseRecorder = this._createRecorder();
-    poseRecorder.captureFrame(
-      (name) => this.applier.getQuaternion(name),
-      () => this._getBvhHipsPosition(),
-    );
+    this._captureCurrentPoseFrame(poseRecorder);
     const bvhText = poseRecorder.stop();
     const name = `pose_${++this._poseExportIndex}`;
     downloadBvh(bvhText, `${name}.bvh`);
@@ -685,10 +686,7 @@ export class MocapController {
     lines.push('  To verify BVH fix: enable camera, stand in T-pose, then re-open this modal.');
     try {
       const recorder = this._createRecorder();
-      recorder.captureFrame(
-        (name) => this.applier.getQuaternion(name),
-        () => this._getBvhHipsPosition(),
-      );
+      this._captureCurrentPoseFrame(recorder);
       lines.push(recorder.stop());
     } catch (e) {
       lines.push(`ERROR: ${(e as Error).message}`);

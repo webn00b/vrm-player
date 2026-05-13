@@ -72,10 +72,10 @@ function appendHipPositionTrack(
 ): void {
   const hipsPosTrack = fbxClip.tracks.find((t) => /hips\.position$/i.test(t.name));
   if (!hipsPosTrack) return;
-  const hipsNode = vrm.humanoid.getNormalizedBoneNode('hips' as any);
+  const hipsNode = vrm.humanoid.getNormalizedBoneNode('hips');
   const v = hipsPosTrack.values;
   const firstHipY = v.length >= 2 ? v[1] : 0;
-  const avatarHipY = (vrm.humanoid as any).normalizedRestPose?.hips?.position?.[1] ?? 0.86;
+  const avatarHipY = (vrm.humanoid as { normalizedRestPose?: { hips?: { position?: { [k: number]: number } } } }).normalizedRestPose?.hips?.position?.[1] ?? 0.86;
   if (firstHipY <= 0.05 || !hipsNode) return;
 
   const scale = avatarHipY / firstHipY;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Hand as KalidoHand } from 'kalidokit';
-import type { HandFrame } from '../pipeline/poseDetector';
+import type { HandFrame, Landmark3D } from '../pipeline/poseDetector';
 import { kalidoHandBoneToVrm } from './directPoseConfig';
 import { mpDirToVrm } from '../solvers/motionSpace';
 
@@ -66,7 +66,7 @@ export function applyTrackedPalmRetarget(
 
 export function applyKalidoHandRetarget(
   ctx: HandRetargetContext,
-  landmarks: any[],
+  landmarks: Landmark3D[],
   side: 'Left' | 'Right',
   includeWrist = false,
   snap = false,
@@ -75,14 +75,14 @@ export function applyKalidoHandRetarget(
   // avatar-side convention that body tracking uses, so applying another
   // left/right swap here would send wrist/finger rotations to the opposite
   // hand and make palm orientation diverge from the video.
-  const rig = KalidoHand.solve(landmarks as any, side);
+  const rig = KalidoHand.solve(landmarks, side);
   if (!rig) return;
   for (const [kalidoKey, rot] of Object.entries(rig)) {
     if (!includeWrist && kalidoKey.endsWith('Wrist')) continue;
     const vrmName = kalidoHandBoneToVrm(kalidoKey);
     const node = ctx.nodeCache.get(vrmName);
     if (!node) continue;
-    const r = rot as any;
+    const r = rot as { x: number; y: number; z: number; rotationOrder?: string };
     _q1.setFromEuler(
       new THREE.Euler(r.x, r.y, r.z, (r.rotationOrder ?? 'XYZ') as THREE.EulerOrder),
     );

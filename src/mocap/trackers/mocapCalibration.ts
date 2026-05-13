@@ -24,7 +24,7 @@
  */
 
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import type { PoseFrame, Landmark3D } from '../pipeline/poseDetector';
 
 const LM = {
@@ -147,22 +147,23 @@ export class MocapCalibration {
     const humanoid = vrm.humanoid;
     vrm.scene.updateMatrixWorld(true);
 
-    const boneLen = (childName: string): number => {
-      const node = humanoid.getNormalizedBoneNode(childName as any);
+    const getBone = (name: VRMHumanBoneName): THREE.Object3D | null => humanoid.getNormalizedBoneNode(name);
+    const boneLen = (childName: VRMHumanBoneName): number => {
+      const node = getBone(childName);
       return node ? node.position.length() : 0;
     };
 
     // Hip width = world distance between leftUpperLeg and rightUpperLeg origins.
-    const lHipNode = humanoid.getNormalizedBoneNode('leftUpperLeg'  as any);
-    const rHipNode = humanoid.getNormalizedBoneNode('rightUpperLeg' as any);
+    const lHipNode = getBone('leftUpperLeg');
+    const rHipNode = getBone('rightUpperLeg');
     const lPos = new THREE.Vector3(), rPos = new THREE.Vector3();
     lHipNode?.getWorldPosition(lPos);
     rHipNode?.getWorldPosition(rPos);
     this.avatarHipWidth = lPos.distanceTo(rPos);
 
     // Shoulder width = world distance between leftUpperArm and rightUpperArm.
-    const lShoulder = humanoid.getNormalizedBoneNode('leftUpperArm'  as any);
-    const rShoulder = humanoid.getNormalizedBoneNode('rightUpperArm' as any);
+    const lShoulder = getBone('leftUpperArm');
+    const rShoulder = getBone('rightUpperArm');
     if (lShoulder && rShoulder) {
       const lsPos = new THREE.Vector3(), rsPos = new THREE.Vector3();
       lShoulder.getWorldPosition(lsPos);
@@ -176,8 +177,8 @@ export class MocapCalibration {
     // eye bones (they correlate much better than head-bone length with actual
     // face width). Fallback: head.position.length() × 1.5 as a rough proxy.
     // If nothing usable, set to 0 and head-based scaling is disabled.
-    const lEye = humanoid.getNormalizedBoneNode('leftEye'  as any);
-    const rEye = humanoid.getNormalizedBoneNode('rightEye' as any);
+    const lEye = getBone('leftEye');
+    const rEye = getBone('rightEye');
     if (lEye && rEye) {
       const lePos = new THREE.Vector3(), rePos = new THREE.Vector3();
       lEye.getWorldPosition(lePos);
@@ -187,7 +188,7 @@ export class MocapCalibration {
       // applied.
       this.avatarHeadWidth = lePos.distanceTo(rePos) * 1.8;
     } else {
-      const head = humanoid.getNormalizedBoneNode('head' as any);
+      const head = getBone('head');
       this.avatarHeadWidth = head ? head.position.length() * 1.5 : 0;
     }
 

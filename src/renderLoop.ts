@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { VRMHumanBoneName } from '@pixiv/three-vrm';
 import type { createScene } from './scene';
 import type { loadVRM } from './vrmLoader';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
@@ -9,6 +10,20 @@ import {
 import { renderLoopHooks } from './renderLoopHooks';
 
 type CleanupFn = () => void;
+type DebugVizCache = {
+  hipsNode: THREE.Object3D | null;
+  lhNode: THREE.Object3D | null;
+  rhNode: THREE.Object3D | null;
+  lfNode: THREE.Object3D | null;
+  rfNode: THREE.Object3D | null;
+  hipWorld: THREE.Vector3;
+  actualBones: {
+    leftHand: THREE.Vector3;
+    rightHand: THREE.Vector3;
+    leftFoot: THREE.Vector3;
+    rightFoot: THREE.Vector3;
+  };
+};
 
 export function startRenderLoop(
   ctx: ReturnType<typeof createScene>,
@@ -23,6 +38,9 @@ export function startRenderLoop(
 
   let stopped = false;
   let rafId = 0;
+  let dbgVizCache: DebugVizCache | null = null;
+  const getNormBone = (name: VRMHumanBoneName): THREE.Object3D | null =>
+    vrm.humanoid.getNormalizedBoneNode(name);
   const tick = () => {
     if (stopped) return;
     const delta = ctx.clock.getDelta();
@@ -106,12 +124,12 @@ export function startRenderLoop(
       const frame = mocap.latestFrame;
       if (frame) {
         // Cache bone nodes + scratch vectors on first call to avoid lookups/allocations each frame.
-        const cache = (tick as any)._dbgVizCache ??= {
-          hipsNode:  vrm.humanoid.getNormalizedBoneNode('hips'      as any),
-          lhNode:    vrm.humanoid.getNormalizedBoneNode('leftHand'  as any),
-          rhNode:    vrm.humanoid.getNormalizedBoneNode('rightHand' as any),
-          lfNode:    vrm.humanoid.getNormalizedBoneNode('leftFoot'  as any),
-          rfNode:    vrm.humanoid.getNormalizedBoneNode('rightFoot' as any),
+        const cache = dbgVizCache ??= {
+          hipsNode:  getNormBone('hips'),
+          lhNode:    getNormBone('leftHand'),
+          rhNode:    getNormBone('rightHand'),
+          lfNode:    getNormBone('leftFoot'),
+          rfNode:    getNormBone('rightFoot'),
           hipWorld:  new THREE.Vector3(),
           actualBones: {
             leftHand:  new THREE.Vector3(), rightHand: new THREE.Vector3(),

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import type { AnimationController } from './animationController';
 import { downloadBvh } from './mocap/bvh/bvhRecorder';
 import { createBvhRecorderForVrm } from './mocap/bvh/bvhRecorderFactory';
@@ -58,14 +58,16 @@ export function exportClipAsBvh(
     // local position. Using getNormalizedBoneNode mirrors how mocap recording
     // captures the same fields → identical encode path.
     const _qScratch = new THREE.Quaternion();
+    const getBone = (boneName: string): THREE.Object3D | null =>
+      vrm.humanoid.getNormalizedBoneNode(boneName as VRMHumanBoneName);
     const getQuaternion = (boneName: string): [number, number, number, number] | null => {
-      const node = vrm.humanoid.getNormalizedBoneNode(boneName as any);
+      const node = getBone(boneName);
       if (!node) return null;
       _qScratch.copy(node.quaternion);
       return [_qScratch.x, _qScratch.y, _qScratch.z, _qScratch.w];
     };
     const getHipsPosition = (): [number, number, number] | null => {
-      const hips = vrm.humanoid.getNormalizedBoneNode('hips' as any);
+      const hips = getBone('hips');
       if (!hips) return null;
       return [hips.position.x, hips.position.y, hips.position.z];
     };

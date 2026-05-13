@@ -1,4 +1,4 @@
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 
 /**
  * Procedural micro-animations — breathing, head sway, eye saccades,
@@ -48,11 +48,11 @@ export class MicroAnimations {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   private rawBone(vrm: VRM, name: string) {
-    try { return vrm.humanoid.getRawBoneNode(name as any); } catch { return null; }
+    try { return vrm.humanoid.getRawBoneNode(name as VRMHumanBoneName); } catch { return null; }
   }
 
   private normBone(vrm: VRM, name: string) {
-    try { return vrm.humanoid.getNormalizedBoneNode(name as any); } catch { return null; }
+    try { return vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName); } catch { return null; }
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

@@ -192,6 +192,7 @@ export class SkeletonLoggerCore {
   // Hips world-Y trace — компактные счётчики drift.
   private hipsY = { first: NaN, last: NaN, min: +Infinity, max: -Infinity };
   private hipsRun = { dir: 0, count: 0, start: 0, sum: 0 };
+  private hipsPrevY: number | undefined = undefined;
 
   // Последний дайджест, на случай повторного вызова printToConsole/download.
   private lastDigest = '';
@@ -225,6 +226,7 @@ export class SkeletonLoggerCore {
     this.frame = 0;
     this.hipsY = { first: NaN, last: NaN, min: +Infinity, max: -Infinity };
     this.hipsRun = { dir: 0, count: 0, start: 0, sum: 0 };
+    this.hipsPrevY = undefined;
     this.nanFrames = 0;
     this.romFrames = 0;
     this.flipFrames = 0;
@@ -329,7 +331,7 @@ export class SkeletonLoggerCore {
 
       // Длина серии однонаправленных смещений ≥HIP_DRIFT_PER_FRAME.
       // Не используем prevWorldY вне трэкера — храним его в hipsRun.
-      const prev = (this as any)._hipsPrevY as number | undefined;
+      const prev = this.hipsPrevY;
       if (prev !== undefined) {
         const dy = y - prev;
         const dir = dy > +HIP_DRIFT_PER_FRAME ? +1
@@ -347,7 +349,7 @@ export class SkeletonLoggerCore {
           this.hipsRun = { dir, count: dir !== 0 ? 1 : 0, start: f, sum: dir !== 0 ? dy : 0 };
         }
       }
-      (this as any)._hipsPrevY = y;
+      this.hipsPrevY = y;
     }
 
     if (frameHasNan) this.nanFrames++;
@@ -492,14 +494,14 @@ export class SkeletonLoggerCore {
 import * as THREE from 'three';
 
 function makeBoneSourceFromVrm(vrm: VRM): BoneSource {
-  const cache = new Map<VRMHumanBoneName, THREE.Object3D>();
+  const cache = new Map<VRMHumanBoneName, THREE.Object3D | null>();
   const tmpV = new THREE.Vector3();
   const getNode = (name: VRMHumanBoneName) => {
     let n = cache.get(name);
     if (n === undefined) {
-      const got = vrm.humanoid.getNormalizedBoneNode(name);
-      // null означает «нет такой кости в скелете» — кэшируем как «не искать»
-      n = got ?? (null as unknown as THREE.Object3D);
+      const got = vrm.humanoid.getNormalizedBoneNode(name) as THREE.Object3D | null;
+      // null означает «нет такой кости в скелете» — кэшируем явно
+      n = got;
       cache.set(name, n);
     }
     return n;

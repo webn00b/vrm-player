@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 
 // Bone chain used by our direction-based retargeting / IK code.
 // Each entry says "this bone aims toward that child".
@@ -39,7 +39,7 @@ function buildTrackTargetMap(vrm: VRM): Map<string, string> {
   const map = new Map<string, string>();
   const names = Object.keys(vrm.humanoid.humanBones) as string[];
   for (const bone of names) {
-    const node = vrm.humanoid.getNormalizedBoneNode(bone as any);
+    const node = vrm.humanoid.getNormalizedBoneNode(bone as VRMHumanBoneName);
     if (!node) continue;
     map.set(node.uuid, bone);
     map.set(node.name, bone);
@@ -79,10 +79,14 @@ export function buildHumanoidRestAxes(vrm: VRM): Map<string, HumanoidRestAxisInf
   const result = new Map<string, HumanoidRestAxisInfo>();
 
   vrm.scene.updateMatrixWorld(true);
+  const getNorm = (name: string): THREE.Object3D | null =>
+    vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
+  const getRaw = (name: string): THREE.Object3D | null =>
+    vrm.humanoid.getRawBoneNode(name as VRMHumanBoneName);
 
   for (const [bone, childBone] of Object.entries(HUMANOID_DIRECTION_CHILD)) {
-    const boneNode = vrm.humanoid.getNormalizedBoneNode(bone as any);
-    const childNode = vrm.humanoid.getNormalizedBoneNode(childBone as any);
+    const boneNode = getNorm(bone);
+    const childNode = getNorm(childBone);
     if (!boneNode || !childNode) continue;
 
     const normalizedAxis = childNode.position.clone();
@@ -92,8 +96,8 @@ export function buildHumanoidRestAxes(vrm: VRM): Map<string, HumanoidRestAxisInf
     const rawAxis = normalizedAxis.clone();
     let rawDerived = false;
 
-    const rawBone = vrm.humanoid.getRawBoneNode(bone as any);
-    const rawChild = vrm.humanoid.getRawBoneNode(childBone as any);
+    const rawBone = getRaw(bone);
+    const rawChild = getRaw(childBone);
     if (rawBone && rawChild && boneNode.parent) {
       rawBone.getWorldPosition(_worldA);
       rawChild.getWorldPosition(_worldB);

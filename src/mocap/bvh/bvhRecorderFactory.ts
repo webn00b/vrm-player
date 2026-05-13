@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import { BvhRecorder } from './bvhRecorder';
 import { getCachedHumanoidRestAxes } from '../../humanoidRestPose';
 
@@ -39,7 +39,7 @@ function buildCorrectionInvMap(vrm: VRM): Map<string, [number, number, number, n
 
 function getJointOffset(vrm: VRM, name: string): [number, number, number] | null {
   if (name === 'hips') return [0, 0, 0];
-  const node = vrm.humanoid.getNormalizedBoneNode(name as any);
+  const node = vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
   if (!node) return null;
   return [node.position.x, node.position.y, node.position.z];
 }

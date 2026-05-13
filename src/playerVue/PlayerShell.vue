@@ -7,15 +7,21 @@
  * those anchors, panel collapse persistence, and the hidden mocap media nodes.
  */
 
-import { reactive, ref } from 'vue';
+import { onMounted, onUnmounted, reactive, ref } from 'vue';
+import Button from 'primevue/button';
 import SelectButton from 'primevue/selectbutton';
 import Toast from 'primevue/toast';
+import { useToast } from 'primevue/usetoast';
 import FileConverter from '../exports/FileConverter.vue';
+import type { AppToastPayload } from '../ui';
 
 const PANEL_KEY = 'vrm-player.panel-collapsed';
 const PAGE_KEY = 'vrm-player.active-page';
+const MODE_KEY = 'vrm-player.ui-mode';
+const ZEN_KEY = 'vrm-player.zen-mode';
 const collapsed = reactive<Record<string, boolean>>({});
 type AppPage = 'player' | 'retarget' | 'tools';
+type UiMode = 'basic' | 'debug';
 const pageOptions: Array<{ label: string; value: AppPage }> = [
   { label: 'Player', value: 'player' },
   { label: 'Retarget Lab', value: 'retarget' },
@@ -27,6 +33,15 @@ const storedPage = (() => {
 const activePage = ref<AppPage>(
   storedPage === 'tools' || storedPage === 'retarget' ? storedPage : 'player',
 );
+const storedMode = (() => {
+  try { return localStorage.getItem(MODE_KEY); } catch { return null; }
+})();
+const uiMode = ref<UiMode>(storedMode === 'debug' ? 'debug' : 'basic');
+const zenMode = ref((() => {
+  try { return localStorage.getItem(ZEN_KEY) === '1'; } catch { return false; }
+})());
+const helpOpen = ref(false);
+const toast = useToast();
 
 try {
   const raw = localStorage.getItem(PANEL_KEY);
@@ -41,10 +56,63 @@ function isCollapsed(id: string): boolean {
   return !!collapsed[id];
 }
 
-function setPage(next: AppPage | null): void {
+function setPage(next: AppPage | null, emitChange = true): void {
   if (!next) return;
   activePage.value = next;
   try { localStorage.setItem(PAGE_KEY, next); } catch { /* ignore */ }
+  if (emitChange) {
+    window.dispatchEvent(new CustomEvent<AppPage>('vrm-player:page-changed', { detail: next }));
+  }
+}
+
+function toggleMode(): void {
+  uiMode.value = uiMode.value === 'basic' ? 'debug' : 'basic';
+  try { localStorage.setItem(MODE_KEY, uiMode.value); } catch { /* ignore */ }
+}
+
+function toggleZen(): void {
+  zenMode.value = !zenMode.value;
+  try { localStorage.setItem(ZEN_KEY, zenMode.value ? '1' : '0'); } catch { /* ignore */ }
+}
+
+function toggleHelp(): void {
+  helpOpen.value = !helpOpen.value;
+}
+
+onMounted(() => {
+  window.addEventListener('vrm-player:toggle-zen', toggleZen);
+  window.addEventListener('vrm-player:toggle-help', toggleHelp);
+  window.addEventListener('vrm-player:toast', onToast);
+  window.addEventListener('vrm-player:set-page', onSetPage);
+  window.addEventListener('keydown', onHelpKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('vrm-player:toggle-zen', toggleZen);
+  window.removeEventListener('vrm-player:toggle-help', toggleHelp);
+  window.removeEventListener('vrm-player:toast', onToast);
+  window.removeEventListener('vrm-player:set-page', onSetPage);
+  window.removeEventListener('keydown', onHelpKeydown);
+});
+
+function onToast(event: Event): void {
+  const payload = (event as CustomEvent<AppToastPayload>).detail;
+  if (!payload?.summary) return;
+  toast.add({
+    severity: payload.severity ?? 'info',
+    summary: payload.summary,
+    detail: payload.detail,
+    life: payload.life ?? 2600,
+  });
+}
+
+function onSetPage(event: Event): void {
+  const page = (event as CustomEvent<AppPage>).detail;
+  if (page === 'player' || page === 'retarget' || page === 'tools') setPage(page, false);
+}
+
+function onHelpKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && helpOpen.value) helpOpen.value = false;
 }
 
 function onShellClick(event: MouseEvent): void {
@@ -71,9 +139,82 @@ function onShellClick(event: MouseEvent): void {
       :allowEmpty="false"
       @update:modelValue="setPage"
     />
+    <div class="shell-actions" v-show="activePage === 'player'">
+      <Button
+        class="shell-action"
+        :label="uiMode === 'basic' ? 'Basic' : 'Debug'"
+        :icon="uiMode === 'basic' ? 'pi pi-eye' : 'pi pi-wrench'"
+        text
+        size="small"
+        :aria-pressed="uiMode === 'debug'"
+        title="Toggle simple and debug controls"
+        @click="toggleMode"
+      />
+      <Button
+        class="shell-action"
+        :icon="zenMode ? 'pi pi-window-maximize' : 'pi pi-expand'"
+        text
+        rounded
+        size="small"
+        :aria-pressed="zenMode"
+        title="Hide panels for scene preview"
+        aria-label="Toggle zen preview"
+        @click="toggleZen"
+      />
+      <Button
+        class="shell-action"
+        icon="pi pi-question-circle"
+        text
+        rounded
+        size="small"
+        :aria-pressed="helpOpen"
+        title="Shortcuts and workflow"
+        aria-label="Open shortcuts help"
+        @click="toggleHelp"
+      />
+    </div>
   </div>
 
-  <div id="ui-overlay" v-show="activePage === 'player'" @click.capture="onShellClick">
+  <aside v-show="activePage === 'player' && helpOpen" id="help-popover" aria-label="Shortcuts help">
+    <div class="help-head">
+      <span>Quick Help</span>
+      <Button
+        class="help-close"
+        icon="pi pi-times"
+        text
+        rounded
+        size="small"
+        aria-label="Close help"
+        @click="helpOpen = false"
+      />
+    </div>
+    <div class="help-section">
+      <h2>Workflow</h2>
+      <div class="help-row"><kbd>1</kbd><span>Show avatar</span></div>
+      <div class="help-row"><kbd>2</kbd><span>Add animation or start capture</span></div>
+      <div class="help-row"><kbd>3</kbd><span>Play, export, or open in Retarget Lab</span></div>
+    </div>
+    <div class="help-section">
+      <h2>Shortcuts</h2>
+      <div class="help-grid">
+        <kbd>Space</kbd><span>Play / pause</span>
+        <kbd>M</kbd><span>Model</span>
+        <kbd>S</kbd><span>Skeleton</span>
+        <kbd>D</kbd><span>Drag bones</span>
+        <kbd>R</kbd><span>Reset drag</span>
+        <kbd>Z</kbd><span>Zen view</span>
+        <kbd>?</kbd><span>This panel</span>
+      </div>
+    </div>
+  </aside>
+
+  <div
+    id="ui-overlay"
+    v-show="activePage === 'player'"
+    :data-ui-mode="uiMode"
+    :class="{ zen: zenMode }"
+    @click.capture="onShellClick"
+  >
     <div id="left-col">
       <div id="debug-panel" class="panel" :class="{ collapsed: isCollapsed('debug-panel') }">
         <p class="panel-title"><span>Controls</span></p>
@@ -93,7 +234,10 @@ function onShellClick(event: MouseEvent): void {
       </div>
     </div>
 
-    <div id="center-col"></div>
+    <div id="center-col">
+      <div id="scene-toolbar-root"></div>
+      <div id="player-start-root"></div>
+    </div>
 
     <div id="right-col">
       <div
@@ -145,6 +289,9 @@ function onShellClick(event: MouseEvent): void {
   transform: translateX(-50%);
   z-index: 30;
   pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 :where(.app-page-select) {
@@ -161,7 +308,7 @@ function onShellClick(event: MouseEvent): void {
   border-radius: 6px;
   background: transparent;
   color: rgba(255, 255, 255, 0.6);
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--font-ui);
   font-size: 11px;
   font-weight: 700;
   padding: 6px 12px;
@@ -194,6 +341,123 @@ function onShellClick(event: MouseEvent): void {
   color: #fff !important;
 }
 
+.shell-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(16, 16, 16, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+:where(.shell-action.p-button) {
+  height: 30px;
+  min-width: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.66);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+:where(.shell-action.p-button:hover) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+:where(.shell-action.p-button[aria-pressed="true"]) {
+  background: #2a3550;
+  color: #fff;
+}
+
+#help-popover {
+  position: fixed;
+  top: 54px;
+  right: 16px;
+  z-index: 35;
+  width: 310px;
+  padding: 12px;
+  border-radius: 8px;
+  pointer-events: auto;
+  background: rgba(16, 16, 16, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
+}
+
+.help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.help-head span,
+.help-section h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+:where(.help-close.p-button) {
+  width: 26px;
+  height: 26px;
+  color: rgba(255, 255, 255, 0.54);
+}
+
+.help-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.help-section + .help-section {
+  margin-top: 12px;
+}
+
+.help-row,
+.help-grid {
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.help-row {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  align-items: center;
+  gap: 6px 9px;
+}
+
+kbd {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 24px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
 #ui-overlay {
   position: fixed;
   inset: 0;
@@ -205,6 +469,29 @@ function onShellClick(event: MouseEvent): void {
   padding-top: 46px;
   pointer-events: none;
   z-index: 10;
+}
+
+#ui-overlay.zen {
+  grid-template-columns: 1fr;
+}
+
+#ui-overlay.zen #left-col,
+#ui-overlay.zen #right-col {
+  display: none;
+}
+
+#ui-overlay.zen #center-col {
+  grid-column: 1 / -1;
+}
+
+#ui-overlay[data-ui-mode="basic"] #debug-panel details.dbg-fold,
+#ui-overlay[data-ui-mode="basic"] #mocap-tuning-panel-root > div > .dbg-divider,
+#ui-overlay[data-ui-mode="basic"] #mocap-tuning-panel-root > div > .dbg-divider ~ * {
+  display: none !important;
+}
+
+#ui-overlay[data-ui-mode="basic"] #debug-panel .dbg-hint {
+  opacity: 0.42;
 }
 
 #left-col,
@@ -220,11 +507,17 @@ function onShellClick(event: MouseEvent): void {
 }
 
 #center-col {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  align-items: start;
+  justify-items: center;
   pointer-events: none;
   min-height: 0;
+}
+
+#scene-toolbar-root,
+#player-start-root {
+  pointer-events: auto;
 }
 
 #bottom-bar {
@@ -308,14 +601,24 @@ function onShellClick(event: MouseEvent): void {
   display: none;
 }
 
-#tools-page,
-#retarget-page {
+#tools-page {
   position: fixed;
   inset: 0;
   z-index: 12;
   overflow: auto;
   padding: 58px 24px 24px;
   background: #0d0d0f;
+  color: #e6e6e6;
+  pointer-events: auto;
+}
+
+#retarget-page {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  overflow: auto;
+  padding: 58px 24px 24px;
+  background: #000;
   color: #e6e6e6;
   pointer-events: auto;
 }
@@ -366,16 +669,76 @@ function onShellClick(event: MouseEvent): void {
     left: 8px;
     right: 8px;
     transform: none;
+    align-items: stretch;
+  }
+  .app-page-select {
+    flex: 1;
+    min-width: 0;
+  }
+  .shell-actions {
+    flex-shrink: 0;
   }
   :where(.app-page-select .p-togglebutton) {
     flex: 1;
     padding-inline: 8px;
   }
+  :where(.shell-action.p-button) {
+    padding-inline: 8px;
+  }
   #ui-overlay {
-    padding-top: 54px;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+    align-content: start;
+    gap: 8px;
+    overflow-y: auto;
+    padding-top: 64px;
+    padding-bottom: 74px;
+  }
+  #left-col,
+  #right-col {
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+  }
+  #center-col {
+    display: none;
+  }
+  #bottom-bar {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 25;
+  }
+  #queue-panel {
+    min-height: 180px;
+    max-height: none;
+  }
+  #ui-overlay.zen {
+    display: block;
+    overflow: hidden;
+    padding-bottom: 74px;
   }
   .tools-page-inner {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  #app-page-tabs {
+    gap: 5px;
+  }
+  :where(.app-page-select .p-togglebutton) {
+    font-size: 10px;
+    padding-inline: 6px;
+  }
+  :where(.shell-action.p-button) {
+    min-width: 28px;
+    font-size: 10px;
+  }
+  :where(.shell-action.p-button .p-button-label) {
+    display: none;
   }
 }
 </style>

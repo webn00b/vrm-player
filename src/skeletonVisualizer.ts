@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 
 // ── Humanoid bone connections ─────────────────────────────────────────────────
 // Each pair [parent, child] draws one line segment.
@@ -159,13 +159,16 @@ export class SkeletonVisualizer {
   // ── Private ─────────────────────────────────────────────────────────────────
 
   private _buildCache(): void {
+    const getRaw = (name: string): THREE.Object3D | null =>
+      this.vrm.humanoid.getRawBoneNode(name as VRMHumanBoneName);
+    const getNorm = (name: string): THREE.Object3D | null =>
+      this.vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
     for (const name of ALL_JOINT_NAMES) {
       // getRawBoneNode returns the actual Three.js bone that the mesh is skinned to,
       // so world positions match what's visually rendered.
       // getNormalizedBoneNode is a virtual T-pose wrapper used for driving animation —
       // its world position can diverge from the mesh in A-pose or custom rest-pose models.
-      const node = this.vrm.humanoid.getRawBoneNode(name as any)
-                ?? this.vrm.humanoid.getNormalizedBoneNode(name as any);
+      const node = getRaw(name) ?? getNorm(name);
       if (node) this.nodeCache.set(name, node);
     }
   }

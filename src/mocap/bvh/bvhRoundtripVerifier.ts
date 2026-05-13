@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import { BVH_JOINTS, BVH_FRAME_TIME } from './bvhRecorder';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -89,8 +89,10 @@ export function captureSnapshot(vrm: VRM, frameIdx: number): PoseSnapshot {
   const hips: [number, number, number] = [0, 0, 0];
 
   const scratch = new THREE.Vector3();
+  const getBone = (name: string): THREE.Object3D | null =>
+    vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
   for (const joint of BVH_JOINTS) {
-    const node = vrm.humanoid.getNormalizedBoneNode(joint.name as any);
+    const node = getBone(joint.name);
     if (!node) { bones[joint.name] = [0, 0, 0, 1]; continue; }
     const q = node.quaternion;
     bones[joint.name] = [q.x, q.y, q.z, q.w];
@@ -98,7 +100,7 @@ export function captureSnapshot(vrm: VRM, frameIdx: number): PoseSnapshot {
 
   // Local position — matches what AnimationMixer reads/writes during playback.
   // (See note in mocapController._getBvhHipsPosition.)
-  const hipsNode = vrm.humanoid.getNormalizedBoneNode('hips' as any);
+  const hipsNode = getBone('hips');
   if (hipsNode) {
     hips[0] = hipsNode.position.x;
     hips[1] = hipsNode.position.y;
@@ -106,7 +108,7 @@ export function captureSnapshot(vrm: VRM, frameIdx: number): PoseSnapshot {
   }
 
   for (const name of EFFECTOR_BONES) {
-    const node = vrm.humanoid.getNormalizedBoneNode(name as any);
+    const node = getBone(name);
     if (!node) { effectors[name] = [0, 0, 0]; continue; }
     node.getWorldPosition(scratch);
     effectors[name] = [scratch.x, scratch.y, scratch.z];

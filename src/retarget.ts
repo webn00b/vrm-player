@@ -9,6 +9,18 @@ import { applyHumanoidRestCorrectionsToClip } from './humanoidRestPose';
 import { validateClip, clampClip } from './validation/clipValidator';
 import { normalizeQuaternionSignsAcrossClip } from './animationLoaders/quaternionContinuity';
 
+interface NormalizedRestPoseLike {
+  hips?: {
+    position?: {
+      [index: number]: number;
+    };
+  };
+}
+
+type HumanoidWithNormalizedRestPose = VRM['humanoid'] & {
+  normalizedRestPose?: NormalizedRestPoseLike;
+};
+
 export interface RetargetOptions {
   /** If true, keyframes outside anatomical ROM are clamped in-place. Default false (log only). */
   clampOutOfRange?: boolean;
@@ -38,7 +50,7 @@ export async function retargetBvhToVrm(
   // and the hips translation track becomes a bit-exact round-trip. Without it
   // we hit the bbox-derived skeleton depth (~0.78 m) instead of true bind
   // height (~0.86 m) and every hips keyframe drifts by ~9 cm.
-  const hipsRestY = (vrm.humanoid as any).normalizedRestPose?.hips?.position?.[1];
+  const hipsRestY = (vrm.humanoid as HumanoidWithNormalizedRestPose).normalizedRestPose?.hips?.position?.[1];
   const vrmaBuffer: ArrayBuffer = await convertBVHToVRMAnimation(bvh, { hipsRestY });
 
   // Step 2: load the VRMA via GLTFLoader + VRMAnimationLoaderPlugin
@@ -99,7 +111,7 @@ export async function exportBvhAsVrma(
   bvh: ParsedBVH,
   name: string,
 ): Promise<void> {
-  const hipsRestY = (vrm.humanoid as any).normalizedRestPose?.hips?.position?.[1];
+  const hipsRestY = (vrm.humanoid as HumanoidWithNormalizedRestPose).normalizedRestPose?.hips?.position?.[1];
   const buf: ArrayBuffer = await convertBVHToVRMAnimation(bvh, { hipsRestY });
   const blob = new Blob([buf], { type: 'model/gltf-binary' });
   const url  = URL.createObjectURL(blob);

@@ -9,6 +9,8 @@ export interface SequenceItem {
   duration: number;
 }
 
+export type QueueLoopMode = 'queue' | 'one';
+
 export type PlaybackListener = (queuePos: number, item: SequenceItem) => void;
 
 interface CrossfadeState {
@@ -42,6 +44,11 @@ export class AnimationController {
   private crossfade: CrossfadeState | null = null;
   private listener: PlaybackListener | null = null;
   private _muted = false;
+  private loopMode: QueueLoopMode = 'queue';
+  private previewAction: THREE.AnimationAction | null = null;
+  private previewName = '';
+  private previewDuration = 0;
+  private previewTime = 0;
 
   constructor(vrm: VRM) {
     this.mixer = new THREE.AnimationMixer(vrm.scene);
@@ -93,6 +100,14 @@ export class AnimationController {
       // Removed something before the current position — adjust index
       this.queuePos--;
     }
+  }
+
+  /** Remove every queued entry and stop playback. Registered library clips stay available. */
+  clearQueue(): void {
+    this.queue = [];
+    this.queuePos = -1;
+    this.prevItemIndex = -1;
+    this.stopAll();
   }
 
   /** Reorder queue using "insert before toIndex" semantics. */
@@ -164,7 +179,32 @@ export class AnimationController {
     }
   }
   get muted(): boolean { return this._muted; }
-  get hasBvhActive(): boolean { return this.queuePos >= 0; }
+  get hasBvhActive(): boolean { return this.queuePos >= 0 || !!this.previewAction; }
+
+  playPreviewClip(name: string, clip: THREE.AnimationClip): void {
+    this.stopAll();
+    this.queuePos = -1;
+    this.prevItemIndex = -1;
+    this.previewName = name;
+    this.previewDuration = clip.duration;
+    this.previewTime = 0;
+    this.previewAction = this.mixer.clipAction(clip);
+    this.previewAction.setLoop(THREE.LoopRepeat, Infinity);
+    this.previewAction.setEffectiveWeight(1);
+    this.previewAction.reset();
+    this.previewAction.play();
+    this.listener?.(-1, { name, action: this.previewAction, duration: clip.duration });
+  }
+
+  stopPreview(): void {
+    if (!this.previewAction) return;
+    this.previewAction.setEffectiveWeight(0);
+    this.previewAction.stop();
+    this.previewAction = null;
+    this.previewName = '';
+    this.previewDuration = 0;
+    this.previewTime = 0;
+  }
 
   // ── Transport (play/pause/seek/skip) ───────────────────────────────────────
 
@@ -173,20 +213,28 @@ export class AnimationController {
   togglePaused(): void { this.setPaused(!this.paused); }
 
   /** Current playback time in the active clip (seconds). 0 when queue empty. */
-  get currentTime(): number { return this.timeInCurrent; }
+  get currentTime(): number { return this.previewAction ? this.previewTime : this.timeInCurrent; }
   /** Duration of the active clip (seconds). 0 when queue empty. */
   get currentDuration(): number {
+    if (this.previewAction) return this.previewDuration;
     if (this.queuePos < 0) return 0;
     return this.items[this.queue[this.queuePos]]?.duration ?? 0;
   }
   /** Name of the active clip. '' when queue empty. */
   get currentName(): string {
+    if (this.previewAction) return this.previewName;
     if (this.queuePos < 0) return '';
     return this.items[this.queue[this.queuePos]]?.name ?? '';
   }
 
   /** Seek the active clip to an absolute time in seconds (clamped to duration). */
   seek(seconds: number): void {
+    if (this.previewAction) {
+      const t = Math.max(0, Math.min(seconds, Math.max(this.previewDuration - 1e-3, 0)));
+      this.previewAction.time = t;
+      this.previewTime = t;
+      return;
+    }
     if (this.queuePos < 0) return;
     const item = this.items[this.queue[this.queuePos]];
     if (!item) return;
@@ -203,6 +251,14 @@ export class AnimationController {
     if (this.queue.length === 0) return;
     const n = this.queue.length;
     this.activateQueuePos(((this.queuePos - 1) % n + n) % n);
+  }
+
+  setLoopMode(mode: QueueLoopMode): void {
+    this.loopMode = mode;
+  }
+
+  get currentLoopMode(): QueueLoopMode {
+    return this.loopMode;
   }
 
   // ── Listener ───────────────────────────────────────────────────────────────
@@ -232,6 +288,14 @@ export class AnimationController {
 
     this.mixer.update(delta);
 
+    if (this.previewAction) {
+      if (!this.paused) {
+        this.previewTime += delta;
+        if (this.previewDuration > 0 && this.previewTime >= this.previewDuration) this.previewTime = 0;
+      }
+      return;
+    }
+
     if (this.queuePos < 0 || this.queue.length === 0) return;
     // When paused, freeze time tracking and auto-advance — the mixer is already
     // frozen via timeScale, but timeInCurrent must not drift forward either or
@@ -243,10 +307,10 @@ export class AnimationController {
     const currentItem = this.items[this.queue[this.queuePos]];
     const triggerAt = Math.max(currentItem.duration - CROSSFADE_DURATION, 0);
 
-    if (this.timeInCurrent >= triggerAt && this.queue.length > 1) {
+    if (this.timeInCurrent >= triggerAt && this.queue.length > 1 && this.loopMode === 'queue') {
       this.activateQueuePos((this.queuePos + 1) % this.queue.length);
-    } else if (this.timeInCurrent >= currentItem.duration && this.queue.length === 1) {
-      this.timeInCurrent = 0; // single item: reset timer, action loops naturally
+    } else if (this.timeInCurrent >= currentItem.duration) {
+      this.timeInCurrent = 0; // current action loops naturally
     }
   }
 
@@ -254,6 +318,7 @@ export class AnimationController {
 
   private activateQueuePos(pos: number): void {
     if (pos < 0 || pos >= this.queue.length) return;
+    this.stopPreview();
     const itemIndex = this.queue[pos];
     const next = this.items[itemIndex];
 
@@ -277,7 +342,13 @@ export class AnimationController {
 
   private stopAll(): void {
     for (const item of this.items) { item.action.setEffectiveWeight(0); item.action.stop(); }
+    if (this.previewAction) {
+      this.previewAction.setEffectiveWeight(0);
+      this.previewAction.stop();
+      this.previewAction = null;
+    }
     this.crossfade = null;
     this.timeInCurrent = 0;
+    this.previewTime = 0;
   }
 }

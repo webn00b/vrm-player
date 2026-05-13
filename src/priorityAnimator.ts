@@ -1,4 +1,4 @@
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import * as THREE from 'three';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ export class PriorityAnimator {
     const humanoid = this.vrm.humanoid;
     const names = Object.keys(humanoid.humanBones) as string[];
     for (const name of names) {
-      const node = humanoid.getNormalizedBoneNode(name as any);
+      const node = humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
       if (node) this.nodeCache.set(name, node);
     }
   }

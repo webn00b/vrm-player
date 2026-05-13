@@ -16,14 +16,14 @@
  * pass the canvas to `mocap.setCanvas()` during recording / live preview.
  */
 
-import { ref, onMounted, onUnmounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import Button from 'primevue/button';
-import SelectButton from 'primevue/selectbutton';
 import type { VRM } from '@pixiv/three-vrm';
 import type { MocapController, MocapState } from '../mocap/pipeline/mocapController';
 import type { AnimationController } from '../animationController';
 import type { MocapDebugRecorder } from '../mocap/diagnostics/mocapDebugRecorder';
 import { exportClipAsBvh, type BvhExportHandle } from '../bvhExportRecorder';
+import { notify } from '../ui';
 
 const props = defineProps<{
   mocap: MocapController;
@@ -42,9 +42,9 @@ const SOURCE_KEY = 'vrm-player.capture-source';
 const validSource = (s: string | null): CaptureSource =>
   s === 'video' || s === 'animfile' ? s : 'camera';
 const sourceOptions: Array<{ label: string; value: CaptureSource }> = [
-  { label: 'Camera', value: 'camera' },
-  { label: 'Video', value: 'video' },
-  { label: 'Anim', value: 'animfile' },
+  { label: 'Live', value: 'camera' },
+  { label: 'Video BVH', value: 'video' },
+  { label: 'Anim export', value: 'animfile' },
 ];
 
 const currentSource = ref<CaptureSource>(validSource(localStorage.getItem(SOURCE_KEY)));
@@ -58,6 +58,11 @@ const showStopCam   = ref(false);
 const showPlayback  = ref(false);
 const pauseLabel    = ref('⏸');
 const paused        = ref(false);
+const presetCaption = computed(() => {
+  if (currentSource.value === 'camera') return 'Camera preview and recording';
+  if (currentSource.value === 'video') return 'Video file to mocap BVH';
+  return 'Loaded animation to BVH';
+});
 
 const fileInputRef     = ref<HTMLInputElement | null>(null);
 const animFileInputRef = ref<HTMLInputElement | null>(null);
@@ -150,9 +155,12 @@ function startAnimRecord(): void {
       .then((filename) => {
         statusText.value = `✓ saved ${filename}`;
         framesText.value = '';
+        notify({ severity: 'success', summary: 'BVH saved', detail: filename });
       })
       .catch((e) => {
-        statusText.value = `❌ ${(e as Error).message.slice(0, 60)}`;
+        const msg = (e as Error).message;
+        statusText.value = `❌ ${msg.slice(0, 60)}`;
+        notify({ severity: 'error', summary: 'BVH export failed', detail: msg, life: 4200 });
       })
       .finally(() => {
         animExportHandle = null;
@@ -160,7 +168,9 @@ function startAnimRecord(): void {
         updateAnimUI();
       });
   } catch (e) {
-    statusText.value = `❌ ${(e as Error).message.slice(0, 60)}`;
+    const msg = (e as Error).message;
+    statusText.value = `❌ ${msg.slice(0, 60)}`;
+    notify({ severity: 'error', summary: 'BVH export failed', detail: msg, life: 4200 });
     animExportHandle = null;
   }
 }
@@ -255,7 +265,11 @@ async function onPrimaryClick(): Promise<void> {
       primaryLabel.value = '…';
       primaryDisabled.value = true;
       try { await m.startLive(); }
-      catch { statusText.value = '❌ Camera error'; }
+      catch (e) {
+        const msg = e instanceof Error ? e.message : 'Camera permission or device error';
+        statusText.value = '❌ Camera error';
+        notify({ severity: 'error', summary: 'Camera error', detail: msg, life: 4200 });
+      }
       finally { primaryDisabled.value = false; }
     } else if (m.state === 'live') {
       m.startRecording();
@@ -303,14 +317,17 @@ async function onAnimFileChange(e: Event): Promise<void> {
   if (!file) return;
   if (!props.onAnimFile) {
     statusText.value = '❌ animation import not wired';
+    notify({ severity: 'error', summary: 'Animation import unavailable' });
     return;
   }
   statusText.value = `🎬 loading ${file.name}…`;
+  notify({ severity: 'info', summary: 'Loading animation', detail: file.name, life: 1800 });
   try {
     await props.onAnimFile(file);
   } catch (e) {
     const msg = (e instanceof Error ? e.message : String(e)) || 'unknown error';
     statusText.value = `❌ ${msg.slice(0, 60)}`;
+    notify({ severity: 'error', summary: 'Animation load failed', detail: msg, life: 4200 });
   }
   updateAnimUI();
 }
@@ -324,12 +341,14 @@ async function onVideoFileChange(e: Event): Promise<void> {
   if (!m || m.state !== 'off') return;
   // Auto-start debug recorder for full file capture (no frame cap).
   props.dbgRecorder.start(Infinity);
+  notify({ severity: 'info', summary: 'Processing video', detail: file.name, life: 2200 });
   try {
     await m.startFromFile(file);
   } catch (e) {
     props.dbgRecorder.stop();
     const msg = (e instanceof Error ? e.message : String(e)) || 'unknown error';
     statusText.value = `❌ ${msg.slice(0, 28)}`;
+    notify({ severity: 'error', summary: 'Video processing failed', detail: msg, life: 4200 });
   }
 }
 
@@ -383,6 +402,7 @@ function onExportPose(): void {
     const name = m.exportCurrentPoseBvh();
     exportPoseLabel.value = 'Saved';
     exportPoseTitle.value = `Downloaded ${name}.bvh`;
+    notify({ severity: 'success', summary: 'Pose exported', detail: `${name}.bvh` });
   } finally {
     trackTimeout(() => {
       exportPoseLabel.value = prev;
@@ -413,6 +433,7 @@ onMounted(() => {
   props.mocap.onStateChange = updateMocapUI;
   props.mocap.onError = (err) => {
     statusText.value = `❌ ${err.message.slice(0, 30)}`;
+    notify({ severity: 'error', summary: 'Mocap error', detail: err.message, life: 4200 });
   };
 
   // Paint initial UI based on current source + mocap state.
@@ -431,16 +452,25 @@ onUnmounted(() => {
 
 <template>
   <div class="dbg-section">
-    <SelectButton
+    <div
       class="capture-source"
-      :modelValue="currentSource"
-      :options="sourceOptions"
-      optionLabel="label"
-      optionValue="value"
-      :allowEmpty="false"
+      role="group"
+      aria-label="Capture source"
       data-testid="capture-source"
-      @update:modelValue="setSource"
-    />
+    >
+      <button
+        v-for="option in sourceOptions"
+        :key="option.value"
+        type="button"
+        class="capture-src-btn"
+        :aria-pressed="currentSource === option.value"
+        :data-testid="`capture-src-${option.value}`"
+        @click="setSource(option.value)"
+      >
+        {{ option.label }}
+      </button>
+    </div>
+    <div class="capture-preset-caption">{{ presetCaption }}</div>
 
     <Button
       class="capture-primary"
@@ -511,41 +541,43 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-:deep(.capture-source) {
+.capture-source {
   display: flex;
   width: 100%;
-  margin-bottom: 8px;
+  margin-bottom: 5px;
 }
-:deep(.capture-source .p-togglebutton) {
+.capture-src-btn {
   flex: 1;
-  justify-content: center;
   border-radius: 0;
   background: transparent;
   color: #ccc;
-  border-color: #2a2a2a;
+  border: 1px solid #2a2a2a;
+  border-right: 0;
   font-size: 11px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--font-ui);
   padding: 6px;
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
 }
-:deep(.capture-source .p-togglebutton:first-child) {
+.capture-src-btn:first-child {
   border-radius: 5px 0 0 5px;
 }
-:deep(.capture-source .p-togglebutton:last-child) {
+.capture-src-btn:last-child {
   border-radius: 0 5px 5px 0;
+  border-right: 1px solid #2a2a2a;
 }
-:deep(.capture-source .p-togglebutton-checked) {
+.capture-src-btn:hover {
+  background: #1c1c1c;
+}
+.capture-src-btn[aria-pressed="true"] {
   background: #2a3550;
   color: #fff;
 }
-:deep(.capture-source .p-togglebutton[data-p-checked="true"]) {
-  background: #2a3550;
-  color: #fff;
-}
-:deep(.capture-source .p-togglebutton .p-togglebutton-content) {
-  background: transparent;
-}
-:deep(.capture-source .p-togglebutton[data-p-checked="true"] .p-togglebutton-label) {
-  color: #fff;
+.capture-preset-caption {
+  margin-bottom: 8px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.42);
 }
 :deep(.p-button.capture-primary) {
   width: 100%;
@@ -554,7 +586,7 @@ onUnmounted(() => {
   background: #3b5bdb;
   border-color: #3b5bdb;
   color: #fff;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 600;
   padding: 10px;

@@ -8,18 +8,22 @@ import type { ParsedBVH } from './bvhLoader';
 import { loadAnimationFile, isSupportedAnimationFile } from './animationImport';
 import { exportClipAsBvh } from './bvhExportRecorder';
 import { exportClipAsGlb } from './gltfExportRecorder';
-import { AnimationController } from './animationController';
+import { AnimationController, type QueueLoopMode } from './animationController';
 import { PriorityAnimator } from './priorityAnimator';
 import { MicroAnimations } from './microAnimations';
 import { IdleLoop } from './idleLoop';
-import { setStatus } from './ui';
+import { notify, setStatus } from './ui';
 import { createApp } from 'vue';
 import PlayerShell from './playerVue/PlayerShell.vue';
 import QueuePanel from './playerVue/QueuePanel.vue';
 import BottomBar from './playerVue/BottomBar.vue';
 import RetargetLab from './playerVue/RetargetLab.vue';
+import SceneToolbar from './playerVue/SceneToolbar.vue';
+import PlayerStartPanel from './playerVue/PlayerStartPanel.vue';
 import { installPrimeVueOn } from './playerVue/plugin';
+import { sceneControlsState } from './playerVue/sceneControlsState';
 import type { ManualFbxBoneMapping } from './animationLoaders/fbxBoneMapping';
+import { applyQuaternionCorrectionsToClip, type QuaternionCorrection } from './retargetCorrections';
 import { mountDebugPanel } from './debugPanel';
 import { BonePosePanel } from './bonePosePanel';
 import { BoneDragController } from './boneDragController';
@@ -35,6 +39,19 @@ import { renderLoopHooks } from './renderLoopHooks';
 import { startRenderLoop } from './renderLoop';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 
+type CleanupFn = () => void;
+let selectedVrmUrl: string | null = null;
+let selectedVrmName = '';
+const QUEUE_LOOP_KEY = 'vrm-player.queue-loop-mode';
+
+declare global {
+  interface Window {
+    __vrmPlayerCleanup?: CleanupFn;
+    __mocapDbg?: MocapDebugRecorder;
+    __skelLog?: ReturnType<typeof createSkeletonLogger>;
+  }
+}
+
 /**
  * Resolve which VRM to load via runtime fetch of `models/index.json`.
  *
@@ -47,6 +64,7 @@ import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSyst
  * git inside `public/models/`) to know what's available at runtime.
  */
 async function resolveVrmUrl(): Promise<string> {
+  if (selectedVrmUrl) return selectedVrmUrl;
   const res = await fetch('/models/index.json', { cache: 'no-cache' });
   if (!res.ok) {
     throw new Error(
@@ -65,8 +83,17 @@ async function resolveVrmUrl(): Promise<string> {
   return `/models/${sorted[0]}`;
 }
 
-type CleanupFn = () => void;
-const GLOBAL_CLEANUP_KEY = '__vrmPlayerCleanup';
+function readQueueLoopMode(): QueueLoopMode {
+  try {
+    return localStorage.getItem(QUEUE_LOOP_KEY) === 'one' ? 'one' : 'queue';
+  } catch {
+    return 'queue';
+  }
+}
+
+function writeQueueLoopMode(mode: QueueLoopMode): void {
+  try { localStorage.setItem(QUEUE_LOOP_KEY, mode); } catch { /* ignore */ }
+}
 
 function installGlobalCleanup(cleanup: CleanupFn): void {
   let disposed = false;
@@ -74,14 +101,14 @@ function installGlobalCleanup(cleanup: CleanupFn): void {
     if (disposed) return;
     disposed = true;
     cleanup();
-    if ((window as any)[GLOBAL_CLEANUP_KEY] === wrapped) delete (window as any)[GLOBAL_CLEANUP_KEY];
+    if (window.__vrmPlayerCleanup === wrapped) delete window.__vrmPlayerCleanup;
   };
-  (window as any)[GLOBAL_CLEANUP_KEY] = wrapped;
+  window.__vrmPlayerCleanup = wrapped;
   import.meta.hot?.dispose(() => wrapped());
 }
 
 async function main() {
-  const previousCleanup = (window as any)[GLOBAL_CLEANUP_KEY] as CleanupFn | undefined;
+  const previousCleanup = window.__vrmPlayerCleanup as CleanupFn | undefined;
   previousCleanup?.();
   const container = document.getElementById('app');
   if (!container) throw new Error('#app not found');
@@ -95,6 +122,7 @@ async function main() {
 
   setStatus('loading VRM…');
   const vrm = await loadVRM(await resolveVrmUrl());
+  if (selectedVrmName) notify({ severity: 'success', summary: 'VRM loaded', detail: selectedVrmName });
   // NOTE: mirror effect for mocap is applied at the landmark level in
   // DirectPoseApplier (_mirrorX flag) — do NOT scale the scene negatively,
   // that breaks the direct-math's getWorldQuaternion calls on parent bones.
@@ -122,7 +150,7 @@ async function main() {
     dbgRecorder.download('mocap_debug.json');
   };
   // Expose globally so it can be controlled from the browser console too
-  (window as any).__mocapDbg = dbgRecorder;
+  window.__mocapDbg = dbgRecorder;
 
   // ── Bone pose panel ────────────────────────────────────────────────────────
   const bonePanel = new BonePosePanel(vrm);
@@ -145,7 +173,7 @@ async function main() {
   const cleanup = (): void => {
     for (let i = cleanupFns.length - 1; i >= 0; i--) cleanupFns[i]();
     cleanupFns.length = 0;
-    if ((window as any).__mocapDbg === dbgRecorder) delete (window as any).__mocapDbg;
+    if (window.__mocapDbg === dbgRecorder) delete window.__mocapDbg;
   };
   registerCleanup(
     () => shellApp.unmount(),
@@ -160,11 +188,89 @@ async function main() {
   );
 
   const controller = new AnimationController(vrm);
+  controller.setLoopMode(readQueueLoopMode());
 
   const bottomBarApp = createApp(BottomBar, { controller });
   installPrimeVueOn(bottomBarApp);
   bottomBarApp.mount('#bottom-bar');
   registerCleanup(() => bottomBarApp.unmount());
+
+  const sceneToolbarApp = createApp(SceneToolbar, {
+    skelViz,
+    boneDrag,
+    setModelVisible: (v: boolean) => { vrm.scene.visible = v; },
+  });
+  installPrimeVueOn(sceneToolbarApp);
+  sceneToolbarApp.mount('#scene-toolbar-root');
+  registerCleanup(() => sceneToolbarApp.unmount());
+
+  const playerStartApp = createApp(PlayerStartPanel, {
+    controller,
+    setModelVisible: (v: boolean) => { vrm.scene.visible = v; },
+  });
+  installPrimeVueOn(playerStartApp);
+  playerStartApp.mount('#player-start-root');
+  registerCleanup(() => playerStartApp.unmount());
+
+  const isTypingTarget = (target: EventTarget | null): boolean => {
+    const el = target as HTMLElement | null;
+    if (!el) return false;
+    const tag = el.tagName.toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
+  };
+  const onShortcutKey = (e: KeyboardEvent): void => {
+    if (e.repeat || e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target)) return;
+    const key = e.key.toLowerCase();
+    if (key === ' ') {
+      e.preventDefault();
+      controller.togglePaused();
+    } else if (key === 'm') {
+      sceneControlsState.modelOn = !sceneControlsState.modelOn;
+      vrm.scene.visible = sceneControlsState.modelOn;
+    } else if (key === 's') {
+      sceneControlsState.skeletonOn = !sceneControlsState.skeletonOn;
+      skelViz.setVisible(sceneControlsState.skeletonOn);
+    } else if (key === 'd') {
+      sceneControlsState.dragOn = !sceneControlsState.dragOn;
+      boneDrag.setEnabled(sceneControlsState.dragOn);
+      if (sceneControlsState.dragOn && !sceneControlsState.skeletonOn) {
+        sceneControlsState.skeletonOn = true;
+        skelViz.setVisible(true);
+      }
+    } else if (key === 'r') {
+      boneDrag.resetAll();
+    } else if (key === 'z') {
+      window.dispatchEvent(new Event('vrm-player:toggle-zen'));
+    } else if (key === '?' || (e.code === 'Slash' && e.shiftKey)) {
+      window.dispatchEvent(new Event('vrm-player:toggle-help'));
+    }
+  };
+  window.addEventListener('keydown', onShortcutKey);
+  registerCleanup(() => window.removeEventListener('keydown', onShortcutKey));
+
+  const onLoadVrmFile = (e: Event): void => {
+    const file = (e as CustomEvent<File>).detail;
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.vrm')) {
+      notify({ severity: 'error', summary: 'Unsupported avatar file', detail: 'Choose a .vrm file.' });
+      return;
+    }
+    if (selectedVrmUrl?.startsWith('blob:')) URL.revokeObjectURL(selectedVrmUrl);
+    selectedVrmUrl = URL.createObjectURL(file);
+    selectedVrmName = file.name;
+    sceneControlsState.modelOn = true;
+    sceneControlsState.skeletonOn = true;
+    sceneControlsState.dragOn = false;
+    setStatus(`loading ${file.name}…`);
+    notify({ severity: 'info', summary: 'Loading VRM', detail: file.name, life: 1800 });
+    void main().catch((err) => {
+      console.error(err);
+      setStatus(`error: ${(err as Error).message}`);
+      notify({ severity: 'error', summary: 'VRM load failed', detail: (err as Error).message, life: 6000 });
+    });
+  };
+  window.addEventListener('vrm-player:load-vrm-file', onLoadVrmFile);
+  registerCleanup(() => window.removeEventListener('vrm-player:load-vrm-file', onLoadVrmFile));
 
   // Per-item parsed BVH cache, keyed by library item index. Used by the ⬇
   // export-as-VRMA button so we can re-run convertBVHToVRMAnimation on demand
@@ -174,6 +280,7 @@ async function main() {
   // internally, but we mirror locally so we can pass the user-facing alias to
   // setStatus / queue.push without going through the controller).
   const names: string[] = [];
+  const sourceFileByIndex = new Map<number, File>();
 
   setStatus('drop a .bvh file or record from mocap to start');
 
@@ -197,12 +304,12 @@ async function main() {
   const skeletonLogger = createSkeletonLogger(vrm, validator);
   renderLoopHooks.skeletonLoggerTick = () => skeletonLogger.tick();
   registerCleanup(() => { renderLoopHooks.skeletonLoggerTick = null; });
-  (window as any).__skelLog = skeletonLogger;
+  window.__skelLog = skeletonLogger;
 
   const playback: PlaybackSystems = { controller, pa, micro, idle: idleLoop };
   const tooling: ToolingSystems   = { skelViz, validator, bonePanel, boneDrag, hipForce, hipBalance, skeletonLogger };
 
-  vrm.scene.visible = false;
+  vrm.scene.visible = sceneControlsState.modelOn;
 
   // ── Queue (playback) — Vue island on #queue-panel ─────────────────────────
   // Replaced the imperative `mountQueue()` with QueuePanel.vue. The same
@@ -210,13 +317,143 @@ async function main() {
   // `defineExpose` inside the component, so the rest of main.ts uses the
   // returned `queue` reference identically.
   interface QueueHandle {
-    push(name: string): void;
+    push(name: string, duration?: number): void;
     remove(qi: number): void;
     setActive(qi: number): void;
     reorder(from: number, to: number): void;
+    clear(): void;
   }
+  interface QueuePanelProps extends Record<string, unknown> {
+    mode?: 'full' | 'exportsOnly';
+    onJump?: (queueIndex: number) => void;
+    onReorder?: (fromIndex: number, toIndex: number) => void;
+    onRemove?: (queueIndex: number) => void;
+    onClear?: () => void;
+    onDuplicate?: (queueIndex: number) => void;
+    onRetarget?: (queueIndex: number) => void;
+    loopMode?: QueueLoopMode;
+    onLoopModeChange?: (mode: QueueLoopMode) => void;
+    onExportVrma?: (queueIndex: number) => void | Promise<unknown>;
+    onExportBvh?: (queueIndex: number) => void | Promise<unknown>;
+    onExportGlb?: (queueIndex: number) => void | Promise<unknown>;
+    onRename?: (queueIndex: number, newDisplayName: string) => void;
+  }
+
+  function mountQueuePanel(
+    mountTarget: string | Element,
+    props: QueuePanelProps,
+  ): { handle: QueueHandle; unmount: () => void } {
+    const queueApp = createApp(QueuePanel, props);
+    installPrimeVueOn(queueApp);
+    const handle = queueApp.mount(mountTarget) as unknown as QueueHandle;
+    return {
+      handle,
+      unmount: () => queueApp.unmount(),
+    };
+  }
+
+  const createExportCallbacks = (
+    vrmInst: Parameters<typeof exportBvhAsVrma>[0],
+    namesRef: string[],
+    bvhByIndexRef: Map<number, ParsedBVH>,
+    controllerRef: AnimationController,
+  ): Pick<QueuePanelProps, 'onExportVrma' | 'onExportBvh' | 'onExportGlb'> => ({
+    onExportVrma: async (qi: number) => {
+      const itemIdx = controllerRef.getItemIndexAtQueuePos(qi);
+      const bvh = bvhByIndexRef.get(itemIdx);
+      const name = namesRef[itemIdx];
+      if (!bvh || !name) {
+        const msg = 'No source BVH for this item. Use BVH export instead.';
+        setStatus('no source BVH for this item — use ⬇bvh instead');
+        notify({ severity: 'warn', summary: 'VRMA unavailable', detail: msg, life: 4200 });
+        throw new Error(msg);
+      }
+      try {
+        await exportBvhAsVrma(vrmInst, bvh, name);
+        setStatus(`saved ${name}.vrma`);
+        notify({ severity: 'success', summary: 'VRMA saved', detail: `${name}.vrma` });
+      } catch (e) {
+        const msg = (e as Error).message;
+        setStatus(`vrma export failed: ${msg}`);
+        notify({ severity: 'error', summary: 'VRMA export failed', detail: msg, life: 4200 });
+        throw e;
+      }
+    },
+    onExportBvh: async (qi: number) => {
+      setStatus('recording BVH…');
+      const handle = exportClipAsBvh(qi, controllerRef, vrmInst);
+      try {
+        const filename = await handle.promise;
+        setStatus(`saved ${filename}`);
+        notify({ severity: 'success', summary: 'BVH saved', detail: filename });
+      } catch (e) {
+        const msg = (e as Error).message;
+        setStatus(`bvh export failed: ${msg}`);
+        notify({ severity: 'error', summary: 'BVH export failed', detail: msg, life: 4200 });
+        throw e;
+      }
+    },
+    onExportGlb: async (qi: number) => {
+      const clip = controllerRef.getClipAtQueuePos(qi);
+      if (!clip) {
+        const msg = 'No animation clip for this item.';
+        setStatus('no animation clip for this item');
+        notify({ severity: 'warn', summary: 'GLB unavailable', detail: msg, life: 4200 });
+        throw new Error(msg);
+      }
+      const itemIdx = controllerRef.getItemIndexAtQueuePos(qi);
+      const name = namesRef[itemIdx] || 'export';
+      setStatus('exporting GLB…');
+      try {
+        const filename = await exportClipAsGlb(vrmInst, clip, name);
+        setStatus(`saved ${filename}`);
+        notify({ severity: 'success', summary: 'GLB saved', detail: filename });
+      } catch (e) {
+        const msg = (e as Error).message;
+        setStatus(`glb export failed: ${msg}`);
+        notify({ severity: 'error', summary: 'GLB export failed', detail: msg, life: 4200 });
+        throw e;
+      }
+    },
+  });
+
+  const queueExportCallbacks = createExportCallbacks(vrm, names, bvhByIndex, controller);
+
+  const openQueueItemInRetargetLab = (queueIndex: number, navigate: boolean): boolean => {
+    const itemIdx = controller.getItemIndexAtQueuePos(queueIndex);
+    const file = sourceFileByIndex.get(itemIdx);
+    if (!file) {
+      notify({
+        severity: 'warn',
+        summary: 'No source file for this clip',
+        detail: 'Load or record the clip first, then open it in Retarget Lab.',
+        life: 4200,
+      });
+      return false;
+    }
+    if (navigate) window.dispatchEvent(new CustomEvent('vrm-player:set-page', { detail: 'retarget' }));
+    window.dispatchEvent(new CustomEvent<File>('vrm-player:retarget-file', { detail: file }));
+    return true;
+  };
+
+  const onPageChanged = (e: Event): void => {
+    const page = (e as CustomEvent<string>).detail;
+    if (page !== 'retarget') return;
+    const queueIndex = controller.currentQueuePos;
+    if (queueIndex < 0) return;
+    openQueueItemInRetargetLab(queueIndex, false);
+  };
+  window.addEventListener('vrm-player:page-changed', onPageChanged);
+  registerCleanup(() => window.removeEventListener('vrm-player:page-changed', onPageChanged));
+
   let reexportQueue: QueueHandle | null = null;
-  const queueApp = createApp(QueuePanel, {
+  const { handle: queue, unmount: unmountQueue } = mountQueuePanel('#queue-panel-root', {
+    loopMode: controller.currentLoopMode,
+    onLoopModeChange: (mode: QueueLoopMode) => {
+      controller.setLoopMode(mode);
+      writeQueueLoopMode(mode);
+      setStatus(mode === 'one' ? 'looping current clip' : 'looping queue');
+    },
     onJump:    (qi: number)              => controller.jumpTo(qi),
     onReorder: (from: number, to: number) => {
       controller.reorderQueue(from, to);
@@ -228,92 +465,95 @@ async function main() {
       // The component removes itself from its reactive list; we just sync
       // the underlying controller state. No `queue.remove(qi)` needed.
     },
-    onExportVrma: (qi: number) => {
+    onClear: () => {
+      controller.clearQueue();
+      reexportQueue?.clear();
+      setStatus('queue cleared');
+    },
+    onDuplicate: (qi: number) => {
       const itemIdx = controller.getItemIndexAtQueuePos(qi);
-      const bvh = bvhByIndex.get(itemIdx);
-      const name = names[itemIdx];
-      if (!bvh || !name) { setStatus('no source BVH for this item — use ⬇bvh instead'); return; }
-      exportBvhAsVrma(vrm, bvh, name)
-        .then(() => setStatus(`saved ${name}.vrma`))
-        .catch((e) => setStatus(`vrma export failed: ${(e as Error).message}`));
+      if (itemIdx < 0) return;
+      controller.addToQueue(itemIdx);
+      const name = names[itemIdx] || controller.getItemName(itemIdx);
+      const duration = controller.getClipAtItemIndex(itemIdx)?.duration ?? 0;
+      queue.push(name, duration);
+      reexportQueue?.push(name, duration);
     },
-    onExportBvh: (qi: number) => {
-      setStatus('recording BVH…');
-      const handle = exportClipAsBvh(qi, controller, vrm);
-      handle.promise
-        .then((filename) => setStatus(`saved ${filename}`))
-        .catch((e) => setStatus(`bvh export failed: ${(e as Error).message}`));
+    onRetarget: (qi: number) => {
+      openQueueItemInRetargetLab(qi, true);
     },
-    onExportGlb: (qi: number) => {
-      const clip = controller.getClipAtQueuePos(qi);
-      if (!clip) { setStatus('no animation clip for this item'); return; }
-      const itemIdx = controller.getItemIndexAtQueuePos(qi);
-      const name = names[itemIdx] || 'export';
-      setStatus('exporting GLB…');
-      exportClipAsGlb(vrm, clip, name)
-        .then((filename) => setStatus(`saved ${filename}`))
-        .catch((e) => setStatus(`glb export failed: ${(e as Error).message}`));
-    },
+    ...queueExportCallbacks,
     onRename: (_qi: number, _name: string) => {
       // Display alias is persisted to localStorage inside the component; the
       // hook is here in case future logic wants the new name as well.
     },
   });
-  installPrimeVueOn(queueApp);
-  const queue = queueApp.mount('#queue-panel-root') as unknown as QueueHandle;
-  registerCleanup(() => queueApp.unmount());
+  registerCleanup(unmountQueue);
 
   const reexportRoot = document.getElementById('tools-reexport-root');
-  let reexportQueueApp: ReturnType<typeof createApp> | null = null;
   if (reexportRoot) {
-    reexportQueueApp = createApp(QueuePanel, {
+    const { handle, unmount: unmountReexportQueue } = mountQueuePanel(reexportRoot, {
       mode: 'exportsOnly',
       onJump: (qi: number) => controller.jumpTo(qi),
       onReorder: (from: number, to: number) => controller.reorderQueue(from, to),
-      onExportVrma: (qi: number) => {
-        const itemIdx = controller.getItemIndexAtQueuePos(qi);
-        const bvh = bvhByIndex.get(itemIdx);
-        const name = names[itemIdx];
-        if (!bvh || !name) { setStatus('no source BVH for this item — use ⬇bvh instead'); return; }
-        exportBvhAsVrma(vrm, bvh, name)
-          .then(() => setStatus(`saved ${name}.vrma`))
-          .catch((e) => setStatus(`vrma export failed: ${(e as Error).message}`));
-      },
-      onExportBvh: (qi: number) => {
-        setStatus('recording BVH…');
-        const handle = exportClipAsBvh(qi, controller, vrm);
-        handle.promise
-          .then((filename) => setStatus(`saved ${filename}`))
-          .catch((e) => setStatus(`bvh export failed: ${(e as Error).message}`));
-      },
-      onExportGlb: (qi: number) => {
-        const clip = controller.getClipAtQueuePos(qi);
-        if (!clip) { setStatus('no animation clip for this item'); return; }
-        const itemIdx = controller.getItemIndexAtQueuePos(qi);
-        const name = names[itemIdx] || 'export';
-        setStatus('exporting GLB…');
-        exportClipAsGlb(vrm, clip, name)
-          .then((filename) => setStatus(`saved ${filename}`))
-          .catch((e) => setStatus(`glb export failed: ${(e as Error).message}`));
-      },
+      ...queueExportCallbacks,
     });
-    installPrimeVueOn(reexportQueueApp);
-    reexportQueue = reexportQueueApp.mount(reexportRoot) as unknown as QueueHandle;
-    registerCleanup(() => reexportQueueApp?.unmount());
+    reexportQueue = handle;
+    registerCleanup(unmountReexportQueue);
   }
 
   const registerAndEnqueue = (
     name: string,
     bvh: ParsedBVH | null,
     clip: THREE.AnimationClip,
+    sourceFile?: File,
   ): void => {
     controller.register(name, clip);
     const itemIdx = names.length;
     names.push(name);
     if (bvh) bvhByIndex.set(itemIdx, bvh);
+    if (sourceFile) sourceFileByIndex.set(itemIdx, sourceFile);
     controller.addToQueue(itemIdx);
-    queue.push(name);
-    reexportQueue?.push(name);
+    queue.push(name, clip.duration);
+    reexportQueue?.push(name, clip.duration);
+  };
+
+  interface AnimationLoadResult {
+    ok: boolean;
+    fileName: string;
+    name?: string;
+    error?: string;
+  }
+
+  const loadAnimationIntoQueue = async (
+    file: File,
+    manualFbxMapping: ManualFbxBoneMapping = {},
+    quaternionCorrections: QuaternionCorrection[] = [],
+    options: { statusLabel?: string; toast?: boolean } = {},
+  ): Promise<AnimationLoadResult> => {
+    const baseName = file.name;
+    const shouldToast = options.toast ?? true;
+    setStatus(options.statusLabel ?? `loading ${baseName}…`);
+    try {
+      const loaded = await loadAnimationFile(file, vrm, manualFbxMapping);
+      const correctionReport = applyQuaternionCorrectionsToClip(loaded.clip, vrm, quaternionCorrections);
+      if (correctionReport.affectedTracks > 0) {
+        console.info(
+          `[retarget-corrections] applied ${correctionReport.appliedCorrections} correction(s), ` +
+          `${correctionReport.affectedTracks} track(s), ${correctionReport.affectedKeyframes} keyframe(s), ` +
+          `sign flips normalized: ${correctionReport.signFlips}`,
+        );
+      }
+      registerAndEnqueue(loaded.name, loaded.parsedBvh, loaded.clip, file);
+      setStatus(`▶ ${loaded.name}`);
+      if (shouldToast) notify({ severity: 'success', summary: 'Animation added', detail: loaded.name });
+      return { ok: true, fileName: baseName, name: loaded.name };
+    } catch (e) {
+      const msg = (e as Error).message;
+      setStatus(`load failed: ${msg}`);
+      if (shouldToast) notify({ severity: 'error', summary: 'Animation load failed', detail: msg, life: 4200 });
+      return { ok: false, fileName: baseName, error: msg };
+    }
   };
 
   // Single import path used by both Capture-panel file picker and window-drop.
@@ -321,16 +561,102 @@ async function main() {
   const handleAnimationFile = async (
     file: File,
     manualFbxMapping: ManualFbxBoneMapping = {},
+    quaternionCorrections: QuaternionCorrection[] = [],
   ): Promise<void> => {
-    const baseName = file.name;
-    setStatus(`loading ${baseName}…`);
-    try {
-      const loaded = await loadAnimationFile(file, vrm, manualFbxMapping);
-      registerAndEnqueue(loaded.name, loaded.parsedBvh, loaded.clip);
-      setStatus(`▶ ${loaded.name}`);
-    } catch (e) {
-      setStatus(`load failed: ${(e as Error).message}`);
+    await loadAnimationIntoQueue(file, manualFbxMapping, quaternionCorrections);
+  };
+
+  const handleAnimationFiles = async (files: File[]): Promise<void> => {
+    const supported = files.filter((file) => isSupportedAnimationFile(file.name));
+    const unsupported = files.filter((file) => !isSupportedAnimationFile(file.name));
+    if (unsupported.length > 0) {
+      const names = unsupported.slice(0, 3).map((file) => file.name).join(', ');
+      const suffix = unsupported.length > 3 ? ` +${unsupported.length - 3} more` : '';
+      setStatus(`skipped ${unsupported.length} unsupported file${unsupported.length === 1 ? '' : 's'}`);
+      notify({
+        severity: 'warn',
+        summary: 'Unsupported animation file',
+        detail: `Use .bvh, .vrma, or .fbx. Skipped: ${names}${suffix}`,
+        life: 5200,
+      });
     }
+    if (supported.length === 0) return;
+    if (supported.length === 1) {
+      await handleAnimationFile(supported[0]);
+      return;
+    }
+
+    notify({
+      severity: 'info',
+      summary: 'Loading animations',
+      detail: `${supported.length} files`,
+      life: 2200,
+    });
+
+    const results: AnimationLoadResult[] = [];
+    for (const [index, file] of supported.entries()) {
+      const result = await loadAnimationIntoQueue(file, {}, [], {
+        statusLabel: `loading ${index + 1}/${supported.length}: ${file.name}…`,
+        toast: false,
+      });
+      results.push(result);
+    }
+
+    const loaded = results.filter((result) => result.ok);
+    const failed = results.length - loaded.length;
+    setStatus(`loaded ${loaded.length}/${supported.length} animations`);
+    notify({
+      severity: failed > 0 ? 'warn' : 'success',
+      summary: failed > 0 ? 'Batch import finished with errors' : 'Animations added',
+      detail: failed > 0
+        ? `${loaded.length} loaded, ${failed} failed`
+        : `${loaded.length} files loaded`,
+      life: failed > 0 ? 5200 : 3000,
+    });
+  };
+
+  const onQueueAddAnimationFile = (e: Event): void => {
+    const file = (e as CustomEvent<File>).detail;
+    if (!file) return;
+    if (!isSupportedAnimationFile(file.name)) {
+      void handleAnimationFiles([file]);
+      return;
+    }
+    void handleAnimationFile(file);
+  };
+  const onQueueAddAnimationFiles = (e: Event): void => {
+    const files = (e as CustomEvent<File[]>).detail;
+    if (!Array.isArray(files) || files.length === 0) return;
+    void handleAnimationFiles(files);
+  };
+  window.addEventListener('vrm-player:add-animation-file', onQueueAddAnimationFile);
+  window.addEventListener('vrm-player:add-animation-files', onQueueAddAnimationFiles);
+  registerCleanup(() => {
+    window.removeEventListener('vrm-player:add-animation-file', onQueueAddAnimationFile);
+    window.removeEventListener('vrm-player:add-animation-files', onQueueAddAnimationFiles);
+  });
+
+  const previewRetargetFile = async (
+    file: File,
+    manualFbxMapping: ManualFbxBoneMapping = {},
+    quaternionCorrections: QuaternionCorrection[] = [],
+    corrected = true,
+  ): Promise<{ name: string; duration: number }> => {
+    const loaded = await loadAnimationFile(file, vrm, manualFbxMapping);
+    if (corrected) {
+      const correctionReport = applyQuaternionCorrectionsToClip(loaded.clip, vrm, quaternionCorrections);
+      if (correctionReport.affectedTracks > 0) {
+        console.info(
+          `[retarget-preview] applied ${correctionReport.appliedCorrections} correction(s), ` +
+          `${correctionReport.affectedTracks} track(s), ${correctionReport.affectedKeyframes} keyframe(s)`,
+        );
+      }
+    }
+    const label = `${loaded.name} ${corrected ? '(corrected preview)' : '(original preview)'}`;
+    vrm.scene.visible = true;
+    controller.playPreviewClip(label, loaded.clip);
+    setStatus(`previewing ${label}`);
+    return { name: label, duration: loaded.clip.duration };
   };
 
   const retargetLabRoot = document.getElementById('retarget-lab-root');
@@ -339,6 +665,13 @@ async function main() {
     retargetLabApp = createApp(RetargetLab, {
       vrm,
       onImport: handleAnimationFile,
+      onPreview: previewRetargetFile,
+      onPreviewSeek: (seconds: number) => controller.seek(seconds),
+      onPreviewStop: () => {
+        controller.stopPreview();
+        vrm.scene.visible = false;
+        setStatus('preview stopped');
+      },
     });
     installPrimeVueOn(retargetLabApp);
     retargetLabApp.mount(retargetLabRoot);
@@ -364,10 +697,10 @@ async function main() {
     }
   };
   const onWindowDrop = (e: DragEvent): void => {
-    const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => isSupportedAnimationFile(f.name));
+    const files = Array.from(e.dataTransfer?.files ?? []);
     if (!files.length) return;
     e.preventDefault();
-    files.forEach((f) => void handleAnimationFile(f));
+    void handleAnimationFiles(files);
   };
   window.addEventListener('dragover', onWindowDragOver);
   window.addEventListener('drop', onWindowDrop);
@@ -391,10 +724,13 @@ async function main() {
     try {
       const bvh  = parseBVH(bvhText);
       const clip = await retargetBvhToVrm(vrm, bvh, name);
-      registerAndEnqueue(name, bvh, clip);
+      registerAndEnqueue(name, bvh, clip, new File([bvhText], `${name}.bvh`, { type: 'text/plain' }));
       setStatus(`▶ replaying ${name}`);
+      notify({ severity: 'success', summary: 'Mocap BVH ready', detail: name });
     } catch (e) {
-      setStatus(`replay failed: ${(e as Error).message}`);
+      const msg = (e as Error).message;
+      setStatus(`replay failed: ${msg}`);
+      notify({ severity: 'error', summary: 'Replay failed', detail: msg, life: 4200 });
     }
   };
 
@@ -417,4 +753,5 @@ async function main() {
 main().catch((err) => {
   console.error(err);
   setStatus(`error: ${(err as Error).message}`);
+  notify({ severity: 'error', summary: 'Startup error', detail: (err as Error).message, life: 6000 });
 });

@@ -23,12 +23,23 @@
 import { ref, computed } from 'vue';
 import Button from 'primevue/button';
 import { formatLibraryName, readLibraryAlias, writeLibraryAlias } from '../ui';
+import type { QueueLoopMode } from '../animationController';
 
 interface QueueItem {
   /** Raw library name (not user alias). Stable per item — used as React-style key. */
   rawName: string;
+  duration: number;
   /** Auto-incrementing unique id so re-ordered items keep their identity. */
   id: number;
+}
+
+type ExportKind = 'bvh' | 'glb' | 'vrma';
+type ExportPhase = 'loading' | 'done' | 'error';
+type ExportCallback = (queueIndex: number) => void | Promise<unknown>;
+
+interface RowExportState {
+  kind: ExportKind;
+  phase: ExportPhase;
 }
 
 const props = defineProps<{
@@ -36,10 +47,15 @@ const props = defineProps<{
   onJump?:       (queueIndex: number) => void;
   onReorder?:    (fromIndex: number, toIndex: number) => void;
   onRemove?:     (queueIndex: number) => void;
+  onClear?:      () => void;
+  onDuplicate?:  (queueIndex: number) => void;
+  onRetarget?:   (queueIndex: number) => void;
+  loopMode?:      QueueLoopMode;
+  onLoopModeChange?: (mode: QueueLoopMode) => void;
   /** ⬇ VRMA — only useful for items whose source was BVH. */
-  onExportVrma?: (queueIndex: number) => void;
-  onExportBvh?:  (queueIndex: number) => void;
-  onExportGlb?:  (queueIndex: number) => void;
+  onExportVrma?: ExportCallback;
+  onExportBvh?:  ExportCallback;
+  onExportGlb?:  ExportCallback;
   onRename?:     (queueIndex: number, newDisplayName: string) => void;
 }>();
 
@@ -51,17 +67,23 @@ const dropTarget   = ref(-1);
 /** Index of the item currently being inline-renamed, or -1. */
 const renamingIndex = ref(-1);
 const renameValue   = ref('');
+const addInputRef   = ref<HTMLInputElement | null>(null);
+const loopMode      = ref<QueueLoopMode>(props.loopMode ?? 'queue');
+const emptyDropActive = ref(false);
+const exportStates = ref<Record<number, RowExportState | undefined>>({});
 
 const activeTab = ref<'queue' | 'exports'>(props.mode === 'exportsOnly' ? 'exports' : 'queue');
 
 let nextId = 1;
+const exportResetTimers = new Map<number, number>();
 
 // ── Imperative API exposed to main.ts ────────────────────────────────────────
-function push(name: string): void {
-  items.value.push({ rawName: name, id: nextId++ });
+function push(name: string, duration = 0): void {
+  items.value.push({ rawName: name, duration, id: nextId++ });
 }
 function remove(queueIndex: number): void {
   if (queueIndex < 0 || queueIndex >= items.value.length) return;
+  clearExportState(items.value[queueIndex].id);
   items.value.splice(queueIndex, 1);
   if (activeIndex.value === queueIndex)      activeIndex.value = -1;
   else if (activeIndex.value > queueIndex)   activeIndex.value--;
@@ -69,18 +91,109 @@ function remove(queueIndex: number): void {
 function setActive(queueIndex: number): void {
   activeIndex.value = queueIndex;
 }
+function clear(): void {
+  items.value = [];
+  activeIndex.value = -1;
+  draggedIndex.value = -1;
+  dropTarget.value = -1;
+  renamingIndex.value = -1;
+  for (const id of exportResetTimers.keys()) clearExportState(id);
+}
 function reorder(fromIndex: number, toIndex: number): void {
   if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
   if (fromIndex >= items.value.length || toIndex > items.value.length) return;
   const [moved] = items.value.splice(fromIndex, 1);
   items.value.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, moved);
 }
-defineExpose({ push, remove, setActive, reorder });
+defineExpose({ push, remove, setActive, reorder, clear });
 
 // ── Display helpers ──────────────────────────────────────────────────────────
 const displayName = (rawName: string): string => formatLibraryName(rawName);
+const formatDuration = (seconds: number): string => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '--:--';
+  const total = Math.round(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+};
 
 const isEmpty = computed(() => items.value.length === 0);
+const totalDuration = computed(() =>
+  items.value.reduce((sum, item) => sum + (Number.isFinite(item.duration) ? Math.max(item.duration, 0) : 0), 0),
+);
+const queueSummary = computed(() => {
+  const count = items.value.length;
+  const label = count === 1 ? '1 clip' : `${count} clips`;
+  return `${label} · ${formatDuration(totalDuration.value)}`;
+});
+
+function clearExportState(itemId: number): void {
+  const timer = exportResetTimers.get(itemId);
+  if (timer) window.clearTimeout(timer);
+  exportResetTimers.delete(itemId);
+  delete exportStates.value[itemId];
+}
+
+function scheduleExportStateReset(itemId: number, delay: number): void {
+  const timer = exportResetTimers.get(itemId);
+  if (timer) window.clearTimeout(timer);
+  exportResetTimers.set(itemId, window.setTimeout(() => {
+    clearExportState(itemId);
+  }, delay));
+}
+
+function rowExportState(qi: number): RowExportState | null {
+  const item = items.value[qi];
+  return item ? exportStates.value[item.id] ?? null : null;
+}
+
+function isExporting(qi: number, kind?: ExportKind): boolean {
+  const state = rowExportState(qi);
+  return state?.phase === 'loading' && (!kind || state.kind === kind);
+}
+
+function exportButtonClass(qi: number, kind: ExportKind): Record<string, boolean> {
+  const state = rowExportState(qi);
+  return {
+    'export-loading': state?.phase === 'loading' && state.kind === kind,
+    'export-done': state?.phase === 'done' && state.kind === kind,
+    'export-error': state?.phase === 'error' && state.kind === kind,
+  };
+}
+
+function exportKindLabel(kind: ExportKind): string {
+  return kind === 'vrma' ? 'VRMA' : kind.toUpperCase();
+}
+
+function exportStatusText(qi: number): string {
+  const state = rowExportState(qi);
+  if (!state) return '';
+  const label = exportKindLabel(state.kind);
+  if (state.phase === 'loading') return `Saving ${label}`;
+  if (state.phase === 'done') return `Saved ${label}`;
+  return `Failed ${label}`;
+}
+
+function exportStatusClass(qi: number): string {
+  const state = rowExportState(qi);
+  return state ? `export-status-${state.phase}` : '';
+}
+
+async function runExport(qi: number, kind: ExportKind, callback?: ExportCallback): Promise<void> {
+  if (!callback || isExporting(qi)) return;
+  const item = items.value[qi];
+  if (!item) return;
+  clearExportState(item.id);
+  exportStates.value[item.id] = { kind, phase: 'loading' };
+  try {
+    await Promise.resolve(callback(qi));
+    exportStates.value[item.id] = { kind, phase: 'done' };
+    scheduleExportStateReset(item.id, 2600);
+  } catch {
+    exportStates.value[item.id] = { kind, phase: 'error' };
+    scheduleExportStateReset(item.id, 4200);
+  }
+}
 
 // ── Click → jump (skipped when click target is a button or rename input) ────
 function onItemClick(e: MouseEvent, qi: number): void {
@@ -110,6 +223,51 @@ function commitRename(qi: number, save: boolean): void {
     props.onRename?.(qi, v || item.rawName);
   }
   renamingIndex.value = -1;
+}
+
+function openAddPicker(): void {
+  addInputRef.value?.click();
+}
+
+function onAddFileChange(e: Event): void {
+  const input = e.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = '';
+  if (files.length === 0) return;
+  window.dispatchEvent(new CustomEvent<File[]>('vrm-player:add-animation-files', { detail: files }));
+}
+
+function toggleLoopMode(): void {
+  loopMode.value = loopMode.value === 'queue' ? 'one' : 'queue';
+  props.onLoopModeChange?.(loopMode.value);
+}
+
+function hasDraggedFiles(e: DragEvent): boolean {
+  return Array.from(e.dataTransfer?.items ?? []).some((item) => item.kind === 'file');
+}
+
+function onEmptyDragOver(e: DragEvent): void {
+  if (props.mode === 'exportsOnly' || !hasDraggedFiles(e)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  emptyDropActive.value = true;
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+}
+
+function onEmptyDragLeave(e: DragEvent): void {
+  const next = e.relatedTarget as Node | null;
+  if (next && (e.currentTarget as HTMLElement).contains(next)) return;
+  emptyDropActive.value = false;
+}
+
+function onEmptyDrop(e: DragEvent): void {
+  if (props.mode === 'exportsOnly') return;
+  e.preventDefault();
+  e.stopPropagation();
+  emptyDropActive.value = false;
+  const files = Array.from(e.dataTransfer?.files ?? []);
+  if (files.length === 0) return;
+  window.dispatchEvent(new CustomEvent<File[]>('vrm-player:add-animation-files', { detail: files }));
 }
 
 // ── Drag-and-drop reorder ────────────────────────────────────────────────────
@@ -180,11 +338,37 @@ const emptyText = computed(() =>
       />
     </div>
 
+    <div v-if="mode !== 'exportsOnly' && activeTab === 'queue' && !isEmpty" class="queue-tools">
+      <Button
+        class="queue-tool-btn queue-loop-btn"
+        :class="{ active: loopMode === 'one' }"
+        icon="pi pi-refresh"
+        :label="loopMode === 'one' ? 'Loop one' : 'Loop queue'"
+        text
+        size="small"
+        aria-label="Toggle loop mode"
+        :title="loopMode === 'one' ? 'Repeat the current clip' : 'Play through the whole queue'"
+        :aria-pressed="loopMode === 'one'"
+        data-testid="queue-loop-toggle"
+        @click="toggleLoopMode"
+      />
+      <span class="queue-summary">{{ queueSummary }}</span>
+      <Button
+        class="queue-tool-btn"
+        icon="pi pi-trash"
+        label="Clear queue"
+        text
+        size="small"
+        title="Remove every clip from the queue"
+        @click="props.onClear?.(); clear()"
+      />
+    </div>
+
     <!-- Exports tab tools -->
     <div v-if="mode !== 'exportsOnly'" v-show="activeTab === 'exports'" class="exports-tools">
       <div class="title">File-to-file converters</div>
       <a href="/exports.html" target="_blank" rel="noopener" class="converter-link">
-        🛠 Open converter window
+        Open converter window
       </a>
       <div class="hint">
         Standalone page — no avatar, lightweight. Supports
@@ -192,7 +376,7 @@ const emptyText = computed(() =>
         <code>.gltf</code> / <code>.vrma</code> → JSON.
       </div>
       <div class="title spaced">Per-clip downloads</div>
-      <div class="hint">Click ⬇bvh / ⬇glb / ⬇ next to each item below</div>
+      <div class="hint">Use BVH, GLB, or VRMA next to each item below</div>
     </div>
 
     <!-- Items list (visible in both tabs; action buttons swap via CSS classes) -->
@@ -233,37 +417,89 @@ const emptyText = computed(() =>
           :title="item.rawName"
           @dblclick.stop="startRename(qi)"
         >{{ displayName(item.rawName) }}</span>
+        <span class="q-duration">{{ formatDuration(item.duration) }}</span>
 
         <!-- Exports tab: per-format download buttons -->
         <Button
           v-if="onExportBvh"
           class="q-action q-export-bvh"
-          label="⬇bvh"
+          :class="exportButtonClass(qi, 'bvh')"
+          label="BVH"
           text
           size="small"
+          :disabled="isExporting(qi)"
+          :loading="isExporting(qi, 'bvh')"
           aria-label="Record this clip as BVH"
-          @click.stop="onExportBvh?.(qi)"
+          title="Export this clip as BVH"
+          @click.stop="runExport(qi, 'bvh', onExportBvh)"
         />
         <Button
           v-if="onExportGlb"
           class="q-action q-export-glb"
-          label="⬇glb"
+          :class="exportButtonClass(qi, 'glb')"
+          label="GLB"
           text
           size="small"
+          :disabled="isExporting(qi)"
+          :loading="isExporting(qi, 'glb')"
           aria-label="Download as glTF/GLB"
-          @click.stop="onExportGlb?.(qi)"
+          title="Export this clip as GLB"
+          @click.stop="runExport(qi, 'glb', onExportGlb)"
         />
         <Button
           v-if="onExportVrma"
           class="q-action q-export"
-          label="⬇"
+          :class="exportButtonClass(qi, 'vrma')"
+          label="VRMA"
           text
           size="small"
+          :disabled="isExporting(qi)"
+          :loading="isExporting(qi, 'vrma')"
           aria-label="Download as VRMA"
-          @click.stop="onExportVrma?.(qi)"
+          title="Export this clip as VRMA"
+          @click.stop="runExport(qi, 'vrma', onExportVrma)"
         />
+        <span
+          v-if="exportStatusText(qi)"
+          class="q-export-status"
+          :class="exportStatusClass(qi)"
+        >{{ exportStatusText(qi) }}</span>
 
         <!-- Queue tab: remove only -->
+        <Button
+          v-if="mode !== 'exportsOnly'"
+          class="q-action q-play"
+          icon="pi pi-play"
+          text
+          rounded
+          size="small"
+          aria-label="Play this clip"
+          title="Play this clip"
+          @click.stop="props.onJump?.(qi)"
+        />
+        <Button
+          v-if="mode !== 'exportsOnly'"
+          class="q-action q-duplicate"
+          icon="pi pi-copy"
+          text
+          rounded
+          size="small"
+          aria-label="Duplicate in queue"
+          title="Duplicate this clip in the queue"
+          @click.stop="props.onDuplicate?.(qi)"
+        />
+        <Button
+          v-if="mode !== 'exportsOnly' && onRetarget"
+          class="q-action q-retarget"
+          icon="pi pi-sliders-h"
+          text
+          rounded
+          size="small"
+          aria-label="Open in Retarget Lab"
+          title="Open this clip in Retarget Lab"
+          @click.stop="props.onRetarget?.(qi)"
+        />
+
         <Button
           class="q-action q-remove"
           icon="pi pi-times"
@@ -271,17 +507,44 @@ const emptyText = computed(() =>
           rounded
           size="small"
           aria-label="Remove from queue"
+          title="Remove this clip from the queue"
           @click.stop="props.onRemove?.(qi); remove(qi)"
         />
       </li>
     </ul>
 
+    <input
+      ref="addInputRef"
+      type="file"
+      accept=".bvh,.vrma,.fbx"
+      multiple
+      hidden
+      @change="onAddFileChange"
+    />
+
     <!-- Empty placeholder -->
-    <div v-if="isEmpty" class="queue-empty">
+    <div
+      v-if="isEmpty"
+      class="queue-empty"
+      :class="{ 'drag-over': emptyDropActive }"
+      @dragenter.prevent.stop="onEmptyDragOver"
+      @dragover.prevent.stop="onEmptyDragOver"
+      @dragleave="onEmptyDragLeave"
+      @drop.prevent.stop="onEmptyDrop"
+    >
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M12 5v14M5 12l7-7 7 7"/>
       </svg>
-      {{ emptyText }}
+      <span>{{ emptyText }}</span>
+      <Button
+        v-if="mode !== 'exportsOnly'"
+        class="queue-add-btn"
+        icon="pi pi-plus"
+        label="Add animation"
+        size="small"
+        data-testid="queue-add-animation"
+        @click="openAddPicker"
+      />
     </div>
   </div>
 </template>
@@ -293,7 +556,7 @@ const emptyText = computed(() =>
 .queue-panel-root {
   display: flex;
   flex-direction: column;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--font-ui);
   font-size: 11px;
 }
 
@@ -334,6 +597,47 @@ const emptyText = computed(() =>
   padding: 8px 10px;
   background: rgba(110, 168, 255, 0.06);
   border-radius: 3px;
+}
+
+.queue-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -2px 0 6px;
+}
+
+:deep(.queue-tool-btn.p-button) {
+  height: 24px;
+  padding: 0 8px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+:deep(.queue-tool-btn.p-button:hover) {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.1);
+}
+
+:deep(.queue-loop-btn.p-button) {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+:deep(.queue-loop-btn.p-button:hover),
+:deep(.queue-loop-btn.p-button.active) {
+  color: #bfdbfe;
+  background: rgba(59, 91, 219, 0.18);
+}
+
+.queue-summary {
+  flex: 1;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.42);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-align: center;
+  white-space: nowrap;
 }
 .exports-tools .title       { font-weight: 600; opacity: .7; margin-bottom: 4px; }
 .exports-tools .title.spaced { margin-top: 10px; }
@@ -392,6 +696,24 @@ const emptyText = computed(() =>
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.q-duration {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.q-export-status {
+  flex-shrink: 0;
+  min-width: 62px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.q-export-status.export-status-loading { color: #bfdbfe; }
+.q-export-status.export-status-done    { color: #86efac; }
+.q-export-status.export-status-error   { color: #fca5a5; }
 .q-rename-input {
   flex: 1;
   min-width: 0;
@@ -421,7 +743,28 @@ const emptyText = computed(() =>
   height: 18px;
 }
 .q-action:hover { background: #2a3550; color: #fff; border-color: #3b5bdb; }
-.q-export-bvh, .q-export-glb { font-size: 9px; padding: 0 4px; letter-spacing: 0.05em; }
+.q-export-bvh,
+.q-export-glb,
+.q-export {
+  font-size: 9px;
+  padding: 0 5px;
+  letter-spacing: 0.05em;
+}
+.q-action.export-loading {
+  color: #bfdbfe;
+  border-color: rgba(147, 197, 253, 0.42);
+  background: rgba(59, 91, 219, 0.14);
+}
+.q-action.export-done {
+  color: #86efac;
+  border-color: rgba(134, 239, 172, 0.36);
+  background: rgba(34, 197, 94, 0.12);
+}
+.q-action.export-error {
+  color: #fca5a5;
+  border-color: rgba(252, 165, 165, 0.4);
+  background: rgba(248, 113, 113, 0.12);
+}
 .q-remove {
   border: none;
   color: rgba(255, 255, 255, 0.2);
@@ -433,24 +776,70 @@ const emptyText = computed(() =>
   width: 18px;
 }
 .q-remove:hover { color: #f87171; background: rgba(248, 113, 113, 0.1); border-color: transparent; }
+:deep(.q-play.p-button),
+:deep(.q-duplicate.p-button),
+:deep(.q-retarget.p-button) {
+  width: 18px;
+}
+.q-play:hover,
+.q-duplicate:hover,
+.q-retarget:hover {
+  color: #fff;
+  background: rgba(59, 91, 219, 0.24);
+  border-color: transparent;
+}
 
 /* Per-tab button visibility — same rules as the vanilla CSS in index.html. */
 .queue-panel-root[data-tab="queue"]   .q-export,
 .queue-panel-root[data-tab="queue"]   .q-export-bvh,
 .queue-panel-root[data-tab="queue"]   .q-export-glb { display: none; }
-.queue-panel-root[data-tab="exports"] .q-remove     { display: none; }
+.queue-panel-root[data-tab="exports"] .q-remove,
+.queue-panel-root[data-tab="exports"] .q-play,
+.queue-panel-root[data-tab="exports"] .q-duplicate,
+.queue-panel-root[data-tab="exports"] .q-retarget   { display: none; }
 
 .queue-empty {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 20px 12px;
   font-size: 12px;
-  opacity: 0.35;
+  color: rgba(255, 255, 255, 0.9);
   border: 1.5px dashed rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   margin-top: 4px;
 }
-.queue-empty.drag-over { opacity: 0.7; border-color: #3b5bdb; }
+.queue-empty svg,
+.queue-empty span {
+  opacity: 0.38;
+}
+.queue-empty.drag-over {
+  color: #fff;
+  background: rgba(59, 91, 219, 0.16);
+  border-color: rgba(147, 197, 253, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.18);
+}
+
+.queue-empty.drag-over svg,
+.queue-empty.drag-over span {
+  opacity: 0.8;
+}
+
+:deep(.queue-add-btn.p-button) {
+  height: 28px;
+  padding: 0 10px;
+  background: #10b981;
+  border-color: #10b981;
+  color: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+:deep(.queue-add-btn.p-button:hover) {
+  background: #12c992;
+  border-color: #12c992;
+}
 </style>

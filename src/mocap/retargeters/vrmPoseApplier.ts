@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import { Pose as KalidoPose, Hand as KalidoHand } from 'kalidokit';
+import type { TPose, THandUnsafe } from 'kalidokit';
 import type { PoseFrame } from '../pipeline/poseDetector';
 
 // ── Bone name mappings ────────────────────────────────────────────────────────
@@ -81,6 +82,25 @@ function applyEuler(
   node.quaternion.slerp(_target, lerp);
 }
 
+interface EulerLike {
+  x: number;
+  y: number;
+  z: number;
+  rotationOrder?: string;
+}
+
+function toEuler(value: unknown): EulerLike | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as { x?: unknown; y?: unknown; z?: unknown; rotationOrder?: unknown };
+  if (typeof v.x !== 'number' || typeof v.y !== 'number' || typeof v.z !== 'number') return null;
+  return {
+    x: v.x,
+    y: v.y,
+    z: v.z,
+    rotationOrder: typeof v.rotationOrder === 'string' ? v.rotationOrder : undefined,
+  };
+}
+
 // ── VrmPoseApplier ────────────────────────────────────────────────────────────
 
 /**
@@ -127,7 +147,7 @@ export class VrmPoseApplier {
       'chest', 'upperChest',
     ];
     for (const name of allNames) {
-      const node = humanoid.getNormalizedBoneNode(name as any);
+      const node = humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
       if (node) this.nodeCache.set(name, node);
     }
   }
@@ -158,20 +178,23 @@ export class VrmPoseApplier {
 
   private _applyBody(frame: PoseFrame): void {
     const rig = KalidoPose.solve(
-      frame.worldLandmarks as any,
-      frame.landmarks      as any,
+      frame.worldLandmarks,
+      frame.landmarks,
       { runtime: 'mediapipe', video: null, imageSize: null },
-    );
+    ) as TPose | null;
     if (!rig) return;
 
     const hipsNode  = this.node('hips');
     const spineNode = this.node('spine');
     const chestNode = this.node('chest') ?? this.node('upperChest');
 
-    if (hipsNode && rig.Hips.rotation)
-      applyEuler(hipsNode,  rig.Hips.rotation, this._hipsDamp,  this._bodyLerp);
-    if (spineNode) applyEuler(spineNode, rig.Spine as any, this._spineDamp, this._bodyLerp);
-    if (chestNode) applyEuler(chestNode, rig.Spine as any, this._chestDamp, this._bodyLerp);
+    const hipsRotation = toEuler(rig.Hips?.rotation);
+    const spineRotation = toEuler(rig.Spine);
+
+    if (hipsNode && hipsRotation)
+      applyEuler(hipsNode, hipsRotation, this._hipsDamp,  this._bodyLerp);
+    if (spineNode && spineRotation) applyEuler(spineNode, spineRotation, this._spineDamp, this._bodyLerp);
+    if (chestNode && spineRotation) applyEuler(chestNode, spineRotation, this._chestDamp, this._bodyLerp);
 
     // Front camera is NOT auto-mirrored → KalidoKit's "Right" = person's left.
     // Swap L/R targets.
@@ -179,23 +202,26 @@ export class VrmPoseApplier {
     // Arms: leftUpperArm primary axis = +X, rightUpperArm = −X (opposite).
     // A Z rotation that pulls rightArm DOWN pulls leftArm UP → must negate Y & Z.
     // Legs: both point in −Y → same rotation semantics → no negation needed.
-    const mirArm = (rot: any) => ({ ...rot, y: -(rot.y ?? 0), z: -(rot.z ?? 0) });
+    const mirArm = (rot: EulerLike | null): EulerLike | null => rot
+      ? { ...rot, y: -(rot.y ?? 0), z: -(rot.z ?? 0) }
+      : null;
 
-    this._limb('leftUpperArm',  mirArm(rig.RightUpperArm));
-    this._limb('leftLowerArm',  mirArm(rig.RightLowerArm));
-    this._limb('rightUpperArm', mirArm(rig.LeftUpperArm));
-    this._limb('rightLowerArm', mirArm(rig.LeftLowerArm));
+    this._limb('leftUpperArm',  mirArm(toEuler(rig.RightUpperArm)));
+    this._limb('leftLowerArm',  mirArm(toEuler(rig.RightLowerArm)));
+    this._limb('rightUpperArm', mirArm(toEuler(rig.LeftUpperArm)));
+    this._limb('rightLowerArm', mirArm(toEuler(rig.LeftLowerArm)));
     // Hand/wrist orientation is handled exclusively by _applyHand (KalidoHand.solve).
     // Applying body-solve wrist rotations here would move finger bones on BOTH hands
     // every frame regardless of which hand is actually detected.
 
-    this._limb('leftUpperLeg',  rig.RightUpperLeg as any);
-    this._limb('leftLowerLeg',  rig.RightLowerLeg as any);
-    this._limb('rightUpperLeg', rig.LeftUpperLeg  as any);
-    this._limb('rightLowerLeg', rig.LeftLowerLeg  as any);
+    this._limb('leftUpperLeg',  toEuler(rig.RightUpperLeg));
+    this._limb('leftLowerLeg',  toEuler(rig.RightLowerLeg));
+    this._limb('rightUpperLeg', toEuler(rig.LeftUpperLeg));
+    this._limb('rightLowerLeg', toEuler(rig.LeftLowerLeg));
   }
 
-  private _limb(vrmName: string, rot: { x: number; y: number; z: number; rotationOrder?: string }): void {
+  private _limb(vrmName: string, rot: EulerLike | null): void {
+    if (!rot) return;
     const n = this.node(vrmName);
     if (n) applyEuler(n, rot, 1, this._bodyLerp);
   }
@@ -206,14 +232,17 @@ export class VrmPoseApplier {
     landmarks: Array<{ x: number; y: number; z: number }>,
     side: 'Left' | 'Right',
   ): void {
-    const rig = KalidoHand.solve(landmarks as any, side);
+    const rig = KalidoHand.solve(landmarks, side) as THandUnsafe<'Left' | 'Right'> | null;
     if (!rig) return;
 
     for (const [kalidoKey, rot] of Object.entries(rig)) {
       if (kalidoKey.endsWith('Wrist')) continue;
       const vrmName = kalidoHandBoneToVrm(kalidoKey);
       const n = this.node(vrmName);
-      if (n) applyEuler(n, rot as any, 1, this._handLerp);
+      if (n) {
+        const euler = toEuler(rot);
+        if (euler) applyEuler(n, euler, 1, this._handLerp);
+      }
     }
   }
 }

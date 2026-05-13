@@ -12,7 +12,7 @@
  */
 
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import type { PoseFrame } from '../pipeline/poseDetector';
 import type { MocapCalibration } from '../trackers/mocapCalibration';
 import type { MocapDebugTargets } from './mocapDiagnostics';
@@ -133,9 +133,11 @@ export class MocapDebugRecorder {
     const bonesWorld: DebugFrame['bonesWorld'] = {};
     const humanoid = this._vrm.humanoid;
     const tmpQ = new THREE.Quaternion();
+    const getBone = (name: string): THREE.Object3D | null =>
+      humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
 
     for (const name of KEY_BONES) {
-      const node = humanoid.getNormalizedBoneNode(name as any);
+      const node = getBone(name);
       if (!node) continue;
       const q = node.quaternion;
       bones[name] = [+q.x.toFixed(5), +q.y.toFixed(5), +q.z.toFixed(5), +q.w.toFixed(5)];

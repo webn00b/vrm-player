@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 
 const DEG = Math.PI / 180;
 
@@ -164,7 +164,7 @@ export class BonePosePanel {
   }
 
   getAvailableBones(): BoneDef[] {
-    return BONE_POSE_DEFS.filter((b) => this._vrm.humanoid.getNormalizedBoneNode(b.vrm as any));
+    return BONE_POSE_DEFS.filter((b) => this._vrm.humanoid.getNormalizedBoneNode(b.vrm as VRMHumanBoneName));
   }
 
   getOffset(bone: string, axis: BoneAxis['axis']): number {
@@ -183,7 +183,7 @@ export class BonePosePanel {
     for (const b of BONE_POSE_DEFS) {
       const off = this._offsets.get(b.vrm)!;
       if (off.x === 0 && off.y === 0 && off.z === 0) continue;
-      const node = this._vrm.humanoid.getNormalizedBoneNode(b.vrm as any);
+      const node = this._vrm.humanoid.getNormalizedBoneNode(b.vrm as VRMHumanBoneName);
       if (!node) continue;
       this._e.set(off.x * DEG, off.y * DEG, off.z * DEG, 'YXZ');
       this._q.setFromEuler(this._e);

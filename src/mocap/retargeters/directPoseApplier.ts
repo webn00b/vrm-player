@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import type { PoseFrame } from '../pipeline/poseDetector';
 import type { MocapCalibration } from '../trackers/mocapCalibration';
 import { getCachedHumanoidRestAxes, HUMANOID_DIRECTION_CHILD } from '../../humanoidRestPose';
@@ -500,7 +500,7 @@ export class DirectPoseApplier {
       'leftShoulder', 'rightShoulder',
     ]);
     for (const name of names) {
-      const node = this.vrm.humanoid.getNormalizedBoneNode(name as any);
+      const node = this.vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
       if (node) this.nodeCache.set(name, node);
     }
   }

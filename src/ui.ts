@@ -45,3 +45,16 @@ export function setStatus(text: string): void {
   const el = document.getElementById('status');
   if (el) el.textContent = text;
 }
+
+export type AppToastSeverity = 'success' | 'info' | 'warn' | 'error';
+
+export interface AppToastPayload {
+  severity?: AppToastSeverity;
+  summary: string;
+  detail?: string;
+  life?: number;
+}
+
+export function notify(payload: AppToastPayload): void {
+  window.dispatchEvent(new CustomEvent<AppToastPayload>('vrm-player:toast', { detail: payload }));
+}

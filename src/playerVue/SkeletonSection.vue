@@ -13,9 +13,10 @@
  * grab otherwise — matches `forceSkeletonOn` from the original).
  */
 
-import { ref, onMounted } from 'vue';
+import { onMounted } from 'vue';
 import type { SkeletonVisualizer } from '../skeletonVisualizer';
 import type { BoneDragController } from '../boneDragController';
+import { sceneControlsState as scene } from './sceneControlsState';
 
 const props = defineProps<{
   skelViz: SkeletonVisualizer;
@@ -23,46 +24,39 @@ const props = defineProps<{
   setModelVisible: (v: boolean) => void;
 }>();
 
-const modelOn      = ref(false);
-const skeletonOn   = ref(true);
-const skelBodyOn   = ref(true);
-const skelFingersOn = ref(true);
-const dragOn       = ref(false);
-
 onMounted(() => {
   // Initial commit: skeleton visible, model hidden — matches the legacy
   // default. The actual sub-state (body / fingers) reflects whatever
   // SkeletonVisualizer was constructed with.
-  props.setModelVisible(false);
-  props.skelViz.setVisible(true);
-  skeletonOn.value   = props.skelViz.visible;
-  skelBodyOn.value   = props.skelViz.showBody;
-  skelFingersOn.value = props.skelViz.showFingers;
-  dragOn.value       = props.boneDrag.enabled;
+  props.setModelVisible(scene.modelOn);
+  props.skelViz.setVisible(scene.skeletonOn);
+  props.skelViz.setShowBody(scene.skelBodyOn);
+  props.skelViz.setShowFingers(scene.skelFingersOn);
+  props.boneDrag.setEnabled(scene.dragOn);
 });
 
 function toggleModel(): void {
-  modelOn.value = !modelOn.value;
-  props.setModelVisible(modelOn.value);
+  scene.modelOn = !scene.modelOn;
+  props.setModelVisible(scene.modelOn);
 }
 function toggleSkeleton(): void {
-  skeletonOn.value = !skeletonOn.value;
-  props.skelViz.setVisible(skeletonOn.value);
+  scene.skeletonOn = !scene.skeletonOn;
+  props.skelViz.setVisible(scene.skeletonOn);
 }
 function toggleBody(): void {
-  skelBodyOn.value = !skelBodyOn.value;
-  props.skelViz.setShowBody(skelBodyOn.value);
+  scene.skelBodyOn = !scene.skelBodyOn;
+  props.skelViz.setShowBody(scene.skelBodyOn);
 }
 function toggleFingers(): void {
-  skelFingersOn.value = !skelFingersOn.value;
-  props.skelViz.setShowFingers(skelFingersOn.value);
+  scene.skelFingersOn = !scene.skelFingersOn;
+  props.skelViz.setShowFingers(scene.skelFingersOn);
 }
 function toggleDrag(): void {
-  dragOn.value = !dragOn.value;
-  props.boneDrag.setEnabled(dragOn.value);
+  scene.dragOn = !scene.dragOn;
+  props.boneDrag.setEnabled(scene.dragOn);
   // Force-enable skeleton when turning drag on — same UX as legacy.
-  if (dragOn.value && !skeletonOn.value) {
-    skeletonOn.value = true;
+  if (scene.dragOn && !scene.skeletonOn) {
+    scene.skeletonOn = true;
     props.skelViz.setVisible(true);
   }
 }
@@ -74,24 +68,24 @@ function resetDrag(): void {
 <template>
   <div class="dbg-row">
     <span class="dbg-label">👤 Show model</span>
-    <button class="dbg-toggle" :class="{ off: !modelOn }" @click="toggleModel">
-      {{ modelOn ? 'ON' : 'OFF' }}
+    <button class="dbg-toggle" :class="{ off: !scene.modelOn }" @click="toggleModel">
+      {{ scene.modelOn ? 'ON' : 'OFF' }}
     </button>
   </div>
   <div class="dbg-row">
     <span class="dbg-label">🦴 Show skeleton</span>
-    <button class="dbg-toggle" :class="{ off: !skeletonOn }" @click="toggleSkeleton">
-      {{ skeletonOn ? 'ON' : 'OFF' }}
+    <button class="dbg-toggle" :class="{ off: !scene.skeletonOn }" @click="toggleSkeleton">
+      {{ scene.skeletonOn ? 'ON' : 'OFF' }}
     </button>
   </div>
-  <div v-show="skeletonOn" class="dbg-row">
+  <div v-show="scene.skeletonOn" class="dbg-row">
     <span class="dbg-label" style="opacity:.6;font-size:11px">🩵 Body &nbsp;&nbsp; 💛 Fingers</span>
     <div style="display:flex;gap:4px">
-      <button class="dbg-toggle" :class="{ off: !skelBodyOn }"    @click="toggleBody">
-        {{ skelBodyOn ? 'ON' : 'OFF' }}
+      <button class="dbg-toggle" :class="{ off: !scene.skelBodyOn }"    @click="toggleBody">
+        {{ scene.skelBodyOn ? 'ON' : 'OFF' }}
       </button>
-      <button class="dbg-toggle" :class="{ off: !skelFingersOn }" @click="toggleFingers">
-        {{ skelFingersOn ? 'ON' : 'OFF' }}
+      <button class="dbg-toggle" :class="{ off: !scene.skelFingersOn }" @click="toggleFingers">
+        {{ scene.skelFingersOn ? 'ON' : 'OFF' }}
       </button>
     </div>
   </div>
@@ -100,10 +94,10 @@ function resetDrag(): void {
     <div class="dbg-btn-group">
       <button
         class="dbg-toggle"
-        :class="{ off: !dragOn }"
+        :class="{ off: !scene.dragOn }"
         title="Click joints in 3D to attach a rotation gizmo"
         @click="toggleDrag"
-      >{{ dragOn ? 'ON' : 'OFF' }}</button>
+      >{{ scene.dragOn ? 'ON' : 'OFF' }}</button>
       <button
         class="dbg-toggle off"
         title="Clear all drag offsets"
