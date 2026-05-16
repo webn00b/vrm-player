@@ -101,7 +101,9 @@ test('foot lock: engages when velocity low AND near ground, then holds target', 
   const state = newState();
   state.prevTarget.set(0.001, 0, 0);  // pretend last target was very close
 
-  // Frame 1: target near ground, very small velocity → should LOCK.
+  // Frames 1-2: target near ground, very small velocity → lock candidate,
+  // but not locked yet. Requiring a few stable frames avoids foot glue from a
+  // single coincidental low-velocity jitter frame.
   const r1 = solveLegTarget(baseInput({
     hipWorld: new THREE.Vector3(0, 1, 0),
     legScale: 1,
@@ -109,9 +111,24 @@ test('foot lock: engages when velocity low AND near ground, then holds target', 
     footLockEnabled: true,
     state,
   }) as any);
-  assert.equal(r1.locked, true, 'should lock on slow + ground contact');
+  assert.equal(r1.locked, false, 'first stable frame should not lock yet');
+  solveLegTarget(baseInput({
+    hipWorld: new THREE.Vector3(0, 1, 0),
+    legScale: 1,
+    ankle: { x: 0, y: 1, z: 0 },
+    footLockEnabled: true,
+    state,
+  }) as any);
+  const r3 = solveLegTarget(baseInput({
+    hipWorld: new THREE.Vector3(0, 1, 0),
+    legScale: 1,
+    ankle: { x: 0, y: 1, z: 0 },
+    footLockEnabled: true,
+    state,
+  }) as any);
+  assert.equal(r3.locked, true, 'should lock after repeated slow + ground contact');
 
-  // Frame 2: re-call with ankle slightly different — locked target should NOT move.
+  // Next frame: re-call with ankle slightly different — locked target should NOT move.
   const r2 = solveLegTarget(baseInput({
     hipWorld: new THREE.Vector3(0, 1, 0),
     legScale: 1,
@@ -120,7 +137,7 @@ test('foot lock: engages when velocity low AND near ground, then holds target', 
     state,
   }) as any);
   assert.equal(r2.locked, true, 'still locked');
-  assert.ok(r1.target.distanceTo(r2.target) < 1e-6, 'locked target stays put');
+  assert.ok(r3.target.distanceTo(r2.target) < 1e-6, 'locked target stays put');
 });
 
 test('foot lock: releases when target lifts off ground above footLiftThreshold', () => {

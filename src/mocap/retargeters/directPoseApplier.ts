@@ -90,7 +90,8 @@ export class DirectPoseApplier {
   // We mirror this with separate lerp values: low for spine (stable), high for limbs.
   private _spineLerp    = 0.25;  // hips + spine/chest twist — heavily smoothed
   private _bodyLerp     = 0.7;   // arms + legs IK
-  private _handLerp     = 0.7;
+  private _handLerp     = 0.55;
+  private _headLerp     = 0.28;
   private _handTrackingPriorityEnabled = true;
   private _mirrorX      = true;  // mirror landmarks left↔right (selfie view)
   private _depthScale   = 1;     // Default to full 3D depth; the panel can still reduce it if Z gets noisy
@@ -118,6 +119,9 @@ export class DirectPoseApplier {
   private _hipPerfBaseline:     THREE.Vector3 | null = null;
   private _hipAvatarBaseline:   THREE.Vector3 = new THREE.Vector3();
   private _torsoForwardBaseline: number | null = null;
+  private _headYawBaseline: number | null = null;
+  private _headPitchBaseline: number | null = null;
+  private _headRollBaseline: number | null = null;
 
   // Scratch allocations — reused each frame to avoid GC pressure
   private _v1 = new THREE.Vector3();
@@ -129,6 +133,8 @@ export class DirectPoseApplier {
   private _q1 = new THREE.Quaternion();
   private _q2 = new THREE.Quaternion();
   private _m2 = new THREE.Matrix4();
+  private _headRestLocal = new THREE.Quaternion();
+  private _neckRestLocal = new THREE.Quaternion();
   // IK debug targets — updated each frame, read by MocapDebugViz
   readonly debugTargets: MocapDebugTargets = createMocapDebugTargets();
 
@@ -185,6 +191,8 @@ export class DirectPoseApplier {
   private _footLockedPos:   Record<'left' | 'right', THREE.Vector3>  = {
     left: new THREE.Vector3(), right: new THREE.Vector3(),
   };
+  private _footStableFrames:   Record<'left' | 'right', number> = { left: 0, right: 0 };
+  private _footAirborneFrames: Record<'left' | 'right', number> = { left: 0, right: 0 };
   private _prevAnkleTarget: Record<'left' | 'right', THREE.Vector3>  = {
     left:  new THREE.Vector3(Infinity, Infinity, Infinity),
     right: new THREE.Vector3(Infinity, Infinity, Infinity),
@@ -192,6 +200,11 @@ export class DirectPoseApplier {
   private _footVelocityLockThreshold   = 0.007;  // m/frame — below this = lock candidate
   private _footVelocityUnlockThreshold = 0.018;  // m/frame — above this = force unlock
   private _footLiftThreshold           = 0.05;   // m above groundY — foot is being lifted
+
+  // Hip/root position follows the performer, but less eagerly than rotations.
+  // This preserves weight shift while reducing the "floating pelvis" look from
+  // MediaPipe hip-centre jitter.
+  private _hipPositionLerp = 0.12;
 
   // Extra scratch quaternion for spine lateral bend (keeps _q1/_q2 semantics unchanged).
   private _q3 = new THREE.Quaternion();
@@ -236,6 +249,7 @@ export class DirectPoseApplier {
     this._buildCache();
     this._computeRestAxes();
     this._captureHipsBaseline();
+    this._captureHeadBaseline();
     this._captureGroundY();
   }
 
@@ -265,6 +279,11 @@ export class DirectPoseApplier {
       dir.y = 0;
       if (dir.lengthSq() > 1e-6) this._avatarShoulderRestLocal.copy(dir.normalize());
     }
+  }
+
+  private _captureHeadBaseline(): void {
+    this._headRestLocal.copy(this.nodeCache.get('head')?.quaternion ?? new THREE.Quaternion());
+    this._neckRestLocal.copy(this.nodeCache.get('neck')?.quaternion ?? new THREE.Quaternion());
   }
 
   /** The avatar's hips world quaternion at rest (before any mocap). */
@@ -309,6 +328,9 @@ export class DirectPoseApplier {
   resetHipBaseline(): void {
     this._hipPerfBaseline = null;
     this._torsoForwardBaseline = null;
+    this._headYawBaseline = null;
+    this._headPitchBaseline = null;
+    this._headRollBaseline = null;
   }
 
   /** Release any locked feet and reset velocity history. Call on recalibrate / stop. */
@@ -317,6 +339,8 @@ export class DirectPoseApplier {
     this._footLocked.right = false;
     this._prevAnkleTarget.left.set(Infinity, Infinity, Infinity);
     this._prevAnkleTarget.right.set(Infinity, Infinity, Infinity);
+    this._footStableFrames.left = this._footStableFrames.right = 0;
+    this._footAirborneFrames.left = this._footAirborneFrames.right = 0;
   }
 
   /** Enable/disable foot locking. Disabling also releases any active lock. */
@@ -338,6 +362,9 @@ export class DirectPoseApplier {
     this._spineLerp = enabled ? 1 : 0.25;
     this._bodyLerp  = enabled ? 1 : 0.7;
     this._handLerp  = enabled ? 1 : 0.7;
+    this._headLerp  = enabled ? 1 : 0.28;
+    this._hipPositionLerp = enabled ? 1 : 0.12;
+    if (enabled) this.resetFootLock();
   }
 
   /** When enabled, wrist + fingers from hand tracking are treated as a top layer. */
@@ -382,6 +409,7 @@ export class DirectPoseApplier {
     // Torso first — its rotations propagate to limbs via parent world matrices.
     this._applyHips(frame);
     this._applySpine(frame);
+    this._applyHead(frame);
     this._applyShoulders(frame);
 
     // Arms + legs: two-bone IK (hand/ankle target scaled to avatar space)
@@ -715,8 +743,8 @@ export class DirectPoseApplier {
         scale,
       });
 
-      if (this._spineLerp >= 1) hipsNode.position.copy(positionTarget);
-      else                      hipsNode.position.lerp(positionTarget, this._spineLerp);
+      if (this._hipPositionLerp >= 1) hipsNode.position.copy(positionTarget);
+      else                            hipsNode.position.lerp(positionTarget, this._hipPositionLerp);
       hipsNode.updateWorldMatrix(false, true);
     }
   }
@@ -727,6 +755,91 @@ export class DirectPoseApplier {
    * current hips world-quaternion-inverse so the twist is independent
    * of the VRM's default facing baseline (e.g. 180° around Y).
    */
+  private _applyHead(frame: PoseFrame): void {
+    const headNode = this.nodeCache.get('head');
+    const neckNode = this.nodeCache.get('neck');
+    if (!headNode && !neckNode) return;
+
+    const lms = frame.worldLandmarks;
+    const nose = lms[LM.NOSE];
+    const leftShoulder = lms[LM.LEFT_SHOULDER];
+    const rightShoulder = lms[LM.RIGHT_SHOULDER];
+    if (
+      !nose || !leftShoulder || !rightShoulder ||
+      !this._visible(nose) || !this._visible(leftShoulder) || !this._visible(rightShoulder)
+    ) return;
+
+    const shoulderSpan = Math.max(0.05, Math.hypot(
+      leftShoulder.x - rightShoulder.x,
+      leftShoulder.y - rightShoulder.y,
+      leftShoulder.z - rightShoulder.z,
+    ));
+    const shoulderMidX = (leftShoulder.x + rightShoulder.x) * 0.5;
+    const shoulderMidY = (leftShoulder.y + rightShoulder.y) * 0.5;
+
+    const leftEar = lms[LM.LEFT_EAR];
+    const rightEar = lms[LM.RIGHT_EAR];
+    const earsVisible =
+      !!leftEar && !!rightEar && this._visible(leftEar) && this._visible(rightEar);
+    const earSpan = earsVisible
+      ? Math.max(0.03, Math.hypot(
+          leftEar!.x - rightEar!.x,
+          leftEar!.y - rightEar!.y,
+          leftEar!.z - rightEar!.z,
+        ))
+      : shoulderSpan * 0.45;
+    const faceMidX = earsVisible ? (leftEar!.x + rightEar!.x) * 0.5 : shoulderMidX;
+
+    const yawRaw = (nose.x - faceMidX) / earSpan;
+    const pitchRaw = (nose.y - shoulderMidY) / shoulderSpan;
+    const rollRaw = earsVisible ? (leftEar!.y - rightEar!.y) / earSpan : 0;
+    if (this._headYawBaseline == null) {
+      this._headYawBaseline = yawRaw;
+      this._headPitchBaseline = pitchRaw;
+      this._headRollBaseline = rollRaw;
+    }
+
+    const mirror = this._mirrorX ? -1 : 1;
+    const yaw = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(
+      (yawRaw - this._headYawBaseline) * mirror * 35,
+      -22,
+      22,
+    ));
+    const pitch = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(
+      -(pitchRaw - (this._headPitchBaseline ?? pitchRaw)) * 28,
+      -14,
+      14,
+    ));
+    const roll = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(
+      (rollRaw - (this._headRollBaseline ?? rollRaw)) * mirror * 24,
+      -12,
+      12,
+    ));
+
+    const applyLocal = (
+      node: THREE.Object3D | undefined,
+      rest: THREE.Quaternion,
+      pitchWeight: number,
+      yawWeight: number,
+      rollWeight: number,
+    ): void => {
+      if (!node) return;
+      this._q1.setFromEuler(new THREE.Euler(
+        pitch * pitchWeight,
+        yaw * yawWeight,
+        roll * rollWeight,
+        'XYZ',
+      ));
+      this._q1.premultiply(rest).normalize();
+      if (this._headLerp >= 1) node.quaternion.copy(this._q1);
+      else                     node.quaternion.slerp(this._q1, this._headLerp);
+      node.updateWorldMatrix(false, true);
+    };
+
+    applyLocal(neckNode, this._neckRestLocal, 0.3, 0.3, 0.2);
+    applyLocal(headNode, this._headRestLocal, 0.7, 0.7, 0.5);
+  }
+
   private _applySpine(frame: PoseFrame): void {
     const spineNode = this.nodeCache.get('spine');
     const chestNode = this.nodeCache.get('chest') ?? this.nodeCache.get('upperChest');
@@ -1137,10 +1250,14 @@ export class DirectPoseApplier {
         lockedPosition: this._footLockedPos[side],
         prevTarget: this._prevAnkleTarget[side],
         smoothedPole: this._polesLeg[side],
+        stableFrames: this._footStableFrames[side],
+        airborneFrames: this._footAirborneFrames[side],
       },
     });
     const target = legSolve.target;
     this._footLocked[side] = legSolve.locked;
+    this._footStableFrames[side] = legSolve.stableFrames;
+    this._footAirborneFrames[side] = legSolve.airborneFrames;
 
     getAnkleTarget(this.debugTargets, side).copy(target);
     this.debugTargets[side === 'left' ? 'leftFootLocked'   : 'rightFootLocked'] = this._footLocked[side];

@@ -33,6 +33,21 @@ Recommended:
 GVHMR is CUDA-oriented. It is not a good fit for Apple Silicon/MPS without
 patching.
 
+Native Windows Python is also fragile because upstream GVHMR pins a Linux
+`pytorch3d` wheel. If `pip`/`conda` cannot install `pytorch3d` on Windows,
+use WSL2 Ubuntu with NVIDIA passthrough. This has been verified with:
+
+```powershell
+wsl.exe --install -d Ubuntu --name Ubuntu-GVHMR --no-launch
+wsl.exe -d Ubuntu-GVHMR -- nvidia-smi
+```
+
+Inside WSL, the Windows GVHMR checkout is available at:
+
+```text
+/mnt/c/ai/gvhmr
+```
+
 ## Folder Layout
 
 Use a short path without spaces:
@@ -48,6 +63,7 @@ On the Mac/source machine, copy these files to Windows:
 ```text
 /Users/fedor/Downloads/ted1.mp4
 /Users/fedor/projects/personal/vrm-player/tools/offline_mocap/convert_wham_gvhmr.py
+/Users/fedor/projects/personal/vrm-player/tools/offline_mocap/export_gvhmr_joints.py
 ```
 
 Or clone/pull the `codex/offline-wham-gvhmr-mvp` branch on Windows.
@@ -70,6 +86,16 @@ nvidia-smi
 
 You should see your GPU and driver version. If `nvidia-smi` is missing, fix the
 driver before continuing.
+
+Check shell tools:
+
+```powershell
+git --version
+conda --version
+```
+
+If `conda` is missing, install Miniconda/Mambaforge and open a fresh
+PowerShell/Anaconda Prompt before continuing.
 
 ## 2. Clone GVHMR
 
@@ -126,22 +152,73 @@ Then install GVHMR requirements. Use upstream instructions first. Common form:
 
 ```powershell
 pip install -r requirements.txt
+pip install -e .
 ```
 
 If the upstream docs mention `pytorch3d`, install the exact wheel they specify.
 This is the dependency most likely to break if CUDA/Python/Torch versions drift.
 
-## 4. Download GVHMR Checkpoints
+### WSL2 Ubuntu Setup
 
-Follow the official checkpoint instructions from GVHMR.
+If using `Ubuntu-GVHMR`, install Miniconda and build tools inside WSL:
 
-Usually this creates a folder under the GVHMR repo such as:
-
-```text
-C:\ai\gvhmr\inputs\checkpoints
+```bash
+curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o /tmp/miniconda.sh
+bash /tmp/miniconda.sh -b -p /opt/miniconda
+apt-get update
+apt-get install -y build-essential
 ```
 
-or similar. The exact expected path is defined by GVHMR's config/demo code.
+Then create the GVHMR environment from the Windows checkout:
+
+```bash
+cd /mnt/c/ai/gvhmr
+/opt/miniconda/bin/conda create -n gvhmr python=3.10 -y
+/opt/miniconda/bin/conda run -n gvhmr python -m pip install chumpy==0.70 --no-build-isolation
+/opt/miniconda/bin/conda run -n gvhmr python -m pip install -r requirements.txt
+/opt/miniconda/bin/conda run -n gvhmr python -m pip install -e .
+```
+
+Verify:
+
+```bash
+/opt/miniconda/bin/conda run -n gvhmr python tools/demo/demo.py --help
+```
+
+## 4. Download GVHMR Checkpoints
+
+Follow the official checkpoint instructions from GVHMR. As of the current
+GVHMR demo config, the main model checkpoint is expected here:
+
+```text
+C:\ai\gvhmr\inputs\checkpoints\gvhmr\gvhmr_siga24_release.ckpt
+```
+
+The downloaded checkpoint bundle also contains dependencies used by the demo,
+typically under:
+
+```text
+C:\ai\gvhmr\inputs\checkpoints\hmr2
+C:\ai\gvhmr\inputs\checkpoints\vitpose
+C:\ai\gvhmr\inputs\checkpoints\yolo
+```
+
+The exact expected path is defined by GVHMR's config/demo code, so prefer the
+upstream `docs/INSTALL.md` if it changes.
+
+From WSL, the public Google Drive checkpoints can be downloaded with `gdown`:
+
+```bash
+cd /mnt/c/ai/gvhmr
+/opt/miniconda/bin/conda run -n gvhmr python -m pip install gdown
+mkdir -p inputs/checkpoints
+/opt/miniconda/bin/conda run -n gvhmr gdown --folder \
+  "https://drive.google.com/drive/folders/1eebJ13FUEXrKBawHpJroW0sNSxLjh9xD?usp=drive_link" \
+  -O inputs/checkpoints
+```
+
+Google Drive may rate-limit individual files. In that case, download the
+missing files in a browser and place them in the paths above.
 
 After downloading, search for checkpoint files:
 
@@ -161,12 +238,12 @@ You usually need to register and download from:
 - SMPL: https://smpl.is.tue.mpg.de/
 - SMPL-X: https://smpl-x.is.tue.mpg.de/
 
-After download, place files where GVHMR expects them. The exact path may vary,
-but typical projects expect something like:
+After download, place files where GVHMR expects them. As of the current
+upstream install doc, that means:
 
 ```text
-C:\ai\gvhmr\inputs\body_models\smpl
-C:\ai\gvhmr\inputs\body_models\smplx
+C:\ai\gvhmr\inputs\checkpoints\body_models\smpl
+C:\ai\gvhmr\inputs\checkpoints\body_models\smplx
 ```
 
 Expected files often include names like:
@@ -197,7 +274,8 @@ cd C:\ai\gvhmr
 conda activate gvhmr
 ```
 
-Run the demo/inference. The upstream command may look like:
+Run the demo/inference. Use `-s` only if the camera is static; it skips visual
+odometry. For handheld or moving-camera video, omit `-s` first:
 
 ```powershell
 python tools\demo\demo.py --video C:\ai\data\ted1.mp4 -s
@@ -205,7 +283,14 @@ python tools\demo\demo.py --video C:\ai\data\ted1.mp4 -s
 
 If the command differs, use the command from GVHMR's current README/docs.
 
-After completion, find result files:
+After completion, the main result file should be:
+
+```text
+C:\ai\gvhmr\outputs\demo\ted1\hmr4d_results.pt
+```
+
+You should also see rendered preview videos such as `2_global.mp4` in the same
+output folder. If the expected file is not there, search by run time:
 
 ```powershell
 dir C:\ai\gvhmr -Recurse -Include *.pt,*.pth,*.pkl,*.npz,*.json
@@ -213,7 +298,7 @@ dir C:\ai\gvhmr -Recurse -Include *.pt,*.pth,*.pkl,*.npz,*.json
 
 Look for files created around the run time in output/demo/result folders.
 
-## 7. Convert GVHMR Result To vrm-player JSON
+## 7. Export GVHMR Joints
 
 Clone or copy `vrm-player` on Windows:
 
@@ -227,27 +312,56 @@ git switch codex/offline-wham-gvhmr-mvp
 If the branch is only local on the Mac, copy this script manually:
 
 ```text
+tools\offline_mocap\export_gvhmr_joints.py
 tools\offline_mocap\convert_wham_gvhmr.py
 ```
 
-Run the converter with the GVHMR result file:
+GVHMR's `hmr4d_results.pt` stores SMPL/SMPLX parameters. Export dense SMPL-24
+joints first, from inside the GVHMR environment:
 
 ```powershell
+cd C:\ai\gvhmr
 conda activate gvhmr
-python tools\offline_mocap\convert_wham_gvhmr.py C:\ai\gvhmr\<path-to-result-file>.pt --source gvhmr --fps 30 -o C:\ai\data\ted1.gvhmr.json
+python C:\ai\vrm-player\tools\offline_mocap\export_gvhmr_joints.py `
+  C:\ai\gvhmr\outputs\demo\ted1\hmr4d_results.pt `
+  -o C:\ai\data\ted1.gvhmr-joints.pt `
+  --fps 30
+```
+
+If the camera was not static and global motion looks odd, rerun the original
+GVHMR demo without `-s` before exporting.
+
+## 8. Convert GVHMR Joints To vrm-player JSON
+
+Run the converter with the exported joints file:
+
+```powershell
+cd C:\ai\vrm-player
+conda activate gvhmr
+python tools\offline_mocap\convert_wham_gvhmr.py `
+  C:\ai\data\ted1.gvhmr-joints.pt `
+  --source gvhmr `
+  --fps 30 `
+  -o C:\ai\data\ted1.gvhmr.json
 ```
 
 If it says it could not find a `[frames, joints, 3]` array, inspect available
 keys:
 
 ```powershell
-python tools\offline_mocap\convert_wham_gvhmr.py C:\ai\gvhmr\<result>.pt --source gvhmr
+python tools\offline_mocap\convert_wham_gvhmr.py `
+  C:\ai\data\ted1.gvhmr-joints.pt `
+  --source gvhmr
 ```
 
 If needed, rerun with a dot-path:
 
 ```powershell
-python tools\offline_mocap\convert_wham_gvhmr.py C:\ai\gvhmr\<result>.pt --source gvhmr --key results.smpl_joints -o C:\ai\data\ted1.gvhmr.json
+python tools\offline_mocap\convert_wham_gvhmr.py `
+  C:\ai\data\ted1.gvhmr-joints.pt `
+  --source gvhmr `
+  --key joints3d `
+  -o C:\ai\data\ted1.gvhmr.json
 ```
 
 Common key candidates:
@@ -263,7 +377,7 @@ keypoints3d
 keypoints_3d
 ```
 
-## 8. Import Into vrm-player
+## 9. Import Into vrm-player
 
 Run the app:
 
@@ -286,7 +400,7 @@ Capture
 
 The clip should enter the normal animation queue and start playing.
 
-## 9. Quality Checks
+## 10. Quality Checks
 
 Compare against the current MediaPipe BVH:
 
@@ -349,13 +463,13 @@ config expects.
 
 ### Converter cannot find joints
 
-Run with a specific `--key`. If unsure, inspect the result file structure in
-Python:
+Make sure you are converting `ted1.gvhmr-joints.pt`, not GVHMR's raw
+`hmr4d_results.pt`. If unsure, inspect the file structure in Python:
 
 ```powershell
 python - << "PY"
 import torch
-p = r"C:\ai\gvhmr\<result>.pt"
+p = r"C:\ai\data\ted1.gvhmr-joints.pt"
 d = torch.load(p, map_location="cpu")
 def walk(x, prefix=""):
     if isinstance(x, dict):

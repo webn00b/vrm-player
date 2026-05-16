@@ -1,5 +1,7 @@
 // MediaPipe BlazePose landmark indices used across the direct pose solver.
 export const LM = {
+  NOSE: 0,
+  LEFT_EAR: 7, RIGHT_EAR: 8,
   LEFT_SHOULDER: 11, RIGHT_SHOULDER: 12,
   LEFT_ELBOW: 13, RIGHT_ELBOW: 14,
   LEFT_WRIST: 15, RIGHT_WRIST: 16,

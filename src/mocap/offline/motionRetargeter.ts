@@ -7,6 +7,8 @@ import { clampClip, validateClip } from '../../validation/clipValidator';
 
 export interface OfflineRetargetOptions {
   clampOutOfRange?: boolean;
+  positionSmoothingAlpha?: number;
+  rootMotionMode?: 'preserve' | 'horizontal' | 'locked';
   rootMotionScale?: number;
 }
 
@@ -242,7 +244,9 @@ export function retargetCanonicalMotionToVrm(
   sourceClip: CanonicalMotionClip,
   opts: OfflineRetargetOptions = {},
 ): THREE.AnimationClip {
-  const clip = cleanupCanonicalMotionClip(sourceClip);
+  const clip = cleanupCanonicalMotionClip(sourceClip, {
+    positionSmoothingAlpha: opts.positionSmoothingAlpha,
+  });
   const frames = clip.frames;
   const times = Float32Array.from(frames.map((frame) => frame.time));
   const tracks: THREE.KeyframeTrack[] = [];
@@ -260,6 +264,11 @@ export function retargetCanonicalMotionToVrm(
     const rootPos = frameRootPosition(frame);
     if (rootPos) {
       _v1.subVectors(rootPos, firstRoot).multiplyScalar(rootScale).add(restHips);
+      if (opts.rootMotionMode === 'horizontal') {
+        _v1.y = restHips.y;
+      } else if (opts.rootMotionMode === 'locked') {
+        _v1.copy(restHips);
+      }
       hipsPosValues.push(_v1.x, _v1.y, _v1.z);
     } else {
       hipsPosValues.push(restHips.x, restHips.y, restHips.z);

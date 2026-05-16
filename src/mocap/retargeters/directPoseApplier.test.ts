@@ -167,6 +167,24 @@ test('mirror-symmetric input → similar magnitude on both sides', () => {
 
 // ── Symmetry-fallback toggle wiring ──────────────────────────────────────
 
+test('head polish: nose offset after baseline rotates head softly', () => {
+  const vrm = buildMockVRM();
+  const cal = buildCalibratedCalibration(vrm);
+  const applier = new DirectPoseApplier(vrm as any, cal);
+
+  const baseline = buildMockPoseFrame();
+  applier.apply(baseline as any);
+
+  const turned = buildMockPoseFrame();
+  turned.worldLandmarks[0] = { ...turned.worldLandmarks[0], x: 0.12 };
+  for (let i = 0; i < 12; i++) applier.apply(turned as any);
+
+  const head = vrm.bones.get('head')!.quaternion;
+  const angleFromIdentity = 2 * Math.acos(Math.min(1, Math.abs(head.w)));
+  assert.ok(angleFromIdentity > 0.02, `head should rotate softly; angle=${angleFromIdentity.toFixed(3)} rad`);
+  assert.ok(angleFromIdentity < 0.5, `head polish should stay conservative; angle=${angleFromIdentity.toFixed(3)} rad`);
+});
+
 test('symmetryFallback setter/getter round-trip', () => {
   const vrm = buildMockVRM();
   const applier = new DirectPoseApplier(vrm as any);

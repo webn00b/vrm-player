@@ -6,7 +6,7 @@ import { loadVrmaFromFile } from './animationLoaders/vrmaFile';
 import { loadFbxFromFile } from './animationLoaders/fbxFile';
 import type { ManualFbxBoneMapping } from './animationLoaders/fbxBoneMapping';
 import { parseCanonicalMotionJson } from './mocap/offline/canonicalMotion';
-import { retargetCanonicalMotionToVrm } from './mocap/offline/motionRetargeter';
+import { retargetCanonicalMotionToVrm, type OfflineRetargetOptions } from './mocap/offline/motionRetargeter';
 
 export type ImportFormat = 'bvh' | 'vrma' | 'fbx' | 'motion-json';
 
@@ -69,7 +69,12 @@ export async function loadAnimationFile(
 
   if (fmt === 'motion-json') {
     const motion = parseCanonicalMotionJson(await file.text(), baseName);
-    const clip = retargetCanonicalMotionToVrm(vrm, motion, { clampOutOfRange: true });
+    const offlineOpts: OfflineRetargetOptions = { clampOutOfRange: true };
+    if (motion.source === 'gvhmr' || motion.source === 'smpl' || motion.coordinateSpace === 'smpl') {
+      offlineOpts.positionSmoothingAlpha = 0.45;
+      offlineOpts.rootMotionMode = 'locked';
+    }
+    const clip = retargetCanonicalMotionToVrm(vrm, motion, offlineOpts);
     return { name: motion.name || baseName, clip, parsedBvh: null, format: 'motion-json' };
   }
 

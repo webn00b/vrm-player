@@ -71,3 +71,27 @@ test('offline retarget builds playable AnimationClip tracks', () => {
   }
 });
 
+test('offline retarget can smooth noisy SMPL joints and lock root motion', () => {
+  const vrm = buildMockVRM();
+  const first = smplRestFrame();
+  const noisy = smplRestFrame();
+  noisy[0] = [0.5, 1.5, -0.25];
+  noisy[20] = [1.0, 1.9, 0.4];
+
+  const motion = parseCanonicalMotionJson(JSON.stringify({
+    name: 'smooth-lock',
+    source: 'gvhmr',
+    fps: 30,
+    joints3d: [first, noisy],
+  }), 'fallback');
+
+  const clip = retargetCanonicalMotionToVrm(vrm, motion, {
+    clampOutOfRange: true,
+    positionSmoothingAlpha: 0.5,
+    rootMotionMode: 'locked',
+  });
+  const hips = clip.tracks.find((track) => track.name === 'hips.position');
+  assert.ok(hips, 'hips position track exists');
+  assert.deepEqual(Array.from(hips.values as ArrayLike<number>), [0, 1, 0, 0, 1, 0]);
+});
+

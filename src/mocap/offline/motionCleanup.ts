@@ -4,6 +4,10 @@ import type { CanonicalMotionClip, CanonicalJointName, Vec3Tuple, QuatTuple } fr
 const _prev = new THREE.Quaternion();
 const _cur = new THREE.Quaternion();
 
+export interface MotionCleanupOptions {
+  positionSmoothingAlpha?: number;
+}
+
 function cloneVec(v?: Vec3Tuple): Vec3Tuple | undefined {
   return v ? [v[0], v[1], v[2]] : undefined;
 }
@@ -78,7 +82,50 @@ export function normalizeRootToFirstFrame(clip: CanonicalMotionClip): CanonicalM
   return out;
 }
 
-export function cleanupCanonicalMotionClip(clip: CanonicalMotionClip): CanonicalMotionClip {
-  return normalizeQuaternionContinuity(normalizeRootToFirstFrame(clip));
+export function smoothJointPositions(
+  clip: CanonicalMotionClip,
+  alpha = 1,
+): CanonicalMotionClip {
+  if (alpha >= 1) return cloneMotionClip(clip);
+  const t = THREE.MathUtils.clamp(alpha, 0.05, 1);
+  const out = cloneMotionClip(clip);
+  const lastByJoint = new Map<string, Vec3Tuple>();
+  let lastRoot: Vec3Tuple | undefined;
+
+  for (const frame of out.frames) {
+    if (frame.root?.position) {
+      if (lastRoot) {
+        frame.root.position = [
+          THREE.MathUtils.lerp(lastRoot[0], frame.root.position[0], t),
+          THREE.MathUtils.lerp(lastRoot[1], frame.root.position[1], t),
+          THREE.MathUtils.lerp(lastRoot[2], frame.root.position[2], t),
+        ];
+      }
+      lastRoot = [...frame.root.position];
+    }
+
+    for (const [jointName, pose] of Object.entries(frame.joints)) {
+      if (!pose?.position) continue;
+      const last = lastByJoint.get(jointName);
+      if (last) {
+        pose.position = [
+          THREE.MathUtils.lerp(last[0], pose.position[0], t),
+          THREE.MathUtils.lerp(last[1], pose.position[1], t),
+          THREE.MathUtils.lerp(last[2], pose.position[2], t),
+        ];
+      }
+      lastByJoint.set(jointName, [...pose.position]);
+    }
+  }
+
+  return out;
+}
+
+export function cleanupCanonicalMotionClip(
+  clip: CanonicalMotionClip,
+  opts: MotionCleanupOptions = {},
+): CanonicalMotionClip {
+  const smoothed = smoothJointPositions(clip, opts.positionSmoothingAlpha ?? 1);
+  return normalizeQuaternionContinuity(normalizeRootToFirstFrame(smoothed));
 }
 

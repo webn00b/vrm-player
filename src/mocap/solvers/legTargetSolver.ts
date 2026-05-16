@@ -6,6 +6,8 @@ interface LegLockState {
   lockedPosition: THREE.Vector3;
   prevTarget: THREE.Vector3;
   smoothedPole: THREE.Vector3;
+  stableFrames?: number;
+  airborneFrames?: number;
 }
 
 export interface LegTargetSolverInput {
@@ -32,6 +34,8 @@ export interface LegTargetSolverResult {
   target: THREE.Vector3;
   poleDirection: THREE.Vector3;
   locked: boolean;
+  stableFrames: number;
+  airborneFrames: number;
 }
 
 const _v1 = new THREE.Vector3();
@@ -68,19 +72,27 @@ export function solveLegTarget(input: LegTargetSolverInput): LegTargetSolverResu
   state.prevTarget.copy(target);
 
   if (footLockEnabled) {
+    const nearGround = target.y <= groundY + footLiftThreshold * 0.4;
+    const lowVelocity = velocity < footVelocityLockThreshold;
+    const highVelocity = velocity > footVelocityUnlockThreshold;
+    if (nearGround && lowVelocity) state.stableFrames = (state.stableFrames ?? 0) + 1;
+    else state.stableFrames = 0;
+    if (target.y > groundY + footLiftThreshold) state.airborneFrames = (state.airborneFrames ?? 0) + 1;
+    else state.airborneFrames = 0;
+
     if (state.locked) {
       const shouldUnlock =
-        velocity > footVelocityUnlockThreshold ||
-        target.y > groundY + footLiftThreshold;
+        highVelocity ||
+        (state.airborneFrames ?? 0) >= 2;
       if (!shouldUnlock) {
         target.copy(state.lockedPosition);
       } else {
         state.locked = false;
+        state.stableFrames = 0;
       }
     }
     if (!state.locked) {
-      const nearGround = target.y <= groundY + footLiftThreshold * 0.4;
-      if (velocity < footVelocityLockThreshold && nearGround) {
+      if ((state.stableFrames ?? 0) >= 3) {
         state.locked = true;
         state.lockedPosition.copy(target);
       }
@@ -96,5 +108,7 @@ export function solveLegTarget(input: LegTargetSolverInput): LegTargetSolverResu
     target: target.clone(),
     poleDirection: state.smoothedPole.clone(),
     locked: state.locked,
+    stableFrames: state.stableFrames ?? 0,
+    airborneFrames: state.airborneFrames ?? 0,
   };
 }
