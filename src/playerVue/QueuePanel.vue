@@ -595,8 +595,9 @@ const emptyText = computed(() =>
   font-size: 11px;
   margin-bottom: 8px;
   padding: 8px 10px;
-  background: rgba(110, 168, 255, 0.06);
-  border-radius: 3px;
+  background: rgba(30, 188, 196, 0.07);
+  border: 1px solid rgba(123, 225, 232, 0.12);
+  border-radius: 6px;
 }
 
 .queue-tools {
@@ -626,8 +627,8 @@ const emptyText = computed(() =>
 
 :deep(.queue-loop-btn.p-button:hover),
 :deep(.queue-loop-btn.p-button.active) {
-  color: #bfdbfe;
-  background: rgba(59, 91, 219, 0.18);
+  color: #b9fbff;
+  background: rgba(30, 188, 196, 0.18);
 }
 
 .queue-summary {
@@ -647,13 +648,13 @@ const emptyText = computed(() =>
   padding: 6px 10px;
   margin: 4px 0;
   color: #fff;
-  background: #3b5bdb;
-  border-radius: 3px;
+  background: rgba(30, 188, 196, 0.72);
+  border-radius: 6px;
   text-decoration: none;
   font-weight: 600;
   font-size: 11px;
 }
-.converter-link:hover { background: #4c6ce8; }
+.converter-link:hover { background: #1ebcc4; }
 .exports-tools code {
   background: rgba(255, 255, 255, 0.07);
   padding: 0 4px;
@@ -672,17 +673,19 @@ const emptyText = computed(() =>
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 6px;
-  border-radius: 3px;
+  min-height: 30px;
+  padding: 5px 7px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
   user-select: none;
-  transition: background 100ms;
+  border: 1px solid transparent;
+  transition: background 100ms, border-color 100ms;
 }
 .q-item:hover { background: rgba(255, 255, 255, 0.07); }
 .q-item.active {
-  background: rgba(110, 168, 255, 0.18);
-  outline: 1px solid rgba(110, 168, 255, 0.4);
+  background: rgba(30, 188, 196, 0.16);
+  border-color: rgba(123, 225, 232, 0.32);
 }
 .q-item.dragging   { opacity: 0.4; }
 .q-item.drop-before { box-shadow: 0 -2px 0 #3b5bdb; }
@@ -751,9 +754,9 @@ const emptyText = computed(() =>
   letter-spacing: 0.05em;
 }
 .q-action.export-loading {
-  color: #bfdbfe;
-  border-color: rgba(147, 197, 253, 0.42);
-  background: rgba(59, 91, 219, 0.14);
+  color: #b9fbff;
+  border-color: rgba(123, 225, 232, 0.42);
+  background: rgba(30, 188, 196, 0.14);
 }
 .q-action.export-done {
   color: #86efac;
@@ -785,7 +788,7 @@ const emptyText = computed(() =>
 .q-duplicate:hover,
 .q-retarget:hover {
   color: #fff;
-  background: rgba(59, 91, 219, 0.24);
+  background: rgba(30, 188, 196, 0.2);
   border-color: transparent;
 }
 
@@ -807,9 +810,10 @@ const emptyText = computed(() =>
   padding: 20px 12px;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.9);
-  border: 1.5px dashed rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  border: 1.5px dashed rgba(169, 210, 215, 0.16);
+  border-radius: 6px;
   margin-top: 4px;
+  background: rgba(255, 255, 255, 0.025);
 }
 .queue-empty svg,
 .queue-empty span {
@@ -817,9 +821,9 @@ const emptyText = computed(() =>
 }
 .queue-empty.drag-over {
   color: #fff;
-  background: rgba(59, 91, 219, 0.16);
-  border-color: rgba(147, 197, 253, 0.72);
-  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.18);
+  background: rgba(30, 188, 196, 0.14);
+  border-color: rgba(123, 225, 232, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(123, 225, 232, 0.18);
 }
 
 .queue-empty.drag-over svg,

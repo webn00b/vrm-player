@@ -576,7 +576,7 @@ async function main() {
       notify({
         severity: 'warn',
         summary: 'Unsupported animation file',
-        detail: `Use .bvh, .vrma, or .fbx. Skipped: ${names}${suffix}`,
+        detail: `Use .bvh, .vrma, .fbx, or motion .json. Skipped: ${names}${suffix}`,
         life: 5200,
       });
     }

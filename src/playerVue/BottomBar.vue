@@ -118,14 +118,21 @@ onUnmounted(() => clearInterval(timer));
 
 <style scoped>
 :deep(.tp-btn.p-button) {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   padding: 0;
-  color: #fff;
+  color: rgba(245, 250, 252, 0.72);
 }
 
 :deep(.tp-play.p-button) {
-  background: rgba(59, 91, 219, 0.18);
-  color: #93b4ff;
+  width: 34px;
+  height: 34px;
+  background: rgba(30, 188, 196, 0.2);
+  color: #b9fbff;
+}
+
+:deep(.tp-btn.p-button:hover) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 </style>

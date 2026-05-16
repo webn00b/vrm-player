@@ -207,4 +207,25 @@ onUnmounted(() => clearInterval(timer));
   border-color: rgba(16, 185, 129, 0.28);
   color: #9ff3d0;
 }
+
+@media (max-width: 520px) {
+  .start-panel {
+    width: min(360px, calc(100vw - 24px));
+    margin-top: 6px;
+  }
+
+  .start-head {
+    align-items: start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .start-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  :deep(.start-action.p-button) {
+    min-height: 34px;
+  }
+}
 </style>

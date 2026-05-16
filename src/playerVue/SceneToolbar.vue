@@ -138,10 +138,10 @@ function onVrmFileChange(e: Event): void {
   padding: 4px;
   border-radius: 10px;
   pointer-events: auto;
-  background: rgba(16, 16, 16, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  background: linear-gradient(180deg, rgba(18, 23, 27, 0.9), rgba(8, 10, 13, 0.86));
+  border: 1px solid rgba(169, 210, 215, 0.12);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.26);
 }
 
 :deep(.scene-tool.p-button) {
@@ -156,8 +156,8 @@ function onVrmFileChange(e: Event): void {
 }
 
 :deep(.scene-tool.p-button.active) {
-  background: rgba(59, 91, 219, 0.24);
-  color: #b8c8ff;
+  background: rgba(30, 188, 196, 0.2);
+  color: #b9fbff;
 }
 
 .scene-tool-divider {

@@ -5,8 +5,10 @@ import { retargetBvhToVrm } from './retarget';
 import { loadVrmaFromFile } from './animationLoaders/vrmaFile';
 import { loadFbxFromFile } from './animationLoaders/fbxFile';
 import type { ManualFbxBoneMapping } from './animationLoaders/fbxBoneMapping';
+import { parseCanonicalMotionJson } from './mocap/offline/canonicalMotion';
+import { retargetCanonicalMotionToVrm } from './mocap/offline/motionRetargeter';
 
-export type ImportFormat = 'bvh' | 'vrma' | 'fbx';
+export type ImportFormat = 'bvh' | 'vrma' | 'fbx' | 'motion-json';
 
 export interface LoadedAnimation {
   name: string;
@@ -26,10 +28,13 @@ function detectFormat(filename: string): ImportFormat | null {
   if (lower.endsWith('.bvh')) return 'bvh';
   if (lower.endsWith('.vrma')) return 'vrma';
   if (lower.endsWith('.fbx')) return 'fbx';
+  if (lower.endsWith('.json')) {
+    return 'motion-json';
+  }
   return null;
 }
 
-const SUPPORTED_REGEX = /\.(bvh|vrma|fbx)$/i;
+const SUPPORTED_REGEX = /\.(bvh|vrma|fbx|json)$/i;
 
 /** Returns true if the filename's extension is a supported animation format. */
 export function isSupportedAnimationFile(filename: string): boolean {
@@ -60,6 +65,12 @@ export async function loadAnimationFile(
   if (fmt === 'vrma') {
     const clip = await loadVrmaFromFile(file, vrm, baseName);
     return { name: baseName, clip, parsedBvh: null, format: 'vrma' };
+  }
+
+  if (fmt === 'motion-json') {
+    const motion = parseCanonicalMotionJson(await file.text(), baseName);
+    const clip = retargetCanonicalMotionToVrm(vrm, motion, { clampOutOfRange: true });
+    return { name: motion.name || baseName, clip, parsedBvh: null, format: 'motion-json' };
   }
 
   // fbx

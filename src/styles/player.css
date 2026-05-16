@@ -1,6 +1,18 @@
 :root {
   --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  --ui-bg: rgba(10, 12, 15, 0.9);
+  --ui-bg-soft: rgba(255, 255, 255, 0.055);
+  --ui-border: rgba(169, 210, 215, 0.12);
+  --ui-border-strong: rgba(123, 225, 232, 0.28);
+  --ui-text: rgba(245, 250, 252, 0.88);
+  --ui-muted: rgba(245, 250, 252, 0.52);
+  --ui-faint: rgba(245, 250, 252, 0.32);
+  --ui-accent: #1ebcc4;
+  --ui-accent-soft: rgba(30, 188, 196, 0.18);
+  --ui-good: #43d08a;
+  --ui-warn: #f2b84b;
+  --ui-danger: #f06464;
 }
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; background: #111; overflow: hidden; font-family: var(--font-ui); color: #e0e0e0; }
@@ -309,10 +321,17 @@ details.dbg-fold[open] > summary::after { transform: rotate(0deg); }
 /* ── Status ── */
 #status {
   font-size: 10px;
-  opacity: 0.4;
+  color: var(--ui-muted);
   font-family: var(--font-mono);
   white-space: nowrap;
   flex-shrink: 0;
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 5px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  background: rgba(7, 9, 12, 0.6);
 }
 
 /* ── Transport bar ── */
@@ -320,14 +339,16 @@ details.dbg-fold[open] > summary::after { transform: rotate(0deg); }
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  background: rgba(16, 16, 16, 0.92);
-  border: 1px solid rgba(255,255,255,0.07);
+  gap: 9px;
+  min-width: 0;
+  padding: 9px 12px;
+  background:
+    linear-gradient(180deg, rgba(18, 23, 27, 0.94), rgba(8, 10, 13, 0.92));
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+  box-shadow: 0 18px 46px rgba(0,0,0,0.34);
   font-family: var(--font-ui);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(14px);
   transition: opacity 160ms;
 }
 #transport.empty { opacity: 0.3; pointer-events: none; }
@@ -341,10 +362,10 @@ details.dbg-fold[open] > summary::after { transform: rotate(0deg); }
 .tp-btn:hover  { background: rgba(255,255,255,0.08); }
 .tp-btn:active { transform: scale(0.92); }
 #tp-play {
-  background: rgba(59, 91, 219, 0.18);
-  color: #93b4ff;
+  background: var(--ui-accent-soft);
+  color: #b9fbff;
 }
-#tp-play:hover { background: rgba(59, 91, 219, 0.3); }
+#tp-play:hover { background: rgba(30, 188, 196, 0.28); }
 #tp-timeline {
   flex: 1 1 0; height: 4px;
   background: rgba(255,255,255,0.1);
@@ -360,13 +381,13 @@ details.dbg-fold[open] > summary::after { transform: rotate(0deg); }
   box-shadow: 0 0 5px rgba(59,91,219,0.35);
 }
 #tp-time {
-  font-size: 9px; opacity: 0.6;
+  font-size: 10px; color: var(--ui-muted);
   min-width: 72px; text-align: right;
   font-variant-numeric: tabular-nums;
 }
 #tp-name {
-  font-size: 10px; opacity: 0.7; font-weight: 500;
-  max-width: 140px; white-space: nowrap;
+  font-size: 11px; color: var(--ui-text); font-weight: 650;
+  max-width: 180px; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
 

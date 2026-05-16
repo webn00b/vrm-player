@@ -21,11 +21,16 @@ const MODE_KEY = 'vrm-player.ui-mode';
 const ZEN_KEY = 'vrm-player.zen-mode';
 const collapsed = reactive<Record<string, boolean>>({});
 type AppPage = 'player' | 'retarget' | 'tools';
-type UiMode = 'basic' | 'debug';
+type UiMode = 'play' | 'capture' | 'inspect';
 const pageOptions: Array<{ label: string; value: AppPage }> = [
   { label: 'Player', value: 'player' },
-  { label: 'Retarget Lab', value: 'retarget' },
-  { label: 'Convert & re-export', value: 'tools' },
+  { label: 'Retarget', value: 'retarget' },
+  { label: 'Export', value: 'tools' },
+];
+const modeOptions: Array<{ label: string; value: UiMode }> = [
+  { label: 'Play', value: 'play' },
+  { label: 'Capture', value: 'capture' },
+  { label: 'Inspect', value: 'inspect' },
 ];
 const storedPage = (() => {
   try { return localStorage.getItem(PAGE_KEY); } catch { return null; }
@@ -36,7 +41,11 @@ const activePage = ref<AppPage>(
 const storedMode = (() => {
   try { return localStorage.getItem(MODE_KEY); } catch { return null; }
 })();
-const uiMode = ref<UiMode>(storedMode === 'debug' ? 'debug' : 'basic');
+const uiMode = ref<UiMode>(
+  storedMode === 'capture' || storedMode === 'inspect' || storedMode === 'debug'
+    ? (storedMode === 'debug' ? 'inspect' : storedMode)
+    : 'play',
+);
 const zenMode = ref((() => {
   try { return localStorage.getItem(ZEN_KEY) === '1'; } catch { return false; }
 })());
@@ -65,9 +74,10 @@ function setPage(next: AppPage | null, emitChange = true): void {
   }
 }
 
-function toggleMode(): void {
-  uiMode.value = uiMode.value === 'basic' ? 'debug' : 'basic';
-  try { localStorage.setItem(MODE_KEY, uiMode.value); } catch { /* ignore */ }
+function setMode(next: UiMode | null): void {
+  if (!next) return;
+  uiMode.value = next;
+  try { localStorage.setItem(MODE_KEY, next); } catch { /* ignore */ }
 }
 
 function toggleZen(): void {
@@ -140,15 +150,15 @@ function onShellClick(event: MouseEvent): void {
       @update:modelValue="setPage"
     />
     <div class="shell-actions" v-show="activePage === 'player'">
-      <Button
-        class="shell-action"
-        :label="uiMode === 'basic' ? 'Basic' : 'Debug'"
-        :icon="uiMode === 'basic' ? 'pi pi-eye' : 'pi pi-wrench'"
-        text
-        size="small"
-        :aria-pressed="uiMode === 'debug'"
-        title="Toggle simple and debug controls"
-        @click="toggleMode"
+      <SelectButton
+        class="ui-mode-select"
+        :modelValue="uiMode"
+        :options="modeOptions"
+        optionLabel="label"
+        optionValue="value"
+        :allowEmpty="false"
+        aria-label="Player work mode"
+        @update:modelValue="setMode"
       />
       <Button
         class="shell-action"
@@ -284,9 +294,8 @@ function onShellClick(event: MouseEvent): void {
 <style>
 #app-page-tabs {
   position: fixed;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 10px;
+  left: 12px;
   z-index: 30;
   pointer-events: auto;
   display: flex;
@@ -303,7 +312,8 @@ function onShellClick(event: MouseEvent): void {
   backdrop-filter: blur(8px);
 }
 
-:where(.app-page-select .p-togglebutton) {
+:where(.app-page-select .p-togglebutton),
+:where(.ui-mode-select .p-togglebutton) {
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -314,30 +324,36 @@ function onShellClick(event: MouseEvent): void {
   padding: 6px 12px;
 }
 
-:where(.app-page-select .p-togglebutton-content) {
+:where(.app-page-select .p-togglebutton-content),
+:where(.ui-mode-select .p-togglebutton-content) {
   background: transparent;
 }
 
-:where(.app-page-select .p-togglebutton[data-p-checked="true"]) {
-  background: #2a3550;
+:where(.app-page-select .p-togglebutton[data-p-checked="true"]),
+:where(.ui-mode-select .p-togglebutton[data-p-checked="true"]) {
+  background: rgba(30, 188, 196, 0.18);
   color: #fff;
 }
 
-.app-page-select .p-togglebutton .p-togglebutton-content {
+.app-page-select .p-togglebutton .p-togglebutton-content,
+.ui-mode-select .p-togglebutton .p-togglebutton-content {
   background: transparent !important;
 }
 
-.app-page-select .p-togglebutton {
+.app-page-select .p-togglebutton,
+.ui-mode-select .p-togglebutton {
   background: transparent !important;
   color: rgba(255, 255, 255, 0.6) !important;
 }
 
-.app-page-select .p-togglebutton[data-p-checked="true"] {
-  background: #2a3550 !important;
+.app-page-select .p-togglebutton[data-p-checked="true"],
+.ui-mode-select .p-togglebutton[data-p-checked="true"] {
+  background: rgba(30, 188, 196, 0.18) !important;
   color: #fff !important;
 }
 
-.app-page-select .p-togglebutton[data-p-checked="true"] .p-togglebutton-label {
+.app-page-select .p-togglebutton[data-p-checked="true"] .p-togglebutton-label,
+.ui-mode-select .p-togglebutton[data-p-checked="true"] .p-togglebutton-label {
   color: #fff !important;
 }
 
@@ -350,6 +366,10 @@ function onShellClick(event: MouseEvent): void {
   background: rgba(16, 16, 16, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(8px);
+}
+
+.ui-mode-select {
+  display: flex;
 }
 
 :where(.shell-action.p-button) {
@@ -462,11 +482,10 @@ kbd {
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-columns: 240px 1fr 260px;
-  grid-template-rows: 1fr auto;
-  gap: 8px;
-  padding: 8px;
-  padding-top: 46px;
+  grid-template-columns: minmax(220px, 268px) 1fr minmax(240px, 300px);
+  grid-template-rows: 1fr;
+  gap: 12px;
+  padding: 70px 12px 82px;
   pointer-events: none;
   z-index: 10;
 }
@@ -484,13 +503,64 @@ kbd {
   grid-column: 1 / -1;
 }
 
-#ui-overlay[data-ui-mode="basic"] #debug-panel details.dbg-fold,
-#ui-overlay[data-ui-mode="basic"] #mocap-tuning-panel-root > div > .dbg-divider,
-#ui-overlay[data-ui-mode="basic"] #mocap-tuning-panel-root > div > .dbg-divider ~ * {
+#ui-overlay[data-ui-mode="play"] {
+  grid-template-columns: minmax(220px, 268px) 1fr;
+}
+
+#ui-overlay[data-ui-mode="capture"] {
+  grid-template-columns: 1fr minmax(250px, 310px);
+}
+
+#ui-overlay[data-ui-mode="inspect"] {
+  grid-template-columns: minmax(230px, 280px) 1fr;
+}
+
+#ui-overlay[data-ui-mode="play"] #debug-panel,
+#ui-overlay[data-ui-mode="play"] #mocap-tuning-panel,
+#ui-overlay[data-ui-mode="capture"] #debug-panel,
+#ui-overlay[data-ui-mode="inspect"] #mocap-tuning-panel {
   display: none !important;
 }
 
-#ui-overlay[data-ui-mode="basic"] #debug-panel .dbg-hint {
+#ui-overlay[data-ui-mode="play"] #right-col,
+#ui-overlay[data-ui-mode="capture"] #left-col,
+#ui-overlay[data-ui-mode="inspect"] #right-col {
+  display: none;
+}
+
+#ui-overlay[data-ui-mode="play"] #center-col,
+#ui-overlay[data-ui-mode="inspect"] #center-col {
+  grid-column: 2;
+}
+
+#ui-overlay[data-ui-mode="capture"] #center-col {
+  grid-column: 1;
+}
+
+#ui-overlay[data-ui-mode="capture"] #right-col {
+  grid-column: 2;
+}
+
+#ui-overlay[data-ui-mode="capture"] #queue-panel,
+#ui-overlay[data-ui-mode="inspect"] #queue-panel {
+  max-height: 260px;
+}
+
+#ui-overlay[data-ui-mode="play"] #left-col {
+  align-self: end;
+}
+
+#ui-overlay[data-ui-mode="play"] #queue-panel {
+  max-height: min(360px, 42vh);
+  min-height: 170px;
+}
+
+#ui-overlay[data-ui-mode="capture"] #mocap-tuning-panel-root > div > .dbg-divider,
+#ui-overlay[data-ui-mode="capture"] #mocap-tuning-panel-root > div > .dbg-divider ~ * {
+  display: none !important;
+}
+
+#ui-overlay[data-ui-mode="inspect"] #debug-panel .dbg-hint {
   opacity: 0.42;
 }
 
@@ -498,7 +568,7 @@ kbd {
 #right-col {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-height: 0;
   overflow-y: auto;
   pointer-events: auto;
@@ -521,21 +591,26 @@ kbd {
 }
 
 #bottom-bar {
-  grid-column: 1 / -1;
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: min(920px, calc(100vw - 24px));
   display: flex;
   align-items: center;
   gap: 10px;
   pointer-events: auto;
-  padding: 0 2px;
+  z-index: 24;
 }
 
 .panel {
   position: relative;
-  background: rgba(16, 16, 16, 0.92);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, rgba(15, 18, 22, 0.9), rgba(9, 11, 14, 0.86));
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(169, 210, 215, 0.11);
   border-radius: 8px;
   padding: 10px 12px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
   transition: padding 160ms ease;
 }
 
@@ -669,6 +744,7 @@ kbd {
     left: 8px;
     right: 8px;
     transform: none;
+    flex-direction: column;
     align-items: stretch;
   }
   .app-page-select {
@@ -677,6 +753,11 @@ kbd {
   }
   .shell-actions {
     flex-shrink: 0;
+    width: 100%;
+  }
+  .ui-mode-select,
+  .ui-mode-select .p-togglebutton {
+    flex: 1;
   }
   :where(.app-page-select .p-togglebutton) {
     flex: 1;
@@ -688,12 +769,15 @@ kbd {
   #ui-overlay {
     display: grid;
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto auto;
     align-content: start;
     gap: 8px;
     overflow-y: auto;
-    padding-top: 64px;
+    padding-top: 112px;
     padding-bottom: 74px;
+  }
+  #ui-overlay[data-ui-mode="play"] #left-col {
+    display: none;
   }
   #left-col,
   #right-col {
@@ -702,13 +786,18 @@ kbd {
     overflow: visible;
   }
   #center-col {
+    display: grid;
+    grid-column: 1 !important;
+  }
+  #scene-toolbar-root {
     display: none;
   }
   #bottom-bar {
-    position: fixed;
     left: 8px;
     right: 8px;
     bottom: 8px;
+    width: auto;
+    transform: none;
     z-index: 25;
   }
   #queue-panel {
@@ -735,6 +824,10 @@ kbd {
   }
   :where(.shell-action.p-button) {
     min-width: 28px;
+    font-size: 10px;
+  }
+  :where(.ui-mode-select .p-togglebutton) {
+    padding-inline: 7px;
     font-size: 10px;
   }
   :where(.shell-action.p-button .p-button-label) {

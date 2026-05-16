@@ -31,7 +31,7 @@ const props = defineProps<{
   getMocap: () => MocapController | null;
   getController: () => AnimationController | null;
   dbgRecorder: MocapDebugRecorder;
-  /** Wired in main.ts. When user picks a .bvh/.vrma/.fbx via the anim-file
+  /** Wired in main.ts. When user picks a .bvh/.vrma/.fbx/.motion.json via the anim-file
    *  input, this loads + retargets it onto the queue. */
   onAnimFile?: (file: File) => Promise<void> | void;
 }>();
@@ -115,7 +115,7 @@ function updateAnimUI(): void {
     // status / progress filled by animProgressTimer
   } else if (queueLen === 0) {
     primaryLabel.value = 'Choose animation…';
-    statusText.value = '🎬 Pick a .bvh / .vrma / .fbx';
+    statusText.value = '🎬 Pick animation / motion JSON';
     framesText.value = '';
   } else {
     primaryLabel.value = '⏺ Record BVH';
@@ -212,7 +212,7 @@ function updateMocapUI(state: MocapState): void {
       statusText.value  = '📁 Pick a video to process';
       primaryLabel.value = 'Choose video…';
     } else {
-      statusText.value  = '🎬 Pick a .bvh / .vrma / .fbx';
+      statusText.value  = '🎬 Pick animation / motion JSON';
       primaryLabel.value = 'Choose animation…';
     }
     showStopCam.value  = false;
@@ -482,7 +482,7 @@ onUnmounted(() => {
       @click="onPrimaryClick"
     />
     <input ref="fileInputRef"     type="file" accept="video/*"          hidden @change="onVideoFileChange">
-    <input ref="animFileInputRef" type="file" accept=".bvh,.vrma,.fbx"  hidden @change="onAnimFileChange">
+    <input ref="animFileInputRef" type="file" accept=".bvh,.vrma,.fbx,.json,.motion.json,.wham.json,.gvhmr.json" hidden @change="onAnimFileChange">
 
     <div class="capture-status">
       <span data-testid="mocap-status">{{ statusText }}</span>
