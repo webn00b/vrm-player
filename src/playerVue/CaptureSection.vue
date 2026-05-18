@@ -24,6 +24,7 @@ import type { AnimationController } from '../animationController';
 import type { MocapDebugRecorder } from '../mocap/diagnostics/mocapDebugRecorder';
 import { exportClipAsBvh, type BvhExportHandle } from '../bvhExportRecorder';
 import { notify } from '../ui';
+import { generateBrowserMultiviewMotion } from '../mocap/offline/multiviewMediapipe';
 
 const props = defineProps<{
   mocap: MocapController;
@@ -37,13 +38,14 @@ const props = defineProps<{
 }>();
 
 // ── Reactive UI state ──────────────────────────────────────────────────────
-type CaptureSource = 'camera' | 'video' | 'animfile';
+type CaptureSource = 'camera' | 'video' | 'animfile' | 'multiview';
 const SOURCE_KEY = 'vrm-player.capture-source';
 const validSource = (s: string | null): CaptureSource =>
-  s === 'video' || s === 'animfile' ? s : 'camera';
+  s === 'video' || s === 'animfile' || s === 'multiview' ? s : 'camera';
 const sourceOptions: Array<{ label: string; value: CaptureSource }> = [
   { label: 'Live', value: 'camera' },
   { label: 'Video BVH', value: 'video' },
+  { label: 'Multi-view', value: 'multiview' },
   { label: 'Anim export', value: 'animfile' },
 ];
 
@@ -61,11 +63,26 @@ const paused        = ref(false);
 const presetCaption = computed(() => {
   if (currentSource.value === 'camera') return 'Camera preview and recording';
   if (currentSource.value === 'video') return 'Video file to mocap BVH';
+  if (currentSource.value === 'multiview') return 'Two videos to motion JSON';
   return 'Loaded animation to BVH';
 });
 
 const fileInputRef     = ref<HTMLInputElement | null>(null);
 const animFileInputRef = ref<HTMLInputElement | null>(null);
+const mvFrontInputRef  = ref<HTMLInputElement | null>(null);
+const mvSideInputRef   = ref<HTMLInputElement | null>(null);
+
+// ── Browser multi-view state ───────────────────────────────────────────────
+const mvFrontFile = ref<File | null>(null);
+const mvSideFile = ref<File | null>(null);
+const mvProcessing = ref(false);
+const mvFps = ref(6);
+const mvSideOffset = ref(0);
+const mvDepthAxis = ref<'x' | 'z' | '-x' | '-z'>('x');
+const mvDepthScale = ref(1);
+const mvSmoothing = ref(0.65);
+const mvProgressText = ref('');
+const canGenerateMultiview = computed(() => !!mvFrontFile.value && !!mvSideFile.value && !mvProcessing.value);
 
 // ── Anim-file Record/Stop state (independent of MocapState) ────────────────
 let animExportHandle: BvhExportHandle | null = null;
@@ -126,6 +143,25 @@ function updateAnimUI(): void {
       : '🎬 ready';
     framesText.value = '';
   }
+}
+
+function updateMultiviewUI(): void {
+  if (currentSource.value !== 'multiview') return;
+  primaryRecording.value = mvProcessing.value;
+  primaryDisabled.value = !canGenerateMultiview.value;
+  primaryLabel.value = mvProcessing.value ? 'Generating…' : 'Generate motion JSON';
+  showStopCam.value = false;
+  showPlayback.value = false;
+  sourceInfo.value = '';
+  statusText.value = mvProcessing.value
+    ? (mvProgressText.value || '🎥 Processing two videos…')
+    : mvFrontFile.value && mvSideFile.value
+      ? '🎥 ready · front + side selected'
+      : '🎥 Pick front and side videos';
+  framesText.value = [
+    mvFrontFile.value ? `front: ${mvFrontFile.value.name}` : 'front: none',
+    mvSideFile.value ? `side: ${mvSideFile.value.name}` : 'side: none',
+  ].join(' · ');
 }
 
 function startAnimProgressTimer(): void {
@@ -193,13 +229,21 @@ function updateMocapUI(state: MocapState): void {
   if (state === 'off') sourceInfo.value = '';
   else refreshSourceInfo();
 
-  // Anim-file source has its own state machine.
+  // Anim-file and multiview sources have their own state machines.
   if (currentSource.value === 'animfile') {
     showStopCam.value  = false;
     showPlayback.value = false;
     if (previewPanel) previewPanel.style.display = 'none';
     m?.setCanvas(null);
     updateAnimUI();
+    return;
+  }
+  if (currentSource.value === 'multiview') {
+    showStopCam.value  = false;
+    showPlayback.value = false;
+    if (previewPanel) previewPanel.style.display = 'none';
+    m?.setCanvas(null);
+    updateMultiviewUI();
     return;
   }
 
@@ -277,7 +321,11 @@ async function onPrimaryClick(): Promise<void> {
   } else if (currentSource.value === 'video') {
     if (m.state === 'off') fileInputRef.value?.click();
   } else {
-    // Anim file
+    // Anim file / multiview offline processing
+    if (currentSource.value === 'multiview') {
+      await generateMultiview();
+      return;
+    }
     if (animExportHandle) {
       cancelAnimRecord();
     } else if ((props.getController()?.queueLength ?? 0) === 0) {
@@ -349,6 +397,97 @@ async function onVideoFileChange(e: Event): Promise<void> {
     const msg = (e instanceof Error ? e.message : String(e)) || 'unknown error';
     statusText.value = `❌ ${msg.slice(0, 28)}`;
     notify({ severity: 'error', summary: 'Video processing failed', detail: msg, life: 4200 });
+  }
+}
+
+function jsonFile(payload: Record<string, unknown>, filename: string): File {
+  return new File([JSON.stringify(payload, null, 2)], filename, { type: 'application/json' });
+}
+
+function downloadJson(payload: Record<string, unknown>, filename: string): void {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function multiviewOutputName(): string {
+  const front = mvFrontFile.value?.name.replace(/\.[^.]+$/, '') || 'front';
+  const side = mvSideFile.value?.name.replace(/\.[^.]+$/, '') || 'side';
+  return `${front}_${side}.browser.multiview.motion.json`;
+}
+
+function onMultiviewFrontChange(e: Event): void {
+  const input = e.target as HTMLInputElement;
+  mvFrontFile.value = input.files?.[0] ?? null;
+  input.value = '';
+  updateMultiviewUI();
+}
+
+function onMultiviewSideChange(e: Event): void {
+  const input = e.target as HTMLInputElement;
+  mvSideFile.value = input.files?.[0] ?? null;
+  input.value = '';
+  updateMultiviewUI();
+}
+
+async function generateMultiview(): Promise<void> {
+  if (!mvFrontFile.value || !mvSideFile.value || mvProcessing.value) return;
+  if (!props.onAnimFile) {
+    notify({ severity: 'error', summary: 'Animation import unavailable' });
+    return;
+  }
+
+  mvProcessing.value = true;
+  mvProgressText.value = '🎥 Initializing MediaPipe…';
+  updateMultiviewUI();
+  notify({ severity: 'info', summary: 'Generating multi-view motion', detail: 'Processing front + side videos', life: 2200 });
+  let finalStatus: string | null = null;
+  let finalFrames = '';
+
+  try {
+    const result = await generateBrowserMultiviewMotion({
+      front: mvFrontFile.value,
+      side: mvSideFile.value,
+      fps: Math.max(1, mvFps.value || 6),
+      sideOffsetFrames: Math.trunc(mvSideOffset.value || 0),
+      frontMirrorX: true,
+      sideMirrorX: true,
+      sideDepthAxis: mvDepthAxis.value,
+      depthScale: mvDepthScale.value,
+      depthOffset: 0,
+      smoothingAlpha: mvSmoothing.value,
+      visibility: 0.35,
+      onProgress: (message) => {
+        mvProgressText.value = `🎥 ${message}`;
+        statusText.value = mvProgressText.value;
+      },
+    });
+    const filename = multiviewOutputName();
+    downloadJson(result.motion, filename);
+    downloadJson(result.report, filename.replace(/\.json$/, '.fusion.report.json'));
+    await props.onAnimFile(jsonFile(result.motion, filename));
+    const frames = Array.isArray(result.motion.frames) ? result.motion.frames.length : 0;
+    finalStatus = `✓ multiview loaded · ${frames} frames`;
+    finalFrames = filename;
+    notify({ severity: 'success', summary: 'Multi-view motion ready', detail: `${frames} frames`, life: 3600 });
+  } catch (e) {
+    const msg = (e instanceof Error ? e.message : String(e)) || 'unknown error';
+    statusText.value = `❌ ${msg.slice(0, 60)}`;
+    notify({ severity: 'error', summary: 'Multi-view failed', detail: msg, life: 5200 });
+  } finally {
+    mvProcessing.value = false;
+    mvProgressText.value = '';
+    updateMultiviewUI();
+    if (finalStatus) {
+      statusText.value = finalStatus;
+      framesText.value = finalFrames;
+    }
   }
 }
 
@@ -472,6 +611,48 @@ onUnmounted(() => {
     </div>
     <div class="capture-preset-caption">{{ presetCaption }}</div>
 
+    <div v-if="currentSource === 'multiview'" class="multiview-box">
+      <div class="multiview-file-row">
+        <Button
+          class="dbg-toggle multiview-file-btn"
+          :label="mvFrontFile ? 'Front ✓' : 'Front…'"
+          text
+          size="small"
+          @click="mvFrontInputRef?.click()"
+        />
+        <Button
+          class="dbg-toggle multiview-file-btn"
+          :label="mvSideFile ? 'Side ✓' : 'Side…'"
+          text
+          size="small"
+          @click="mvSideInputRef?.click()"
+        />
+      </div>
+      <div class="multiview-controls">
+        <label>
+          <span>FPS</span>
+          <input v-model.number="mvFps" type="number" min="1" max="60" step="1">
+        </label>
+        <label>
+          <span>Offset</span>
+          <input v-model.number="mvSideOffset" type="number" step="1">
+        </label>
+        <label>
+          <span>Depth</span>
+          <select v-model="mvDepthAxis">
+            <option value="x">x</option>
+            <option value="-x">-x</option>
+            <option value="z">z</option>
+            <option value="-z">-z</option>
+          </select>
+        </label>
+        <label>
+          <span>Scale</span>
+          <input v-model.number="mvDepthScale" type="number" min="0.05" max="4" step="0.05">
+        </label>
+      </div>
+    </div>
+
     <Button
       class="capture-primary"
       data-testid="capture-primary"
@@ -483,6 +664,8 @@ onUnmounted(() => {
     />
     <input ref="fileInputRef"     type="file" accept="video/*"          hidden @change="onVideoFileChange">
     <input ref="animFileInputRef" type="file" accept=".bvh,.vrma,.fbx,.json,.motion.json,.wham.json,.gvhmr.json" hidden @change="onAnimFileChange">
+    <input ref="mvFrontInputRef"  type="file" accept="video/*" hidden @change="onMultiviewFrontChange">
+    <input ref="mvSideInputRef"   type="file" accept="video/*" hidden @change="onMultiviewSideChange">
 
     <div class="capture-status">
       <span data-testid="mocap-status">{{ statusText }}</span>
@@ -603,5 +786,45 @@ onUnmounted(() => {
   min-width: 34px;
   justify-content: center;
   padding: 2px 8px;
+}
+.multiview-box {
+  margin-bottom: 8px;
+}
+.multiview-file-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+:deep(.p-button.multiview-file-btn) {
+  width: 100%;
+  min-height: 30px;
+}
+.multiview-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+.multiview-controls label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 9px;
+  line-height: 1.2;
+  color: rgba(255,255,255,.48);
+}
+.multiview-controls input,
+.multiview-controls select {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+  border: 1px solid #2a2a2a;
+  border-radius: 5px;
+  background: #111;
+  color: #eee;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  padding: 2px 4px;
 }
 </style>

@@ -44,6 +44,7 @@ import type { SkeletonVisualizer } from '../skeletonVisualizer';
 import type { BonePosePanel } from '../bonePosePanel';
 import type { BoneDragController } from '../boneDragController';
 import type { SkeletonLogger } from '../diagnostics/skeletonLogger';
+import type { MotionTraceRecorder } from '../diagnostics/motionTraceRecorder';
 import StatsPanel from './StatsPanel.vue';
 import HipForcePanel from './HipForcePanel.vue';
 import MocapStatsPanel from './MocapStatsPanel.vue';
@@ -69,6 +70,7 @@ const props = defineProps<{
   bonePanel:       BonePosePanel;
   boneDrag:        BoneDragController;
   skeletonLogger:  SkeletonLogger;
+  motionTraceRecorder: MotionTraceRecorder;
   mocap:           MocapController;
   getController:   () => AnimationController | null;
   setModelVisible: (v: boolean) => void;
@@ -236,6 +238,7 @@ onMounted(() => {
           <ValidationFoldContent
             :validator="validator"
             :skeletonLogger="skeletonLogger"
+            :motionTraceRecorder="motionTraceRecorder"
             :mocap="mocap"
             :getController="getController"
           />

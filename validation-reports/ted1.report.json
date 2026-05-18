@@ -1,0 +1,6276 @@
+{
+  "schemaVersion": 1,
+  "trace": {
+    "name": "ted1",
+    "sourceFormat": "frames",
+    "fps": 6.0,
+    "duration": 31.0,
+    "frameCount": 187
+  },
+  "summary": {
+    "issueCount": 250,
+    "suppressedIssueCount": 692,
+    "severityCounts": {
+      "error": 250
+    },
+    "categoryCounts": {
+      "ground-penetration": 250
+    },
+    "rawEventCounts": {
+      "ground-penetration": 748,
+      "bone-length": 194
+    }
+  },
+  "issues": [
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.0,
+      "timeEnd": 0.0,
+      "frameStart": 0,
+      "frameEnd": 0,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7762",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.13327990472316742,
+          -0.7762082815170288,
+          -0.09250450134277344
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.166667,
+      "timeEnd": 0.166667,
+      "frameStart": 1,
+      "frameEnd": 1,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7723",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.13068614900112152,
+          -0.77234947681427,
+          -0.09271039813756943
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.333333,
+      "timeEnd": 0.333333,
+      "frameStart": 2,
+      "frameEnd": 2,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7676",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11499501764774323,
+          -0.7675983309745789,
+          -0.12344977259635925
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.5,
+      "timeEnd": 0.5,
+      "frameStart": 3,
+      "frameEnd": 3,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7677",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11590778827667236,
+          -0.7677357196807861,
+          -0.12175070494413376
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.666667,
+      "timeEnd": 0.666667,
+      "frameStart": 4,
+      "frameEnd": 4,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7681",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11631705611944199,
+          -0.7680978775024414,
+          -0.12123002111911774
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.833333,
+      "timeEnd": 0.833333,
+      "frameStart": 5,
+      "frameEnd": 5,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7663",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.12319771200418472,
+          -0.7662667632102966,
+          -0.12065902352333069
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.0,
+      "timeEnd": 1.0,
+      "frameStart": 6,
+      "frameEnd": 6,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7603",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.1270447075366974,
+          -0.7603266835212708,
+          -0.12024811655282974
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.166667,
+      "timeEnd": 1.166667,
+      "frameStart": 7,
+      "frameEnd": 7,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7603",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.1325335055589676,
+          -0.7602838277816772,
+          -0.11419105529785156
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.333333,
+      "timeEnd": 1.333333,
+      "frameStart": 8,
+      "frameEnd": 8,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7576",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.13888771831989288,
+          -0.7575753927230835,
+          -0.11325625330209732
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.5,
+      "timeEnd": 1.5,
+      "frameStart": 9,
+      "frameEnd": 9,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7573",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.13335759937763214,
+          -0.7573411464691162,
+          -0.10803826153278351
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.666667,
+      "timeEnd": 1.666667,
+      "frameStart": 10,
+      "frameEnd": 10,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7577",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.12868668138980865,
+          -0.7577410340309143,
+          -0.11328578740358353
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.833333,
+      "timeEnd": 1.833333,
+      "frameStart": 11,
+      "frameEnd": 11,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7650",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11775323003530502,
+          -0.7650250792503357,
+          -0.10626211762428284
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.0,
+      "timeEnd": 2.0,
+      "frameStart": 12,
+      "frameEnd": 12,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7629",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11561980098485947,
+          -0.7628947496414185,
+          -0.10164467245340347
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.166667,
+      "timeEnd": 2.166667,
+      "frameStart": 13,
+      "frameEnd": 13,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7620",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11590969562530518,
+          -0.7619776725769043,
+          -0.1020917221903801
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.333333,
+      "timeEnd": 2.333333,
+      "frameStart": 14,
+      "frameEnd": 14,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7605",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11803589016199112,
+          -0.7605013251304626,
+          -0.10538409650325775
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.5,
+      "timeEnd": 2.5,
+      "frameStart": 15,
+      "frameEnd": 15,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7633",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11895017325878143,
+          -0.7632933855056763,
+          -0.1043349876999855
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.666667,
+      "timeEnd": 2.666667,
+      "frameStart": 16,
+      "frameEnd": 16,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7646",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11771159619092941,
+          -0.7645629644393921,
+          -0.11101110279560089
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.833333,
+      "timeEnd": 2.833333,
+      "frameStart": 17,
+      "frameEnd": 17,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7698",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11739261448383331,
+          -0.7697799801826477,
+          -0.10172534734010696
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.0,
+      "timeEnd": 3.0,
+      "frameStart": 18,
+      "frameEnd": 18,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7717",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11433421075344086,
+          -0.7717427611351013,
+          -0.10903535038232803
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.166667,
+      "timeEnd": 3.166667,
+      "frameStart": 19,
+      "frameEnd": 19,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7715",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11347568780183792,
+          -0.7715206742286682,
+          -0.12325451523065567
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.333333,
+      "timeEnd": 3.333333,
+      "frameStart": 20,
+      "frameEnd": 20,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7716",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11168216913938522,
+          -0.7715617418289185,
+          -0.12601131200790405
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.5,
+      "timeEnd": 3.5,
+      "frameStart": 21,
+      "frameEnd": 21,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7716",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10975467413663864,
+          -0.7715727686882019,
+          -0.1291866898536682
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.666667,
+      "timeEnd": 3.666667,
+      "frameStart": 22,
+      "frameEnd": 22,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7721",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11000750958919525,
+          -0.7721098065376282,
+          -0.123644158244133
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.833333,
+      "timeEnd": 3.833333,
+      "frameStart": 23,
+      "frameEnd": 23,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7728",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.1093260794878006,
+          -0.7728148102760315,
+          -0.12544620037078857
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.0,
+      "timeEnd": 4.0,
+      "frameStart": 24,
+      "frameEnd": 24,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7697",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10822897404432297,
+          -0.7697035074234009,
+          -0.1257178783416748
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.166667,
+      "timeEnd": 4.166667,
+      "frameStart": 25,
+      "frameEnd": 25,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7612",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11008738726377487,
+          -0.7611992955207825,
+          -0.12440191209316254
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.333333,
+      "timeEnd": 4.333333,
+      "frameStart": 26,
+      "frameEnd": 26,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7586",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11013218015432358,
+          -0.7586330771446228,
+          -0.12123636156320572
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.5,
+      "timeEnd": 4.5,
+      "frameStart": 27,
+      "frameEnd": 27,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7562",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11009570956230164,
+          -0.756182074546814,
+          -0.12191353738307953
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.666667,
+      "timeEnd": 4.666667,
+      "frameStart": 28,
+      "frameEnd": 28,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7560",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10603500157594681,
+          -0.7559849619865417,
+          -0.1212644949555397
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.833333,
+      "timeEnd": 4.833333,
+      "frameStart": 29,
+      "frameEnd": 29,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7577",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10109131038188934,
+          -0.757696270942688,
+          -0.12018528580665588
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.0,
+      "timeEnd": 5.0,
+      "frameStart": 30,
+      "frameEnd": 30,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7588",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.0971098393201828,
+          -0.7588441371917725,
+          -0.1192249059677124
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.166667,
+      "timeEnd": 5.166667,
+      "frameStart": 31,
+      "frameEnd": 31,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7718",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09681206941604614,
+          -0.7718410491943359,
+          -0.11327581107616425
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.333333,
+      "timeEnd": 5.333333,
+      "frameStart": 32,
+      "frameEnd": 32,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7743",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09174682199954987,
+          -0.7743136882781982,
+          -0.10718606412410736
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.5,
+      "timeEnd": 5.5,
+      "frameStart": 33,
+      "frameEnd": 33,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7744",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09112121909856796,
+          -0.774408757686615,
+          -0.1103062555193901
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.666667,
+      "timeEnd": 5.666667,
+      "frameStart": 34,
+      "frameEnd": 34,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7698",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09841781109571457,
+          -0.7697917222976685,
+          -0.1179409846663475
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.833333,
+      "timeEnd": 5.833333,
+      "frameStart": 35,
+      "frameEnd": 35,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7585",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10970211029052734,
+          -0.7585209608078003,
+          -0.11519263684749603
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.0,
+      "timeEnd": 6.0,
+      "frameStart": 36,
+      "frameEnd": 36,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7554",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10926671326160431,
+          -0.7553993463516235,
+          -0.12668421864509583
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.166667,
+      "timeEnd": 6.166667,
+      "frameStart": 37,
+      "frameEnd": 37,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7542",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10287667065858841,
+          -0.7542413473129272,
+          -0.12626349925994873
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.333333,
+      "timeEnd": 6.333333,
+      "frameStart": 38,
+      "frameEnd": 38,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7524",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10274771600961685,
+          -0.7523522973060608,
+          -0.12158219516277313
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.5,
+      "timeEnd": 6.5,
+      "frameStart": 39,
+      "frameEnd": 39,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7519",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10208065062761307,
+          -0.7519221901893616,
+          -0.12094373255968094
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.666667,
+      "timeEnd": 6.666667,
+      "frameStart": 40,
+      "frameEnd": 40,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7505",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09739595651626587,
+          -0.7505080103874207,
+          -0.12472108006477356
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.833333,
+      "timeEnd": 6.833333,
+      "frameStart": 41,
+      "frameEnd": 41,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7509",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09455699473619461,
+          -0.750856876373291,
+          -0.1392182856798172
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.0,
+      "timeEnd": 7.0,
+      "frameStart": 42,
+      "frameEnd": 42,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7472",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08838210999965668,
+          -0.74722820520401,
+          -0.1545812040567398
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.166667,
+      "timeEnd": 7.166667,
+      "frameStart": 43,
+      "frameEnd": 43,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7439",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08835520595312119,
+          -0.7439178824424744,
+          -0.16457952558994293
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.333333,
+      "timeEnd": 7.333333,
+      "frameStart": 44,
+      "frameEnd": 44,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7447",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09074225276708603,
+          -0.7446960210800171,
+          -0.157173290848732
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.5,
+      "timeEnd": 7.5,
+      "frameStart": 45,
+      "frameEnd": 45,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7467",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09079068154096603,
+          -0.7466825842857361,
+          -0.14948612451553345
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.666667,
+      "timeEnd": 7.666667,
+      "frameStart": 46,
+      "frameEnd": 46,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7424",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09256312251091003,
+          -0.7424220442771912,
+          -0.15167532861232758
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.833333,
+      "timeEnd": 7.833333,
+      "frameStart": 47,
+      "frameEnd": 47,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7406",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09267063438892365,
+          -0.7406348586082458,
+          -0.16411736607551575
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.0,
+      "timeEnd": 8.0,
+      "frameStart": 48,
+      "frameEnd": 48,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7480",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09230181574821472,
+          -0.7479630708694458,
+          -0.15608084201812744
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.166667,
+      "timeEnd": 8.166667,
+      "frameStart": 49,
+      "frameEnd": 49,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7498",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09215614944696426,
+          -0.7497971653938293,
+          -0.14062584936618805
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.333333,
+      "timeEnd": 8.333333,
+      "frameStart": 50,
+      "frameEnd": 50,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7493",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09597627818584442,
+          -0.7492972612380981,
+          -0.14113755524158478
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.5,
+      "timeEnd": 8.5,
+      "frameStart": 51,
+      "frameEnd": 51,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7489",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09918088465929031,
+          -0.7488605380058289,
+          -0.14052167534828186
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.666667,
+      "timeEnd": 8.666667,
+      "frameStart": 52,
+      "frameEnd": 52,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7489",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09856180846691132,
+          -0.7488601803779602,
+          -0.1296451985836029
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.833333,
+      "timeEnd": 8.833333,
+      "frameStart": 53,
+      "frameEnd": 53,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7547",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.0901719182729721,
+          -0.7546917796134949,
+          -0.12400336563587189
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.0,
+      "timeEnd": 9.0,
+      "frameStart": 54,
+      "frameEnd": 54,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7594",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09012026339769363,
+          -0.7594399452209473,
+          -0.1236904188990593
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.166667,
+      "timeEnd": 9.166667,
+      "frameStart": 55,
+      "frameEnd": 55,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7611",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08962137997150421,
+          -0.7611438632011414,
+          -0.11395638436079025
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.333333,
+      "timeEnd": 9.333333,
+      "frameStart": 56,
+      "frameEnd": 56,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7612",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08921337127685547,
+          -0.7611725330352783,
+          -0.11271209269762039
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.5,
+      "timeEnd": 9.5,
+      "frameStart": 57,
+      "frameEnd": 57,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7612",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09019862115383148,
+          -0.7611976265907288,
+          -0.10778609663248062
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.666667,
+      "timeEnd": 9.666667,
+      "frameStart": 58,
+      "frameEnd": 58,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7614",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10171442478895187,
+          -0.7614437341690063,
+          -0.11180365085601807
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.833333,
+      "timeEnd": 9.833333,
+      "frameStart": 59,
+      "frameEnd": 59,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7618",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.1229952797293663,
+          -0.7618051767349243,
+          -0.12092393636703491
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 10.0,
+      "timeEnd": 10.0,
+      "frameStart": 60,
+      "frameEnd": 60,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7553",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.1365334838628769,
+          -0.7552844285964966,
+          -0.1197085753083229
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 10.166667,
+      "timeEnd": 10.166667,
+      "frameStart": 61,
+      "frameEnd": 61,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.5629",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.16362258791923523,
+          -0.5629315376281738,
+          -0.0393863283097744
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 10.333333,
+      "timeEnd": 10.333333,
+      "frameStart": 62,
+      "frameEnd": 62,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3875",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.18650758266448975,
+          -0.3874911665916443,
+          0.01018980797380209
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 10.5,
+      "timeEnd": 10.5,
+      "frameStart": 63,
+      "frameEnd": 63,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3365",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.21883906424045563,
+          -0.33653491735458374,
+          0.009261379949748516
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 10.666667,
+      "timeEnd": 10.666667,
+      "frameStart": 64,
+      "frameEnd": 64,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.2890",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.21706491708755493,
+          -0.2890338897705078,
+          0.03447424992918968
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 10.833333,
+      "timeEnd": 10.833333,
+      "frameStart": 65,
+      "frameEnd": 65,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3079",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.24177499115467072,
+          -0.30792567133903503,
+          0.030858980491757393
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 11.0,
+      "timeEnd": 11.0,
+      "frameStart": 66,
+      "frameEnd": 66,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3139",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.23758140206336975,
+          -0.3138990104198456,
+          0.029074877500534058
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 11.166667,
+      "timeEnd": 11.166667,
+      "frameStart": 67,
+      "frameEnd": 67,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3153",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.22991055250167847,
+          -0.31526893377304077,
+          0.028525453060865402
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 11.333333,
+      "timeEnd": 11.333333,
+      "frameStart": 68,
+      "frameEnd": 68,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3184",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.2034854143857956,
+          -0.3183581829071045,
+          0.03687337413430214
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 11.5,
+      "timeEnd": 11.5,
+      "frameStart": 69,
+      "frameEnd": 69,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3332",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.2043990045785904,
+          -0.3332212567329407,
+          0.0240284763276577
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 11.666667,
+      "timeEnd": 11.666667,
+      "frameStart": 70,
+      "frameEnd": 70,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3394",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.19990088045597076,
+          -0.3393509089946747,
+          0.0455748625099659
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 11.833333,
+      "timeEnd": 11.833333,
+      "frameStart": 71,
+      "frameEnd": 71,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3361",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.20895050466060638,
+          -0.3360583484172821,
+          0.05258895084261894
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 12.0,
+      "timeEnd": 12.0,
+      "frameStart": 72,
+      "frameEnd": 72,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3292",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.21760977804660797,
+          -0.3291526436805725,
+          0.044964153319597244
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 12.166667,
+      "timeEnd": 12.166667,
+      "frameStart": 73,
+      "frameEnd": 73,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3279",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.303097128868103,
+          -0.32794034481048584,
+          0.03174503892660141
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 12.333333,
+      "timeEnd": 12.333333,
+      "frameStart": 74,
+      "frameEnd": 74,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.2154",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.5712107419967651,
+          -0.21541014313697815,
+          0.10201362520456314
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 12.5,
+      "timeEnd": 12.5,
+      "frameStart": 75,
+      "frameEnd": 75,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.1228",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.7378432154655457,
+          -0.12282633036375046,
+          0.09281810373067856
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 12.666667,
+      "timeEnd": 12.666667,
+      "frameStart": 76,
+      "frameEnd": 76,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.1580",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.6999754309654236,
+          -0.15803773701190948,
+          0.0898861363530159
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 12.833333,
+      "timeEnd": 12.833333,
+      "frameStart": 77,
+      "frameEnd": 77,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.2571",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.6829193830490112,
+          -0.25712013244628906,
+          0.1362048238515854
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 13.0,
+      "timeEnd": 13.0,
+      "frameStart": 78,
+      "frameEnd": 78,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.2700",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.4293050169944763,
+          -0.2699897289276123,
+          0.10315588861703873
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 13.166667,
+      "timeEnd": 13.166667,
+      "frameStart": 79,
+      "frameEnd": 79,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.2815",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.27076640725135803,
+          -0.28153255581855774,
+          0.046468816697597504
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 13.333333,
+      "timeEnd": 13.333333,
+      "frameStart": 80,
+      "frameEnd": 80,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.2839",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.20770348608493805,
+          -0.28394827246665955,
+          0.025860102847218513
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 13.5,
+      "timeEnd": 13.5,
+      "frameStart": 81,
+      "frameEnd": 81,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.3263",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.18217754364013672,
+          -0.32633933424949646,
+          0.007083551492542028
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 13.666667,
+      "timeEnd": 13.666667,
+      "frameStart": 82,
+      "frameEnd": 82,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.4255",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.12724162638187408,
+          -0.4255370795726776,
+          -0.015969837084412575
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 13.833333,
+      "timeEnd": 13.833333,
+      "frameStart": 83,
+      "frameEnd": 83,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.6716",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09542416036128998,
+          -0.6715553998947144,
+          -0.13356511294841766
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 14.0,
+      "timeEnd": 14.0,
+      "frameStart": 84,
+      "frameEnd": 84,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7578",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09251905232667923,
+          -0.7578424215316772,
+          -0.11942162364721298
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 14.166667,
+      "timeEnd": 14.166667,
+      "frameStart": 85,
+      "frameEnd": 85,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7611",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.059304770082235336,
+          -0.7611215114593506,
+          -0.12542389333248138
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 14.333333,
+      "timeEnd": 14.333333,
+      "frameStart": 86,
+      "frameEnd": 86,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7468",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.04087230935692787,
+          -0.7467508912086487,
+          -0.1351138949394226
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 14.5,
+      "timeEnd": 14.5,
+      "frameStart": 87,
+      "frameEnd": 87,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7512",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.0334012396633625,
+          -0.7511715292930603,
+          -0.13652801513671875
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 14.666667,
+      "timeEnd": 14.666667,
+      "frameStart": 88,
+      "frameEnd": 88,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7517",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.0289455559104681,
+          -0.7516776919364929,
+          -0.13565769791603088
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 14.833333,
+      "timeEnd": 14.833333,
+      "frameStart": 89,
+      "frameEnd": 89,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7448",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.015159555710852146,
+          -0.7448207139968872,
+          -0.12872590124607086
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 15.0,
+      "timeEnd": 15.0,
+      "frameStart": 90,
+      "frameEnd": 90,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7352",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.009220880456268787,
+          -0.735228955745697,
+          -0.11657341569662094
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 15.166667,
+      "timeEnd": 15.166667,
+      "frameStart": 91,
+      "frameEnd": 91,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7505",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.018224403262138367,
+          -0.750472903251648,
+          -0.0886647030711174
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 15.333333,
+      "timeEnd": 15.333333,
+      "frameStart": 92,
+      "frameEnd": 92,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7605",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.02922145463526249,
+          -0.7605239152908325,
+          -0.09169477224349976
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 15.5,
+      "timeEnd": 15.5,
+      "frameStart": 93,
+      "frameEnd": 93,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7637",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.04395967721939087,
+          -0.7637403011322021,
+          -0.08872218430042267
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 15.666667,
+      "timeEnd": 15.666667,
+      "frameStart": 94,
+      "frameEnd": 94,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7641",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.05504688620567322,
+          -0.764144241809845,
+          -0.08928582072257996
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 15.833333,
+      "timeEnd": 15.833333,
+      "frameStart": 95,
+      "frameEnd": 95,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7432",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.043300703167915344,
+          -0.7432101368904114,
+          -0.09123625606298447
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 16.0,
+      "timeEnd": 16.0,
+      "frameStart": 96,
+      "frameEnd": 96,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7438",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.04301365464925766,
+          -0.7438467741012573,
+          -0.09981083869934082
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 16.166667,
+      "timeEnd": 16.166667,
+      "frameStart": 97,
+      "frameEnd": 97,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7689",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.0385051891207695,
+          -0.7689438462257385,
+          -0.1006411537528038
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 16.333333,
+      "timeEnd": 16.333333,
+      "frameStart": 98,
+      "frameEnd": 98,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7671",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.04029689356684685,
+          -0.7671014666557312,
+          -0.10568006336688995
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 16.5,
+      "timeEnd": 16.5,
+      "frameStart": 99,
+      "frameEnd": 99,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7487",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.03514983132481575,
+          -0.7486595511436462,
+          -0.10241278260946274
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 16.666667,
+      "timeEnd": 16.666667,
+      "frameStart": 100,
+      "frameEnd": 100,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7544",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.043582983314991,
+          -0.7544087767601013,
+          -0.11042027920484543
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 16.833333,
+      "timeEnd": 16.833333,
+      "frameStart": 101,
+      "frameEnd": 101,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7686",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.04448452964425087,
+          -0.768627405166626,
+          -0.09798801690340042
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 17.0,
+      "timeEnd": 17.0,
+      "frameStart": 102,
+      "frameEnd": 102,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7846",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.044009365141391754,
+          -0.784633219242096,
+          -0.09142140299081802
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 17.166667,
+      "timeEnd": 17.166667,
+      "frameStart": 103,
+      "frameEnd": 103,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7765",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.03681038320064545,
+          -0.7764692902565002,
+          -0.08510618656873703
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 17.333333,
+      "timeEnd": 17.333333,
+      "frameStart": 104,
+      "frameEnd": 104,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7665",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.03583605960011482,
+          -0.7664862275123596,
+          -0.07894698530435562
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 17.5,
+      "timeEnd": 17.5,
+      "frameStart": 105,
+      "frameEnd": 105,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7684",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.02193722501397133,
+          -0.7683820724487305,
+          -0.07569144666194916
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 17.666667,
+      "timeEnd": 17.666667,
+      "frameStart": 106,
+      "frameEnd": 106,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7597",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.0014139404520392418,
+          -0.7596696019172668,
+          -0.09507642686367035
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 17.833333,
+      "timeEnd": 17.833333,
+      "frameStart": 107,
+      "frameEnd": 107,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7599",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.017142491415143013,
+          -0.7599325180053711,
+          -0.1331598162651062
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 18.0,
+      "timeEnd": 18.0,
+      "frameStart": 108,
+      "frameEnd": 108,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7586",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.03598380461335182,
+          -0.7585737705230713,
+          -0.13418827950954437
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 18.166667,
+      "timeEnd": 18.166667,
+      "frameStart": 109,
+      "frameEnd": 109,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7569",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.05293256416916847,
+          -0.756862998008728,
+          -0.13727311789989471
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 18.333333,
+      "timeEnd": 18.333333,
+      "frameStart": 110,
+      "frameEnd": 110,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7558",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.07092686742544174,
+          -0.7557601928710938,
+          -0.1414269059896469
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 18.5,
+      "timeEnd": 18.5,
+      "frameStart": 111,
+      "frameEnd": 111,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7557",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08162602037191391,
+          -0.755693793296814,
+          -0.12518151104450226
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 18.666667,
+      "timeEnd": 18.666667,
+      "frameStart": 112,
+      "frameEnd": 112,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7576",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08627121895551682,
+          -0.7575601935386658,
+          -0.12334886938333511
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 18.833333,
+      "timeEnd": 18.833333,
+      "frameStart": 113,
+      "frameEnd": 113,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7556",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08322024345397949,
+          -0.7555601596832275,
+          -0.12687593698501587
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 19.0,
+      "timeEnd": 19.0,
+      "frameStart": 114,
+      "frameEnd": 114,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7573",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08053401857614517,
+          -0.7572569251060486,
+          -0.09999454766511917
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 19.166667,
+      "timeEnd": 19.166667,
+      "frameStart": 115,
+      "frameEnd": 115,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7504",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.0724741667509079,
+          -0.7503756880760193,
+          -0.10312007367610931
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 19.333333,
+      "timeEnd": 19.333333,
+      "frameStart": 116,
+      "frameEnd": 116,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7297",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08490784466266632,
+          -0.729661762714386,
+          -0.11599647998809814
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 19.5,
+      "timeEnd": 19.5,
+      "frameStart": 117,
+      "frameEnd": 117,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7284",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08446762710809708,
+          -0.7284377217292786,
+          -0.12044237554073334
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 19.666667,
+      "timeEnd": 19.666667,
+      "frameStart": 118,
+      "frameEnd": 118,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7242",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08422711491584778,
+          -0.7242112755775452,
+          -0.12247514724731445
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 19.833333,
+      "timeEnd": 19.833333,
+      "frameStart": 119,
+      "frameEnd": 119,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7266",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08691549301147461,
+          -0.726604700088501,
+          -0.11790088564157486
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 20.0,
+      "timeEnd": 20.0,
+      "frameStart": 120,
+      "frameEnd": 120,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7267",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08768951892852783,
+          -0.7267480492591858,
+          -0.10962742567062378
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 20.166667,
+      "timeEnd": 20.166667,
+      "frameStart": 121,
+      "frameEnd": 121,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7469",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.07557879388332367,
+          -0.7469139099121094,
+          -0.09874585270881653
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 20.333333,
+      "timeEnd": 20.333333,
+      "frameStart": 122,
+      "frameEnd": 122,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7590",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.0789608359336853,
+          -0.7589908838272095,
+          -0.08838513493537903
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 20.5,
+      "timeEnd": 20.5,
+      "frameStart": 123,
+      "frameEnd": 123,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7584",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.07467398792505264,
+          -0.7583765387535095,
+          -0.07838190346956253
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 20.666667,
+      "timeEnd": 20.666667,
+      "frameStart": 124,
+      "frameEnd": 124,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7640",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08110158890485764,
+          -0.7639645934104919,
+          -0.10541649907827377
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 20.833333,
+      "timeEnd": 20.833333,
+      "frameStart": 125,
+      "frameEnd": 125,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7628",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08192374557256699,
+          -0.762839138507843,
+          -0.12646307051181793
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 21.0,
+      "timeEnd": 21.0,
+      "frameStart": 126,
+      "frameEnd": 126,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7598",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08187497407197952,
+          -0.7598353028297424,
+          -0.1290782243013382
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 21.166667,
+      "timeEnd": 21.166667,
+      "frameStart": 127,
+      "frameEnd": 127,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7569",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08570142090320587,
+          -0.7569286227226257,
+          -0.12866871058940887
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 21.333333,
+      "timeEnd": 21.333333,
+      "frameStart": 128,
+      "frameEnd": 128,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7569",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08614795655012131,
+          -0.7568921446800232,
+          -0.1283240169286728
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 21.5,
+      "timeEnd": 21.5,
+      "frameStart": 129,
+      "frameEnd": 129,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7629",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.07862558960914612,
+          -0.76290363073349,
+          -0.12855322659015656
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 21.666667,
+      "timeEnd": 21.666667,
+      "frameStart": 130,
+      "frameEnd": 130,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7721",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.06385307759046555,
+          -0.7721499800682068,
+          -0.12486781924962997
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 21.833333,
+      "timeEnd": 21.833333,
+      "frameStart": 131,
+      "frameEnd": 131,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7642",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.05694922059774399,
+          -0.7641717791557312,
+          -0.12829841673374176
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 22.0,
+      "timeEnd": 22.0,
+      "frameStart": 132,
+      "frameEnd": 132,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7707",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.06594805419445038,
+          -0.7707354426383972,
+          -0.11042679846286774
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 22.166667,
+      "timeEnd": 22.166667,
+      "frameStart": 133,
+      "frameEnd": 133,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7641",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.0696391612291336,
+          -0.7640619874000549,
+          -0.09868967533111572
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 22.333333,
+      "timeEnd": 22.333333,
+      "frameStart": 134,
+      "frameEnd": 134,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7398",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09888272732496262,
+          -0.7397879362106323,
+          -0.09927073866128922
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 22.5,
+      "timeEnd": 22.5,
+      "frameStart": 135,
+      "frameEnd": 135,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7313",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10190574079751968,
+          -0.7313079833984375,
+          -0.07409005612134933
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 22.666667,
+      "timeEnd": 22.666667,
+      "frameStart": 136,
+      "frameEnd": 136,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7253",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11273190379142761,
+          -0.7253326177597046,
+          -0.08382855355739594
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 22.833333,
+      "timeEnd": 22.833333,
+      "frameStart": 137,
+      "frameEnd": 137,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7401",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.087458036839962,
+          -0.7401336431503296,
+          -0.09888817369937897
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 23.0,
+      "timeEnd": 23.0,
+      "frameStart": 138,
+      "frameEnd": 138,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7470",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08220580965280533,
+          -0.7470499873161316,
+          -0.10512320697307587
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 23.166667,
+      "timeEnd": 23.166667,
+      "frameStart": 139,
+      "frameEnd": 139,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7528",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08275515586137772,
+          -0.7528383731842041,
+          -0.11944903433322906
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 23.333333,
+      "timeEnd": 23.333333,
+      "frameStart": 140,
+      "frameEnd": 140,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7530",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.0888097807765007,
+          -0.7530184984207153,
+          -0.12006261944770813
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 23.5,
+      "timeEnd": 23.5,
+      "frameStart": 141,
+      "frameEnd": 141,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7550",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09038519114255905,
+          -0.7550391554832458,
+          -0.12041129916906357
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 23.666667,
+      "timeEnd": 23.666667,
+      "frameStart": 142,
+      "frameEnd": 142,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7627",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08893120288848877,
+          -0.762734591960907,
+          -0.11950145661830902
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 23.833333,
+      "timeEnd": 23.833333,
+      "frameStart": 143,
+      "frameEnd": 143,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7710",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08584050834178925,
+          -0.7709775567054749,
+          -0.09845233708620071
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 24.0,
+      "timeEnd": 24.0,
+      "frameStart": 144,
+      "frameEnd": 144,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7711",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08791518956422806,
+          -0.7711167931556702,
+          -0.11375739425420761
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 24.166667,
+      "timeEnd": 24.166667,
+      "frameStart": 145,
+      "frameEnd": 145,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7579",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08444241434335709,
+          -0.7578917741775513,
+          -0.10344738513231277
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 24.333333,
+      "timeEnd": 24.333333,
+      "frameStart": 146,
+      "frameEnd": 146,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7515",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08206746727228165,
+          -0.7514854669570923,
+          -0.10348322987556458
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 24.5,
+      "timeEnd": 24.5,
+      "frameStart": 147,
+      "frameEnd": 147,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7487",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08221012353897095,
+          -0.7486574053764343,
+          -0.10424689948558807
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 24.666667,
+      "timeEnd": 24.666667,
+      "frameStart": 148,
+      "frameEnd": 148,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7528",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08798560500144958,
+          -0.752845048904419,
+          -0.10157661885023117
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 24.833333,
+      "timeEnd": 24.833333,
+      "frameStart": 149,
+      "frameEnd": 149,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7462",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08796361833810806,
+          -0.7462244629859924,
+          -0.10006500035524368
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 25.0,
+      "timeEnd": 25.0,
+      "frameStart": 150,
+      "frameEnd": 150,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7239",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08266620337963104,
+          -0.7238749861717224,
+          -0.08533422648906708
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 25.166667,
+      "timeEnd": 25.166667,
+      "frameStart": 151,
+      "frameEnd": 151,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7257",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.07699120044708252,
+          -0.7256811857223511,
+          -0.09591542929410934
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 25.333333,
+      "timeEnd": 25.333333,
+      "frameStart": 152,
+      "frameEnd": 152,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7251",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08725548535585403,
+          -0.7250860929489136,
+          -0.10106316953897476
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 25.5,
+      "timeEnd": 25.5,
+      "frameStart": 153,
+      "frameEnd": 153,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7177",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09358315914869308,
+          -0.7177212238311768,
+          -0.14189133048057556
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 25.666667,
+      "timeEnd": 25.666667,
+      "frameStart": 154,
+      "frameEnd": 154,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7179",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09335429221391678,
+          -0.7178823947906494,
+          -0.14901092648506165
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 25.833333,
+      "timeEnd": 25.833333,
+      "frameStart": 155,
+      "frameEnd": 155,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7161",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09286463260650635,
+          -0.7160663604736328,
+          -0.16174422204494476
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 26.0,
+      "timeEnd": 26.0,
+      "frameStart": 156,
+      "frameEnd": 156,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7189",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08529616892337799,
+          -0.7189368009567261,
+          -0.16393537819385529
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 26.166667,
+      "timeEnd": 26.166667,
+      "frameStart": 157,
+      "frameEnd": 157,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7462",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.07915448397397995,
+          -0.746205747127533,
+          -0.1506505161523819
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 26.333333,
+      "timeEnd": 26.333333,
+      "frameStart": 158,
+      "frameEnd": 158,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7482",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.07509030401706696,
+          -0.7482051849365234,
+          -0.1488562375307083
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 26.5,
+      "timeEnd": 26.5,
+      "frameStart": 159,
+      "frameEnd": 159,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7502",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.07914852350950241,
+          -0.7501711845397949,
+          -0.13510441780090332
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 26.666667,
+      "timeEnd": 26.666667,
+      "frameStart": 160,
+      "frameEnd": 160,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7538",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08851733803749084,
+          -0.7537939548492432,
+          -0.10788240283727646
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 26.833333,
+      "timeEnd": 26.833333,
+      "frameStart": 161,
+      "frameEnd": 161,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7590",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09384793788194656,
+          -0.7589992880821228,
+          -0.08198180049657822
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 27.0,
+      "timeEnd": 27.0,
+      "frameStart": 162,
+      "frameEnd": 162,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7657",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.09181168675422668,
+          -0.7656668424606323,
+          -0.0868024006485939
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 27.166667,
+      "timeEnd": 27.166667,
+      "frameStart": 163,
+      "frameEnd": 163,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7685",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08951625227928162,
+          -0.7684995532035828,
+          -0.08657801896333694
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 27.333333,
+      "timeEnd": 27.333333,
+      "frameStart": 164,
+      "frameEnd": 164,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7679",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08912574499845505,
+          -0.7679327130317688,
+          -0.08908702433109283
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 27.5,
+      "timeEnd": 27.5,
+      "frameStart": 165,
+      "frameEnd": 165,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7696",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08169373869895935,
+          -0.769621729850769,
+          -0.09037778526544571
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 27.666667,
+      "timeEnd": 27.666667,
+      "frameStart": 166,
+      "frameEnd": 166,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7729",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.06633181869983673,
+          -0.7728811502456665,
+          -0.09865856170654297
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 27.833333,
+      "timeEnd": 27.833333,
+      "frameStart": 167,
+      "frameEnd": 167,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7822",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.06682007014751434,
+          -0.7821844220161438,
+          -0.08786343783140182
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 28.0,
+      "timeEnd": 28.0,
+      "frameStart": 168,
+      "frameEnd": 168,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7820",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.06700217723846436,
+          -0.7819766998291016,
+          -0.07041086256504059
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 28.166667,
+      "timeEnd": 28.166667,
+      "frameStart": 169,
+      "frameEnd": 169,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7963",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.05425313487648964,
+          -0.7962969541549683,
+          -0.06384667754173279
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 28.333333,
+      "timeEnd": 28.333333,
+      "frameStart": 170,
+      "frameEnd": 170,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7986",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.0578840933740139,
+          -0.7986311912536621,
+          -0.06464944779872894
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 28.5,
+      "timeEnd": 28.5,
+      "frameStart": 171,
+      "frameEnd": 171,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7976",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.0632617399096489,
+          -0.7976056337356567,
+          -0.07093612849712372
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 28.666667,
+      "timeEnd": 28.666667,
+      "frameStart": 172,
+      "frameEnd": 172,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7897",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08009972423315048,
+          -0.7896500825881958,
+          -0.07921570539474487
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 28.833333,
+      "timeEnd": 28.833333,
+      "frameStart": 173,
+      "frameEnd": 173,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7849",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.08037357777357101,
+          -0.7849472761154175,
+          -0.09602076560258865
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 29.0,
+      "timeEnd": 29.0,
+      "frameStart": 174,
+      "frameEnd": 174,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7808",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10188739746809006,
+          -0.7808058857917786,
+          -0.09464994072914124
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 29.166667,
+      "timeEnd": 29.166667,
+      "frameStart": 175,
+      "frameEnd": 175,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7767",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.1168716624379158,
+          -0.7766991257667542,
+          -0.12526865303516388
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 29.333333,
+      "timeEnd": 29.333333,
+      "frameStart": 176,
+      "frameEnd": 176,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7686",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.1155460774898529,
+          -0.7686301469802856,
+          -0.12123724818229675
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 29.5,
+      "timeEnd": 29.5,
+      "frameStart": 177,
+      "frameEnd": 177,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7642",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11525804549455643,
+          -0.7641512751579285,
+          -0.11994274705648422
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 29.666667,
+      "timeEnd": 29.666667,
+      "frameStart": 178,
+      "frameEnd": 178,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7564",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.11808410286903381,
+          -0.7563612461090088,
+          -0.09718962758779526
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 29.833333,
+      "timeEnd": 29.833333,
+      "frameStart": 179,
+      "frameEnd": 179,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7571",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.13134527206420898,
+          -0.7571250796318054,
+          -0.09818575531244278
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 30.0,
+      "timeEnd": 30.0,
+      "frameStart": 180,
+      "frameEnd": 180,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7566",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.14258034527301788,
+          -0.7566068172454834,
+          -0.19189117848873138
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 30.166667,
+      "timeEnd": 30.166667,
+      "frameStart": 181,
+      "frameEnd": 181,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7497",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.14543446898460388,
+          -0.7497153282165527,
+          -0.17701268196105957
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 30.333333,
+      "timeEnd": 30.333333,
+      "frameStart": 182,
+      "frameEnd": 182,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7487",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.14628995954990387,
+          -0.7486569285392761,
+          -0.18096183240413666
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 30.5,
+      "timeEnd": 30.5,
+      "frameStart": 183,
+      "frameEnd": 183,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7610",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.14356960356235504,
+          -0.7610113024711609,
+          -0.16362915933132172
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 30.666667,
+      "timeEnd": 30.666667,
+      "frameStart": 184,
+      "frameEnd": 184,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7647",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.1288585215806961,
+          -0.7647404074668884,
+          -0.1223570853471756
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 30.833333,
+      "timeEnd": 30.833333,
+      "frameStart": 185,
+      "frameEnd": 185,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7688",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10525648295879364,
+          -0.7688426971435547,
+          -0.10898217558860779
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 31.0,
+      "timeEnd": 31.0,
+      "frameStart": 186,
+      "frameEnd": 186,
+      "bones": [
+        "leftFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7681",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          0.10617413371801376,
+          -0.7680615782737732,
+          -0.1286342293024063
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.0,
+      "timeEnd": 0.0,
+      "frameStart": 0,
+      "frameEnd": 0,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7644",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.09598104655742645,
+          -0.7643862962722778,
+          -0.11784029006958008
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.166667,
+      "timeEnd": 0.166667,
+      "frameStart": 1,
+      "frameEnd": 1,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7646",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.09041809290647507,
+          -0.7646195292472839,
+          -0.11889070272445679
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.333333,
+      "timeEnd": 0.333333,
+      "frameStart": 2,
+      "frameEnd": 2,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7610",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08281376212835312,
+          -0.7610495686531067,
+          -0.13649636507034302
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.5,
+      "timeEnd": 0.5,
+      "frameStart": 3,
+      "frameEnd": 3,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7619",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07923399657011032,
+          -0.7618936896324158,
+          -0.13319744169712067
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.666667,
+      "timeEnd": 0.666667,
+      "frameStart": 4,
+      "frameEnd": 4,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7603",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07895855605602264,
+          -0.7603483200073242,
+          -0.1314174383878708
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 0.833333,
+      "timeEnd": 0.833333,
+      "frameStart": 5,
+      "frameEnd": 5,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7517",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.0667932853102684,
+          -0.7517076134681702,
+          -0.13113349676132202
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.0,
+      "timeEnd": 1.0,
+      "frameStart": 6,
+      "frameEnd": 6,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7496",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.062010180205106735,
+          -0.749556303024292,
+          -0.13059675693511963
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.166667,
+      "timeEnd": 1.166667,
+      "frameStart": 7,
+      "frameEnd": 7,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7506",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.06193896010518074,
+          -0.7506058216094971,
+          -0.12438512593507767
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.333333,
+      "timeEnd": 1.333333,
+      "frameStart": 8,
+      "frameEnd": 8,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7523",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.06228092312812805,
+          -0.752314031124115,
+          -0.12174028903245926
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.5,
+      "timeEnd": 1.5,
+      "frameStart": 9,
+      "frameEnd": 9,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7591",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.06999143213033676,
+          -0.7590656280517578,
+          -0.11343429237604141
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.666667,
+      "timeEnd": 1.666667,
+      "frameStart": 10,
+      "frameEnd": 10,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7590",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07258115708827972,
+          -0.75896817445755,
+          -0.12296570092439651
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 1.833333,
+      "timeEnd": 1.833333,
+      "frameStart": 11,
+      "frameEnd": 11,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7619",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08224799484014511,
+          -0.7618662118911743,
+          -0.12031752616167068
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.0,
+      "timeEnd": 2.0,
+      "frameStart": 12,
+      "frameEnd": 12,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7619",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08838488161563873,
+          -0.761925458908081,
+          -0.11270999908447266
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.166667,
+      "timeEnd": 2.166667,
+      "frameStart": 13,
+      "frameEnd": 13,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7615",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08869807422161102,
+          -0.7614773511886597,
+          -0.114687979221344
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.333333,
+      "timeEnd": 2.333333,
+      "frameStart": 14,
+      "frameEnd": 14,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7615",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08755069226026535,
+          -0.7614697813987732,
+          -0.11678051203489304
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.5,
+      "timeEnd": 2.5,
+      "frameStart": 15,
+      "frameEnd": 15,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7659",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08745646476745605,
+          -0.765860378742218,
+          -0.1159340888261795
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.666667,
+      "timeEnd": 2.666667,
+      "frameStart": 16,
+      "frameEnd": 16,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7674",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08393767476081848,
+          -0.7673936486244202,
+          -0.11974649131298065
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 2.833333,
+      "timeEnd": 2.833333,
+      "frameStart": 17,
+      "frameEnd": 17,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7690",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.0816291943192482,
+          -0.7689651846885681,
+          -0.09828585386276245
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.0,
+      "timeEnd": 3.0,
+      "frameStart": 18,
+      "frameEnd": 18,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7682",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07907981425523758,
+          -0.7682080864906311,
+          -0.09484755992889404
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.166667,
+      "timeEnd": 3.166667,
+      "frameStart": 19,
+      "frameEnd": 19,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7610",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07475074380636215,
+          -0.7610443234443665,
+          -0.0917205810546875
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.333333,
+      "timeEnd": 3.333333,
+      "frameStart": 20,
+      "frameEnd": 20,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7556",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07463601976633072,
+          -0.7556496262550354,
+          -0.09273609519004822
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.5,
+      "timeEnd": 3.5,
+      "frameStart": 21,
+      "frameEnd": 21,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7529",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07286054641008377,
+          -0.7528551816940308,
+          -0.09285368770360947
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.666667,
+      "timeEnd": 3.666667,
+      "frameStart": 22,
+      "frameEnd": 22,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7548",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.06977321207523346,
+          -0.7548062205314636,
+          -0.0998743548989296
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 3.833333,
+      "timeEnd": 3.833333,
+      "frameStart": 23,
+      "frameEnd": 23,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7600",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07257449626922607,
+          -0.7600182294845581,
+          -0.11164388060569763
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.0,
+      "timeEnd": 4.0,
+      "frameStart": 24,
+      "frameEnd": 24,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7558",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07429317384958267,
+          -0.7558091878890991,
+          -0.12313085049390793
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.166667,
+      "timeEnd": 4.166667,
+      "frameStart": 25,
+      "frameEnd": 25,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7552",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07089663296937943,
+          -0.7552273869514465,
+          -0.1287989467382431
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.333333,
+      "timeEnd": 4.333333,
+      "frameStart": 26,
+      "frameEnd": 26,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7533",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.06606126576662064,
+          -0.7533326745033264,
+          -0.12443114072084427
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.5,
+      "timeEnd": 4.5,
+      "frameStart": 27,
+      "frameEnd": 27,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7523",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.06589528173208237,
+          -0.7523387670516968,
+          -0.12408236414194107
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.666667,
+      "timeEnd": 4.666667,
+      "frameStart": 28,
+      "frameEnd": 28,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7530",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.06686068326234818,
+          -0.7529600262641907,
+          -0.11985815316438675
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 4.833333,
+      "timeEnd": 4.833333,
+      "frameStart": 29,
+      "frameEnd": 29,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7531",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.0726887434720993,
+          -0.7530946731567383,
+          -0.11956271529197693
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.0,
+      "timeEnd": 5.0,
+      "frameStart": 30,
+      "frameEnd": 30,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7530",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07305976003408432,
+          -0.753019392490387,
+          -0.11897332966327667
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.166667,
+      "timeEnd": 5.166667,
+      "frameStart": 31,
+      "frameEnd": 31,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7584",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07345198094844818,
+          -0.758442759513855,
+          -0.10598762333393097
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.333333,
+      "timeEnd": 5.333333,
+      "frameStart": 32,
+      "frameEnd": 32,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7575",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07680589705705643,
+          -0.7574829459190369,
+          -0.10236890614032745
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.5,
+      "timeEnd": 5.5,
+      "frameStart": 33,
+      "frameEnd": 33,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7552",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.0812760442495346,
+          -0.7551560401916504,
+          -0.11193466931581497
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.666667,
+      "timeEnd": 5.666667,
+      "frameStart": 34,
+      "frameEnd": 34,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7520",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07891520857810974,
+          -0.7519826889038086,
+          -0.11856751888990402
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 5.833333,
+      "timeEnd": 5.833333,
+      "frameStart": 35,
+      "frameEnd": 35,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7442",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.0732942596077919,
+          -0.7441574335098267,
+          -0.11928462237119675
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.0,
+      "timeEnd": 6.0,
+      "frameStart": 36,
+      "frameEnd": 36,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7476",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07377196103334427,
+          -0.7475900053977966,
+          -0.12097302079200745
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.166667,
+      "timeEnd": 6.166667,
+      "frameStart": 37,
+      "frameEnd": 37,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7474",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07696682214736938,
+          -0.7473610043525696,
+          -0.11924967169761658
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.333333,
+      "timeEnd": 6.333333,
+      "frameStart": 38,
+      "frameEnd": 38,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7464",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07701243460178375,
+          -0.746350109577179,
+          -0.11617465317249298
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.5,
+      "timeEnd": 6.5,
+      "frameStart": 39,
+      "frameEnd": 39,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7462",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07865402847528458,
+          -0.746225893497467,
+          -0.11496257036924362
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.666667,
+      "timeEnd": 6.666667,
+      "frameStart": 40,
+      "frameEnd": 40,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7438",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07977712899446487,
+          -0.7437816858291626,
+          -0.11523810029029846
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 6.833333,
+      "timeEnd": 6.833333,
+      "frameStart": 41,
+      "frameEnd": 41,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7444",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08054481446743011,
+          -0.744357705116272,
+          -0.14340101182460785
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.0,
+      "timeEnd": 7.0,
+      "frameStart": 42,
+      "frameEnd": 42,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7400",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07608190923929214,
+          -0.7400376200675964,
+          -0.15477389097213745
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.166667,
+      "timeEnd": 7.166667,
+      "frameStart": 43,
+      "frameEnd": 43,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7345",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07643681019544601,
+          -0.7344960570335388,
+          -0.1552290916442871
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.333333,
+      "timeEnd": 7.333333,
+      "frameStart": 44,
+      "frameEnd": 44,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7342",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07337037473917007,
+          -0.7342045903205872,
+          -0.14873750507831573
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.5,
+      "timeEnd": 7.5,
+      "frameStart": 45,
+      "frameEnd": 45,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7342",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07141555845737457,
+          -0.7341877818107605,
+          -0.14340201020240784
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.666667,
+      "timeEnd": 7.666667,
+      "frameStart": 46,
+      "frameEnd": 46,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7309",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07037021964788437,
+          -0.7309052348136902,
+          -0.1493714302778244
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 7.833333,
+      "timeEnd": 7.833333,
+      "frameStart": 47,
+      "frameEnd": 47,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7311",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07151714712381363,
+          -0.7310900688171387,
+          -0.15321600437164307
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.0,
+      "timeEnd": 8.0,
+      "frameStart": 48,
+      "frameEnd": 48,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7425",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07210606336593628,
+          -0.7424705028533936,
+          -0.13143818080425262
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.166667,
+      "timeEnd": 8.166667,
+      "frameStart": 49,
+      "frameEnd": 49,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7504",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07224684953689575,
+          -0.7504422068595886,
+          -0.13142991065979004
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.333333,
+      "timeEnd": 8.333333,
+      "frameStart": 50,
+      "frameEnd": 50,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7533",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07230952382087708,
+          -0.7533169984817505,
+          -0.13165225088596344
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.5,
+      "timeEnd": 8.5,
+      "frameStart": 51,
+      "frameEnd": 51,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7566",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07326720654964447,
+          -0.7565958499908447,
+          -0.13169819116592407
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.666667,
+      "timeEnd": 8.666667,
+      "frameStart": 52,
+      "frameEnd": 52,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7602",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.07791602611541748,
+          -0.7601849436759949,
+          -0.13173902034759521
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 8.833333,
+      "timeEnd": 8.833333,
+      "frameStart": 53,
+      "frameEnd": 53,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7600",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08047285676002502,
+          -0.7599886059761047,
+          -0.12105794250965118
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.0,
+      "timeEnd": 9.0,
+      "frameStart": 54,
+      "frameEnd": 54,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7522",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.0820341631770134,
+          -0.7521969676017761,
+          -0.12151919305324554
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.166667,
+      "timeEnd": 9.166667,
+      "frameStart": 55,
+      "frameEnd": 55,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7518",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08628016710281372,
+          -0.7518248558044434,
+          -0.11952561140060425
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.333333,
+      "timeEnd": 9.333333,
+      "frameStart": 56,
+      "frameEnd": 56,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7502",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08662238717079163,
+          -0.7501602172851562,
+          -0.121995709836483
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.5,
+      "timeEnd": 9.5,
+      "frameStart": 57,
+      "frameEnd": 57,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7517",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08656775951385498,
+          -0.7517477869987488,
+          -0.11971240490674973
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.666667,
+      "timeEnd": 9.666667,
+      "frameStart": 58,
+      "frameEnd": 58,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7513",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.08579590171575546,
+          -0.7512882351875305,
+          -0.12086173892021179
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 9.833333,
+      "timeEnd": 9.833333,
+      "frameStart": 59,
+      "frameEnd": 59,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7512",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.06696728616952896,
+          -0.7512103319168091,
+          -0.12912338972091675
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 10.0,
+      "timeEnd": 10.0,
+      "frameStart": 60,
+      "frameEnd": 60,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7527",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.05459539592266083,
+          -0.7527141571044922,
+          -0.12592458724975586
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 10.166667,
+      "timeEnd": 10.166667,
+      "frameStart": 61,
+      "frameEnd": 61,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7347",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.0382784940302372,
+          -0.7346526980400085,
+          -0.10112562030553818
+        ],
+        "floorY": 0.0
+      }
+    },
+    {
+      "id": "foot-below-floor",
+      "severity": "error",
+      "category": "ground-penetration",
+      "timeStart": 10.333333,
+      "timeEnd": 10.333333,
+      "frameStart": 62,
+      "frameEnd": 62,
+      "bones": [
+        "rightFoot"
+      ],
+      "metric": "world Y",
+      "expected": ">= floorY - 0.030",
+      "actual": "-0.7400",
+      "likelyCause": "Floor calibration, root height, or foot IK target is too low.",
+      "suggestedFix": "Recalibrate floor/root Y and clamp planted feet above the floor plane.",
+      "evidence": {
+        "worldPos": [
+          -0.029379280284047127,
+          -0.7399661540985107,
+          -0.11998753249645233
+        ],
+        "floorY": 0.0
+      }
+    }
+  ]
+}

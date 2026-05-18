@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "inputs": {
+    "before": "animations/idle/idle_0.json",
+    "after": "validation-reports/idle_0.repaired_smooth.json"
+  },
+  "summary": {
+    "matchedTracks": 50,
+    "matchedKeyframes": 300,
+    "componentChangedKeyframes": 9,
+    "visualChangedKeyframes": 9,
+    "hemisphereOnlyKeyframes": 0,
+    "changedBones": 4,
+    "maxDeltaDeg": 65.8734,
+    "maxEulerDeltaDeg": 65.2504,
+    "maxChange": {
+      "frame": 1,
+      "time": 0.0125,
+      "deltaDeg": 65.8734,
+      "componentDelta": 0.53586979,
+      "eulerDeltaDeg": 65.2504,
+      "bone": "rightHand"
+    },
+    "missingBefore": [],
+    "missingAfter": [],
+    "timeMismatch": []
+  },
+  "bones": [
+    {
+      "bone": "rightHand",
+      "keyframes": 6,
+      "componentChangedKeyframes": 1,
+      "visualChangedKeyframes": 1,
+      "hemisphereOnlyKeyframes": 0,
+      "maxDeltaDeg": 65.8734,
+      "maxEulerDeltaDeg": 65.2504,
+      "maxComponentDelta": 0.53586979,
+      "risk": "high",
+      "worst": {
+        "frame": 1,
+        "time": 0.0125,
+        "deltaDeg": 65.8734,
+        "componentDelta": 0.53586979,
+        "eulerDeltaDeg": 65.2504
+      }
+    },
+    {
+      "bone": "rightUpperArm",
+      "keyframes": 6,
+      "componentChangedKeyframes": 6,
+      "visualChangedKeyframes": 6,
+      "hemisphereOnlyKeyframes": 0,
+      "maxDeltaDeg": 25.5625,
+      "maxEulerDeltaDeg": 25.5625,
+      "maxComponentDelta": 0.17821697,
+      "risk": "high",
+      "worst": {
+        "frame": 4,
+        "time": 0.05,
+        "deltaDeg": 25.5625,
+        "componentDelta": 0.17821697,
+        "eulerDeltaDeg": 25.5625
+      }
+    },
+    {
+      "bone": "leftLowerLeg",
+      "keyframes": 6,
+      "componentChangedKeyframes": 1,
+      "visualChangedKeyframes": 1,
+      "hemisphereOnlyKeyframes": 0,
+      "maxDeltaDeg": 6.8865,
+      "maxEulerDeltaDeg": 6.8865,
+      "maxComponentDelta": 0.05992374,
+      "risk": "medium",
+      "worst": {
+        "frame": 2,
+        "time": 0.025,
+        "deltaDeg": 6.8865,
+        "componentDelta": 0.05992374,
+        "eulerDeltaDeg": 6.8865
+      }
+    },
+    {
+      "bone": "rightLowerLeg",
+      "keyframes": 6,
+      "componentChangedKeyframes": 1,
+      "visualChangedKeyframes": 1,
+      "hemisphereOnlyKeyframes": 0,
+      "maxDeltaDeg": 4.0277,
+      "maxEulerDeltaDeg": 4.0277,
+      "maxComponentDelta": 0.03508028,
+      "risk": "low",
+      "worst": {
+        "frame": 5,
+        "time": 0.0625,
+        "deltaDeg": 4.0277,
+        "componentDelta": 0.03508028,
+        "eulerDeltaDeg": 4.0277
+      }
+    }
+  ]
+}

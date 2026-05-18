@@ -48,6 +48,31 @@ test('offline parser accepts dense SMPL-style WHAM/GVHMR joints', () => {
   assert.deepEqual(motion.frames[0].joints.leftUpperArm?.position, [0.2, 1.55, 0]);
 });
 
+test('offline parser accepts multiview canonical motion source aliases', () => {
+  for (const source of ['multiview', 'mediapipe-multiview', 'multi-view-mediapipe']) {
+    const motion = parseCanonicalMotionJson(JSON.stringify({
+      name: 'front-side',
+      source,
+      fps: 30,
+      coordinateSpace: 'vrm',
+      frames: [
+        {
+          time: 0,
+          root: { position: [0, 1, 0] },
+          joints: {
+            hips: { position: [0, 1, 0], confidence: 0.95 },
+            chest: { position: [0, 1.35, 0.05], confidence: 0.9 },
+            leftHand: { position: [0.35, 1.2, 0.25], confidence: 0.8 },
+          },
+        },
+      ],
+    }), 'fallback');
+
+    assert.equal(motion.source, 'multiview');
+    assert.equal(motion.frames[0].joints.leftHand?.confidence, 0.8);
+  }
+});
+
 test('offline retarget builds playable AnimationClip tracks', () => {
   const vrm = buildMockVRM();
   const second = smplRestFrame();
@@ -94,4 +119,3 @@ test('offline retarget can smooth noisy SMPL joints and lock root motion', () =>
   assert.ok(hips, 'hips position track exists');
   assert.deepEqual(Array.from(hips.values as ArrayLike<number>), [0, 1, 0, 0, 1, 0]);
 });
-

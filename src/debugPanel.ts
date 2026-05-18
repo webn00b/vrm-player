@@ -16,7 +16,16 @@ export function mountDebugPanel(
 ): () => void {
   const { pa, micro, idle, controller } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
-  const { skelViz, validator, bonePanel, boneDrag, hipForce, hipBalance, skeletonLogger } = tooling;
+  const {
+    skelViz,
+    validator,
+    bonePanel,
+    boneDrag,
+    hipForce,
+    hipBalance,
+    skeletonLogger,
+    motionTraceRecorder,
+  } = tooling;
   const getController = () => controller;
   const getMocap = () => mocap;
   const root = document.getElementById('debug-panel-root');
@@ -57,7 +66,7 @@ export function mountDebugPanel(
     // Tools sections (Skeleton / Validation / Mocap-advanced / Debug record)
     // — fully migrated into the Vue tree. Replaces `wireDebugPanelTools` +
     // `wireDebugPanelMocapParams`.
-    validator, skelViz, bonePanel, boneDrag, skeletonLogger, mocap,
+    validator, skelViz, bonePanel, boneDrag, skeletonLogger, motionTraceRecorder, mocap,
     getController, setModelVisible, dbgRecorder,
   });
   installPrimeVueOn(debugApp);

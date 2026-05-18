@@ -7,6 +7,7 @@ interface SceneControlsSnapshot {
   skeletonOn: boolean;
   skelBodyOn: boolean;
   skelFingersOn: boolean;
+  skelLabelsOn: boolean;
   dragOn: boolean;
 }
 
@@ -15,6 +16,7 @@ const defaults: SceneControlsSnapshot = {
   skeletonOn: true,
   skelBodyOn: true,
   skelFingersOn: true,
+  skelLabelsOn: false,
   dragOn: false,
 };
 
@@ -28,6 +30,7 @@ function readStoredSceneControls(): SceneControlsSnapshot {
       skeletonOn: typeof parsed.skeletonOn === 'boolean' ? parsed.skeletonOn : defaults.skeletonOn,
       skelBodyOn: typeof parsed.skelBodyOn === 'boolean' ? parsed.skelBodyOn : defaults.skelBodyOn,
       skelFingersOn: typeof parsed.skelFingersOn === 'boolean' ? parsed.skelFingersOn : defaults.skelFingersOn,
+      skelLabelsOn: typeof parsed.skelLabelsOn === 'boolean' ? parsed.skelLabelsOn : defaults.skelLabelsOn,
       dragOn: typeof parsed.dragOn === 'boolean' ? parsed.dragOn : defaults.dragOn,
     };
   } catch {

@@ -35,6 +35,7 @@ import { BoneValidator } from './validation/boneValidator';
 import { HipForceTracker } from './physics/hipForce';
 import { HipBalanceCorrector } from './physics/hipBalanceCorrector';
 import { createSkeletonLogger } from './diagnostics/skeletonLogger';
+import { MotionTraceRecorder } from './diagnostics/motionTraceRecorder';
 import { renderLoopHooks } from './renderLoopHooks';
 import { startRenderLoop } from './renderLoop';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
@@ -49,6 +50,7 @@ declare global {
     __vrmPlayerCleanup?: CleanupFn;
     __mocapDbg?: MocapDebugRecorder;
     __skelLog?: ReturnType<typeof createSkeletonLogger>;
+    __motionTrace?: MotionTraceRecorder;
   }
 }
 
@@ -174,6 +176,8 @@ async function main() {
     for (let i = cleanupFns.length - 1; i >= 0; i--) cleanupFns[i]();
     cleanupFns.length = 0;
     if (window.__mocapDbg === dbgRecorder) delete window.__mocapDbg;
+    if (window.__motionTrace?.active) window.__motionTrace.stop();
+    if (window.__motionTrace === motionTraceRecorder) delete window.__motionTrace;
   };
   registerCleanup(
     () => shellApp.unmount(),
@@ -306,8 +310,23 @@ async function main() {
   registerCleanup(() => { renderLoopHooks.skeletonLoggerTick = null; });
   window.__skelLog = skeletonLogger;
 
+  // ── Motion trace recorder (JSON for Python animation validator) ──────────
+  const motionTraceRecorder = new MotionTraceRecorder(vrm);
+  renderLoopHooks.motionTraceCaptureSink = () => motionTraceRecorder.capture();
+  registerCleanup(() => { renderLoopHooks.motionTraceCaptureSink = null; });
+  window.__motionTrace = motionTraceRecorder;
+
   const playback: PlaybackSystems = { controller, pa, micro, idle: idleLoop };
-  const tooling: ToolingSystems   = { skelViz, validator, bonePanel, boneDrag, hipForce, hipBalance, skeletonLogger };
+  const tooling: ToolingSystems   = {
+    skelViz,
+    validator,
+    bonePanel,
+    boneDrag,
+    hipForce,
+    hipBalance,
+    skeletonLogger,
+    motionTraceRecorder,
+  };
 
   vrm.scene.visible = sceneControlsState.modelOn;
 

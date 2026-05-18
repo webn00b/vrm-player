@@ -63,6 +63,16 @@ const ALL_JOINT_NAMES: string[] = (() => {
   return [...s];
 })();
 
+const BODY_JOINT_NAMES = new Set<string>(BODY_CONNECTIONS.flat());
+const FINGER_JOINT_NAMES = new Set<string>(FINGER_CONNECTIONS.flat());
+
+interface BoneLabel {
+  name: string;
+  sprite: THREE.Sprite;
+  texture: THREE.CanvasTexture;
+  material: THREE.SpriteMaterial;
+}
+
 // ── SkeletonVisualizer ────────────────────────────────────────────────────────
 
 /**
@@ -82,9 +92,11 @@ export class SkeletonVisualizer {
   private bodyLines:   THREE.LineSegments;
   private fingerLines: THREE.LineSegments;
   private dots:        THREE.Points;
+  private labels:      BoneLabel[] = [];
 
   private _showBody    = true;
   private _showFingers = true;
+  private _showLabels  = false;
   private _visible     = false;
 
   // Scratch vectors
@@ -111,13 +123,15 @@ export class SkeletonVisualizer {
     this.bodyLines   = this._makeLines(BODY_CONNECTIONS,   lineMat(0x00e5ff));  // cyan
     this.fingerLines = this._makeLines(FINGER_CONNECTIONS, lineMat(0xffee00));  // yellow
     this.dots        = this._makeDots(dotMat);
+    this.labels      = this._makeLabels();
 
     // Everything hidden by default
     this.bodyLines.visible   = false;
     this.fingerLines.visible = false;
     this.dots.visible        = false;
+    for (const label of this.labels) label.sprite.visible = false;
 
-    scene.add(this.bodyLines, this.fingerLines, this.dots);
+    scene.add(this.bodyLines, this.fingerLines, this.dots, ...this.labels.map(l => l.sprite));
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -125,6 +139,7 @@ export class SkeletonVisualizer {
   get visible():     boolean { return this._visible; }
   get showBody():    boolean { return this._showBody; }
   get showFingers(): boolean { return this._showFingers; }
+  get showLabels():  boolean { return this._showLabels; }
 
   setVisible(v: boolean): void {
     this._visible = v;
@@ -141,19 +156,29 @@ export class SkeletonVisualizer {
     this._syncVisibility();
   }
 
+  setShowLabels(v: boolean): void {
+    this._showLabels = v;
+    this._syncVisibility();
+  }
+
   /** Call every frame (after vrm.update) to sync positions. */
   update(): void {
     if (!this._visible) return;
     if (this._showBody)    this._updateLines(this.bodyLines,   BODY_CONNECTIONS);
     if (this._showFingers) this._updateLines(this.fingerLines, FINGER_CONNECTIONS);
     this._updateDots();
+    if (this._showLabels) this._updateLabels();
   }
 
   dispose(): void {
-    this.scene.remove(this.bodyLines, this.fingerLines, this.dots);
+    this.scene.remove(this.bodyLines, this.fingerLines, this.dots, ...this.labels.map(l => l.sprite));
     this.bodyLines.geometry.dispose();
     this.fingerLines.geometry.dispose();
     this.dots.geometry.dispose();
+    for (const label of this.labels) {
+      label.texture.dispose();
+      label.material.dispose();
+    }
   }
 
   // ── Private ─────────────────────────────────────────────────────────────────
@@ -192,6 +217,77 @@ export class SkeletonVisualizer {
     return new THREE.Points(geo, mat);
   }
 
+  private _makeLabels(): BoneLabel[] {
+    return ALL_JOINT_NAMES.map((name) => {
+      const { texture, aspect } = this._makeLabelTexture(name);
+      const material = new THREE.SpriteMaterial({
+        map: texture,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+      });
+      const sprite = new THREE.Sprite(material);
+      sprite.renderOrder = 1000;
+      sprite.scale.set(0.15 * aspect, 0.15, 1);
+      return { name, sprite, texture, material };
+    });
+  }
+
+  private _makeLabelTexture(text: string): { texture: THREE.CanvasTexture; aspect: number } {
+    const paddingX = 12;
+    const paddingY = 7;
+    const fontSize = 22;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      canvas.width = 1;
+      canvas.height = 1;
+      return { texture: new THREE.CanvasTexture(canvas), aspect: 1 };
+    }
+
+    ctx.font = `600 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const metrics = ctx.measureText(text);
+    const width = Math.ceil(metrics.width + paddingX * 2);
+    const height = Math.ceil(fontSize + paddingY * 2);
+    canvas.width = Math.max(64, width);
+    canvas.height = height;
+
+    ctx.font = `600 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(5, 10, 14, 0.78)';
+    this._roundRect(ctx, 0, 0, canvas.width, canvas.height, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(185, 251, 255, 0.55)';
+    ctx.lineWidth = 2;
+    this._roundRect(ctx, 1, 1, canvas.width - 2, canvas.height - 2, 7);
+    ctx.stroke();
+    ctx.fillStyle = '#f4fbff';
+    ctx.fillText(text, paddingX, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    return { texture, aspect: canvas.width / canvas.height };
+  }
+
+  private _roundRect(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+  ): void {
+    const r = Math.min(radius, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + width, y, x + width, y + height, r);
+    ctx.arcTo(x + width, y + height, x, y + height, r);
+    ctx.arcTo(x, y + height, x, y, r);
+    ctx.arcTo(x, y, x + width, y, r);
+    ctx.closePath();
+  }
+
   private _updateLines(ls: THREE.LineSegments, connections: [string, string][]): void {
     const attr = ls.geometry.attributes.position as THREE.BufferAttribute;
     let i = 0;
@@ -221,9 +317,32 @@ export class SkeletonVisualizer {
     attr.needsUpdate = true;
   }
 
+  private _updateLabels(): void {
+    for (const label of this.labels) {
+      const n = this._node(label.name);
+      if (!n) {
+        label.sprite.visible = false;
+        continue;
+      }
+      n.getWorldPosition(this._pa);
+      label.sprite.position.set(this._pa.x, this._pa.y + 0.035, this._pa.z);
+      label.sprite.visible = this._labelAllowed(label.name);
+    }
+  }
+
+  private _labelAllowed(name: string): boolean {
+    if (!this._visible || !this._showLabels) return false;
+    const body = BODY_JOINT_NAMES.has(name);
+    const fingers = FINGER_JOINT_NAMES.has(name);
+    return (this._showBody && body) || (this._showFingers && fingers);
+  }
+
   private _syncVisibility(): void {
     this.bodyLines.visible   = this._visible && this._showBody;
     this.fingerLines.visible = this._visible && this._showFingers;
     this.dots.visible        = this._visible;
+    for (const label of this.labels) {
+      label.sprite.visible = this._labelAllowed(label.name);
+    }
   }
 }

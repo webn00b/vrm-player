@@ -1,0 +1,310 @@
+{
+  "schemaVersion": 1,
+  "trace": {
+    "name": "idle_0",
+    "sourceFormat": "channels",
+    "fps": 30.0,
+    "duration": 3.0,
+    "frameCount": 6
+  },
+  "summary": {
+    "issueCount": 10,
+    "suppressedIssueCount": 0,
+    "severityCounts": {
+      "warning": 7,
+      "error": 3
+    },
+    "categoryCounts": {
+      "rom": 8,
+      "flip": 2
+    },
+    "rawEventCounts": {
+      "rom": 8,
+      "flip": 2
+    }
+  },
+  "issues": [
+    {
+      "id": "joint-range-violation",
+      "severity": "warning",
+      "category": "rom",
+      "timeStart": 0.0,
+      "timeEnd": 0.0,
+      "frameStart": 0,
+      "frameEnd": 0,
+      "bones": [
+        "rightUpperArm"
+      ],
+      "metric": "rightUpperArm.z Euler (YXZ)",
+      "expected": "-60.0deg..180.0deg",
+      "actual": "-74.6deg",
+      "likelyCause": "rightUpperArm z-axis rotation is outside the configured anatomical range.",
+      "suggestedFix": "Inspect retarget mapping for this bone and clamp/smooth before building final keyframes.",
+      "evidence": {
+        "axis": "z",
+        "order": "YXZ",
+        "valueDeg": -74.57339298960356,
+        "limitDeg": -59.99999999999999,
+        "overByDeg": 14.573392989603573,
+        "quat": [
+          -0.06364715386904243,
+          0.0302955389744195,
+          -0.6026819268701805,
+          0.794862073033219
+        ]
+      }
+    },
+    {
+      "id": "joint-range-violation",
+      "severity": "warning",
+      "category": "rom",
+      "timeStart": 0.0125,
+      "timeEnd": 0.0125,
+      "frameStart": 1,
+      "frameEnd": 1,
+      "bones": [
+        "rightUpperArm"
+      ],
+      "metric": "rightUpperArm.z Euler (YXZ)",
+      "expected": "-60.0deg..180.0deg",
+      "actual": "-74.6deg",
+      "likelyCause": "rightUpperArm z-axis rotation is outside the configured anatomical range.",
+      "suggestedFix": "Inspect retarget mapping for this bone and clamp/smooth before building final keyframes.",
+      "evidence": {
+        "axis": "z",
+        "order": "YXZ",
+        "valueDeg": -74.57339298960356,
+        "limitDeg": -59.99999999999999,
+        "overByDeg": 14.573392989603573,
+        "quat": [
+          -0.06364715386904243,
+          0.0302955389744195,
+          -0.6026819268701805,
+          0.794862073033219
+        ]
+      }
+    },
+    {
+      "id": "large-quaternion-step",
+      "severity": "error",
+      "category": "flip",
+      "timeStart": 0.0125,
+      "timeEnd": 0.0125,
+      "frameStart": 1,
+      "frameEnd": 1,
+      "bones": [
+        "rightHand"
+      ],
+      "metric": "adjacent quaternion delta",
+      "expected": "<= 60.0deg/frame",
+      "actual": "65.87deg",
+      "likelyCause": "Retarget mapping, Euler unwrap, or source mocap tracking jumped between frames.",
+      "suggestedFix": "Inspect this frame in the retarget stage; smooth/unwrap source rotation before building the track.",
+      "evidence": {
+        "previousFrame": 0,
+        "deltaDeg": 65.87341392606412
+      }
+    },
+    {
+      "id": "joint-range-violation",
+      "severity": "warning",
+      "category": "rom",
+      "timeStart": 0.025,
+      "timeEnd": 0.025,
+      "frameStart": 2,
+      "frameEnd": 2,
+      "bones": [
+        "rightUpperArm"
+      ],
+      "metric": "rightUpperArm.z Euler (YXZ)",
+      "expected": "-60.0deg..180.0deg",
+      "actual": "-74.6deg",
+      "likelyCause": "rightUpperArm z-axis rotation is outside the configured anatomical range.",
+      "suggestedFix": "Inspect retarget mapping for this bone and clamp/smooth before building final keyframes.",
+      "evidence": {
+        "axis": "z",
+        "order": "YXZ",
+        "valueDeg": -74.57339298960356,
+        "limitDeg": -59.99999999999999,
+        "overByDeg": 14.573392989603573,
+        "quat": [
+          -0.06364715386904243,
+          0.0302955389744195,
+          -0.6026819268701805,
+          0.794862073033219
+        ]
+      }
+    },
+    {
+      "id": "large-quaternion-step",
+      "severity": "error",
+      "category": "flip",
+      "timeStart": 0.025,
+      "timeEnd": 0.025,
+      "frameStart": 2,
+      "frameEnd": 2,
+      "bones": [
+        "rightHand"
+      ],
+      "metric": "adjacent quaternion delta",
+      "expected": "<= 60.0deg/frame",
+      "actual": "65.87deg",
+      "likelyCause": "Retarget mapping, Euler unwrap, or source mocap tracking jumped between frames.",
+      "suggestedFix": "Inspect this frame in the retarget stage; smooth/unwrap source rotation before building the track.",
+      "evidence": {
+        "previousFrame": 1,
+        "deltaDeg": 65.87341392606412
+      }
+    },
+    {
+      "id": "joint-range-violation",
+      "severity": "warning",
+      "category": "rom",
+      "timeStart": 0.025,
+      "timeEnd": 0.025,
+      "frameStart": 2,
+      "frameEnd": 2,
+      "bones": [
+        "leftLowerLeg"
+      ],
+      "metric": "leftLowerLeg.x Euler (XYZ)",
+      "expected": "-5.0deg..140.0deg",
+      "actual": "-11.9deg",
+      "likelyCause": "left knee pole direction or flexion sign may be inverted.",
+      "suggestedFix": "Check local bone basis, axis sign, and IK pole direction before adding more smoothing.",
+      "evidence": {
+        "axis": "x",
+        "order": "XYZ",
+        "valueDeg": -11.886472924548507,
+        "limitDeg": -5.0,
+        "overByDeg": 6.886472924548507,
+        "quat": [
+          -0.10354312871918475,
+          0.0,
+          0.0,
+          0.9946249647455278
+        ]
+      }
+    },
+    {
+      "id": "joint-range-violation",
+      "severity": "warning",
+      "category": "rom",
+      "timeStart": 0.0375,
+      "timeEnd": 0.0375,
+      "frameStart": 3,
+      "frameEnd": 3,
+      "bones": [
+        "rightUpperArm"
+      ],
+      "metric": "rightUpperArm.z Euler (YXZ)",
+      "expected": "-60.0deg..180.0deg",
+      "actual": "-74.6deg",
+      "likelyCause": "rightUpperArm z-axis rotation is outside the configured anatomical range.",
+      "suggestedFix": "Inspect retarget mapping for this bone and clamp/smooth before building final keyframes.",
+      "evidence": {
+        "axis": "z",
+        "order": "YXZ",
+        "valueDeg": -74.57339298960356,
+        "limitDeg": -59.99999999999999,
+        "overByDeg": 14.573392989603573,
+        "quat": [
+          -0.06364715386904243,
+          0.0302955389744195,
+          -0.6026819268701805,
+          0.794862073033219
+        ]
+      }
+    },
+    {
+      "id": "joint-range-violation",
+      "severity": "error",
+      "category": "rom",
+      "timeStart": 0.05,
+      "timeEnd": 0.05,
+      "frameStart": 4,
+      "frameEnd": 4,
+      "bones": [
+        "rightUpperArm"
+      ],
+      "metric": "rightUpperArm.z Euler (YXZ)",
+      "expected": "-60.0deg..180.0deg",
+      "actual": "-85.6deg",
+      "likelyCause": "rightUpperArm z-axis rotation is outside the configured anatomical range.",
+      "suggestedFix": "Inspect retarget mapping for this bone and clamp/smooth before building final keyframes.",
+      "evidence": {
+        "axis": "z",
+        "order": "YXZ",
+        "valueDeg": -85.56253380655586,
+        "limitDeg": -59.99999999999999,
+        "overByDeg": 25.562533806555873,
+        "quat": [
+          -0.10135571857422741,
+          0.07227919460387613,
+          -0.6716336695790748,
+          0.7303498820616482
+        ]
+      }
+    },
+    {
+      "id": "joint-range-violation",
+      "severity": "warning",
+      "category": "rom",
+      "timeStart": 0.0625,
+      "timeEnd": 0.0625,
+      "frameStart": 5,
+      "frameEnd": 5,
+      "bones": [
+        "rightUpperArm"
+      ],
+      "metric": "rightUpperArm.z Euler (YXZ)",
+      "expected": "-60.0deg..180.0deg",
+      "actual": "-74.6deg",
+      "likelyCause": "rightUpperArm z-axis rotation is outside the configured anatomical range.",
+      "suggestedFix": "Inspect retarget mapping for this bone and clamp/smooth before building final keyframes.",
+      "evidence": {
+        "axis": "z",
+        "order": "YXZ",
+        "valueDeg": -74.57339298960356,
+        "limitDeg": -59.99999999999999,
+        "overByDeg": 14.573392989603573,
+        "quat": [
+          -0.06364715386904243,
+          0.0302955389744195,
+          -0.6026819268701805,
+          0.794862073033219
+        ]
+      }
+    },
+    {
+      "id": "joint-range-violation",
+      "severity": "warning",
+      "category": "rom",
+      "timeStart": 0.0625,
+      "timeEnd": 0.0625,
+      "frameStart": 5,
+      "frameEnd": 5,
+      "bones": [
+        "rightLowerLeg"
+      ],
+      "metric": "rightLowerLeg.x Euler (XYZ)",
+      "expected": "-5.0deg..140.0deg",
+      "actual": "-9.0deg",
+      "likelyCause": "right knee pole direction or flexion sign may be inverted.",
+      "suggestedFix": "Check local bone basis, axis sign, and IK pole direction before adding more smoothing.",
+      "evidence": {
+        "axis": "x",
+        "order": "XYZ",
+        "valueDeg": -9.027652970223496,
+        "limitDeg": -5.0,
+        "overByDeg": 4.027652970223497,
+        "quat": [
+          -0.07869966722828557,
+          0.0,
+          0.0,
+          0.9968983711382806
+        ]
+      }
+    }
+  ]
+}

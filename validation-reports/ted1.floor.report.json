@@ -1,0 +1,4326 @@
+{
+  "schemaVersion": 1,
+  "trace": {
+    "name": "ted1",
+    "sourceFormat": "frames",
+    "fps": 6.0,
+    "duration": 31.0,
+    "frameCount": 187
+  },
+  "summary": {
+    "issueCount": 195,
+    "suppressedIssueCount": 0,
+    "severityCounts": {
+      "warning": 195
+    },
+    "categoryCounts": {
+      "foot-slide": 1,
+      "bone-length": 194
+    },
+    "rawEventCounts": {
+      "foot-slide": 1,
+      "bone-length": 194
+    }
+  },
+  "issues": [
+    {
+      "id": "planted-foot-sliding",
+      "severity": "warning",
+      "category": "foot-slide",
+      "timeStart": 30.0,
+      "timeEnd": 30.0,
+      "frameStart": 180,
+      "frameEnd": 180,
+      "bones": [
+        "leftToes"
+      ],
+      "metric": "horizontal speed while near floor",
+      "expected": "<= 0.450m/s",
+      "actual": "0.643m/s",
+      "likelyCause": "Root motion and planted foot lock disagree.",
+      "suggestedFix": "Add/strengthen foot-lock correction or bake matching root motion for this interval.",
+      "evidence": {
+        "previousFrame": 179,
+        "prevWorldPos": [
+          0.1717243194580078,
+          -0.8689496517181396,
+          0.020456600934267044
+        ],
+        "worldPos": [
+          0.18720358610153198,
+          -0.8720957040786743,
+          -0.08555467426776886
+        ],
+        "speed": 0.6428125185216808
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 2.833333,
+      "timeEnd": 2.833333,
+      "frameStart": 17,
+      "frameEnd": 17,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0835m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08350660389371072
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.0,
+      "timeEnd": 3.0,
+      "frameStart": 18,
+      "frameEnd": 18,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0843m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.0843000178878899
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.166667,
+      "timeEnd": 3.166667,
+      "frameStart": 19,
+      "frameEnd": 19,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0851m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.0850995273275239
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.333333,
+      "timeEnd": 3.333333,
+      "frameStart": 20,
+      "frameEnd": 20,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0857m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08570433106895961
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.5,
+      "timeEnd": 19.5,
+      "frameStart": 117,
+      "frameEnd": 117,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0835m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.0835167228916461
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.666667,
+      "timeEnd": 19.666667,
+      "frameStart": 118,
+      "frameEnd": 118,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0843m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.0843242823681838
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.833333,
+      "timeEnd": 19.833333,
+      "frameStart": 119,
+      "frameEnd": 119,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0851m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08511860512093657
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 21.833333,
+      "timeEnd": 21.833333,
+      "frameStart": 131,
+      "frameEnd": 131,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0820m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08196780648716936
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.0,
+      "timeEnd": 22.0,
+      "frameStart": 132,
+      "frameEnd": 132,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0781m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07810182160179215
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.166667,
+      "timeEnd": 22.166667,
+      "frameStart": 133,
+      "frameEnd": 133,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0748m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07476612830532167
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.333333,
+      "timeEnd": 22.333333,
+      "frameStart": 134,
+      "frameEnd": 134,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0770m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07698782730267135
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.5,
+      "timeEnd": 22.5,
+      "frameStart": 135,
+      "frameEnd": 135,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0793m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07930411816490544
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.666667,
+      "timeEnd": 22.666667,
+      "frameStart": 136,
+      "frameEnd": 136,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0841m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08409542590165243
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.0,
+      "timeEnd": 25.0,
+      "frameStart": 150,
+      "frameEnd": 150,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0819m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08190337704647586
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.166667,
+      "timeEnd": 25.166667,
+      "frameStart": 151,
+      "frameEnd": 151,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0781m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07810191276440934
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.333333,
+      "timeEnd": 25.333333,
+      "frameStart": 152,
+      "frameEnd": 152,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0777m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07765350847530214
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.5,
+      "timeEnd": 25.5,
+      "frameStart": 153,
+      "frameEnd": 153,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0784m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07841053606142963
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.666667,
+      "timeEnd": 25.666667,
+      "frameStart": 154,
+      "frameEnd": 154,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0815m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08150269492260738
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.833333,
+      "timeEnd": 25.833333,
+      "frameStart": 155,
+      "frameEnd": 155,
+      "bones": [
+        "upperChest",
+        "neck"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0853m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08533170518776718
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 2.833333,
+      "timeEnd": 2.833333,
+      "frameStart": 17,
+      "frameEnd": 17,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0835m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08350660389371072
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.0,
+      "timeEnd": 3.0,
+      "frameStart": 18,
+      "frameEnd": 18,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0843m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.0843000178878899
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.166667,
+      "timeEnd": 3.166667,
+      "frameStart": 19,
+      "frameEnd": 19,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0851m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.0850995273275239
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.333333,
+      "timeEnd": 3.333333,
+      "frameStart": 20,
+      "frameEnd": 20,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0857m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08570433106895961
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.5,
+      "timeEnd": 19.5,
+      "frameStart": 117,
+      "frameEnd": 117,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0835m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.0835167228916461
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.666667,
+      "timeEnd": 19.666667,
+      "frameStart": 118,
+      "frameEnd": 118,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0843m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.0843242823681838
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.833333,
+      "timeEnd": 19.833333,
+      "frameStart": 119,
+      "frameEnd": 119,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0851m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08511860512093657
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 21.833333,
+      "timeEnd": 21.833333,
+      "frameStart": 131,
+      "frameEnd": 131,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0820m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08196780648716936
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.0,
+      "timeEnd": 22.0,
+      "frameStart": 132,
+      "frameEnd": 132,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0781m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07810182160179215
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.166667,
+      "timeEnd": 22.166667,
+      "frameStart": 133,
+      "frameEnd": 133,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0748m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07476612830532167
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.333333,
+      "timeEnd": 22.333333,
+      "frameStart": 134,
+      "frameEnd": 134,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0770m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07698782730267135
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.5,
+      "timeEnd": 22.5,
+      "frameStart": 135,
+      "frameEnd": 135,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0793m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07930411816490544
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.666667,
+      "timeEnd": 22.666667,
+      "frameStart": 136,
+      "frameEnd": 136,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0841m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08409542590165243
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.0,
+      "timeEnd": 25.0,
+      "frameStart": 150,
+      "frameEnd": 150,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0819m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08190337704647586
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.166667,
+      "timeEnd": 25.166667,
+      "frameStart": 151,
+      "frameEnd": 151,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0781m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07810191276440934
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.333333,
+      "timeEnd": 25.333333,
+      "frameStart": 152,
+      "frameEnd": 152,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0777m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07765350847530214
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.5,
+      "timeEnd": 25.5,
+      "frameStart": 153,
+      "frameEnd": 153,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0784m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.07841053606142963
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.666667,
+      "timeEnd": 25.666667,
+      "frameStart": 154,
+      "frameEnd": 154,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0815m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08150269492260738
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.833333,
+      "timeEnd": 25.833333,
+      "frameStart": 155,
+      "frameEnd": 155,
+      "bones": [
+        "neck",
+        "head"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.0976m +/- 0.0117m",
+      "actual": "0.0853m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.09760301509610461,
+        "length": 0.08533170518776718
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.0,
+      "timeEnd": 3.0,
+      "frameStart": 18,
+      "frameEnd": 18,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2182m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.2181885614391864
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.166667,
+      "timeEnd": 3.166667,
+      "frameStart": 19,
+      "frameEnd": 19,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2199m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.21992703459083385
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.833333,
+      "timeEnd": 3.833333,
+      "frameStart": 23,
+      "frameEnd": 23,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2187m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.2187338949274708
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 4.333333,
+      "timeEnd": 4.333333,
+      "frameStart": 26,
+      "frameEnd": 26,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2208m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.22077625980841947
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 4.5,
+      "timeEnd": 4.5,
+      "frameStart": 27,
+      "frameEnd": 27,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2176m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.21756219558279113
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 4.666667,
+      "timeEnd": 4.666667,
+      "frameStart": 28,
+      "frameEnd": 28,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2197m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.21972659502335684
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.0,
+      "timeEnd": 5.0,
+      "frameStart": 30,
+      "frameEnd": 30,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2126m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.2126262102806853
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.166667,
+      "timeEnd": 5.166667,
+      "frameStart": 31,
+      "frameEnd": 31,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2176m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.21755006881560504
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.333333,
+      "timeEnd": 5.333333,
+      "frameStart": 32,
+      "frameEnd": 32,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2157m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.2157342169057185
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.5,
+      "timeEnd": 5.5,
+      "frameStart": 33,
+      "frameEnd": 33,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2141m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.21411463584525026
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.666667,
+      "timeEnd": 5.666667,
+      "frameStart": 34,
+      "frameEnd": 34,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2168m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.21681537338032067
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 6.833333,
+      "timeEnd": 6.833333,
+      "frameStart": 41,
+      "frameEnd": 41,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2205m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.2204680285035024
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 7.0,
+      "timeEnd": 7.0,
+      "frameStart": 42,
+      "frameEnd": 42,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2090m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.20900520907330336
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 7.166667,
+      "timeEnd": 7.166667,
+      "frameStart": 43,
+      "frameEnd": 43,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2106m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.2106429599857721
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 7.333333,
+      "timeEnd": 7.333333,
+      "frameStart": 44,
+      "frameEnd": 44,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2162m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.2162193795983966
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 7.5,
+      "timeEnd": 7.5,
+      "frameStart": 45,
+      "frameEnd": 45,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2186m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.2185852755388342
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 7.666667,
+      "timeEnd": 7.666667,
+      "frameStart": 46,
+      "frameEnd": 46,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2139m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.21390769714860147
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 7.833333,
+      "timeEnd": 7.833333,
+      "frameStart": 47,
+      "frameEnd": 47,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2057m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.20568985955972074
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.333333,
+      "timeEnd": 12.333333,
+      "frameStart": 74,
+      "frameEnd": 74,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2837m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.2837310383318021
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.166667,
+      "timeEnd": 19.166667,
+      "frameStart": 115,
+      "frameEnd": 115,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2176m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.21757305596112042
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 20.166667,
+      "timeEnd": 20.166667,
+      "frameStart": 121,
+      "frameEnd": 121,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2179m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.21794828772580357
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 21.666667,
+      "timeEnd": 21.666667,
+      "frameStart": 130,
+      "frameEnd": 130,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2920m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.2920441720552691
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.5,
+      "timeEnd": 22.5,
+      "frameStart": 135,
+      "frameEnd": 135,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.1711m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.17112239667871085
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.666667,
+      "timeEnd": 22.666667,
+      "frameStart": 136,
+      "frameEnd": 136,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2049m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.20492483125905356
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 24.666667,
+      "timeEnd": 24.666667,
+      "frameStart": 148,
+      "frameEnd": 148,
+      "bones": [
+        "leftUpperArm",
+        "leftLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2517m +/- 0.0302m",
+      "actual": "0.2825m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2516703439432256,
+        "length": 0.28253918665330646
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 2.833333,
+      "timeEnd": 2.833333,
+      "frameStart": 17,
+      "frameEnd": 17,
+      "bones": [
+        "rightUpperArm",
+        "rightLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2470m +/- 0.0296m",
+      "actual": "0.2169m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2469908654958077,
+        "length": 0.21689978976748386
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.833333,
+      "timeEnd": 3.833333,
+      "frameStart": 23,
+      "frameEnd": 23,
+      "bones": [
+        "rightUpperArm",
+        "rightLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2470m +/- 0.0296m",
+      "actual": "0.2039m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2469908654958077,
+        "length": 0.20392773722247018
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.166667,
+      "timeEnd": 5.166667,
+      "frameStart": 31,
+      "frameEnd": 31,
+      "bones": [
+        "rightUpperArm",
+        "rightLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2470m +/- 0.0296m",
+      "actual": "0.2090m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2469908654958077,
+        "length": 0.2089888811452132
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.666667,
+      "timeEnd": 5.666667,
+      "frameStart": 34,
+      "frameEnd": 34,
+      "bones": [
+        "rightUpperArm",
+        "rightLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2470m +/- 0.0296m",
+      "actual": "0.2169m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2469908654958077,
+        "length": 0.21688208242980764
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 21.833333,
+      "timeEnd": 21.833333,
+      "frameStart": 131,
+      "frameEnd": 131,
+      "bones": [
+        "rightUpperArm",
+        "rightLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2470m +/- 0.0296m",
+      "actual": "0.2873m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2469908654958077,
+        "length": 0.28732287008318896
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 24.333333,
+      "timeEnd": 24.333333,
+      "frameStart": 146,
+      "frameEnd": 146,
+      "bones": [
+        "rightUpperArm",
+        "rightLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2470m +/- 0.0296m",
+      "actual": "0.2123m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2469908654958077,
+        "length": 0.21228303624539793
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 24.5,
+      "timeEnd": 24.5,
+      "frameStart": 147,
+      "frameEnd": 147,
+      "bones": [
+        "rightUpperArm",
+        "rightLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2470m +/- 0.0296m",
+      "actual": "0.2120m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2469908654958077,
+        "length": 0.21196630159036642
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 24.666667,
+      "timeEnd": 24.666667,
+      "frameStart": 148,
+      "frameEnd": 148,
+      "bones": [
+        "rightUpperArm",
+        "rightLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2470m +/- 0.0296m",
+      "actual": "0.1690m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2469908654958077,
+        "length": 0.16901642399569997
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 24.833333,
+      "timeEnd": 24.833333,
+      "frameStart": 149,
+      "frameEnd": 149,
+      "bones": [
+        "rightUpperArm",
+        "rightLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2470m +/- 0.0296m",
+      "actual": "0.1653m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2469908654958077,
+        "length": 0.16534877800058995
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.166667,
+      "timeEnd": 25.166667,
+      "frameStart": 151,
+      "frameEnd": 151,
+      "bones": [
+        "rightUpperArm",
+        "rightLowerArm"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2470m +/- 0.0296m",
+      "actual": "0.2815m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2469908654958077,
+        "length": 0.2815393978140067
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 2.666667,
+      "timeEnd": 2.666667,
+      "frameStart": 16,
+      "frameEnd": 16,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1985m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.1985407072159734
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.833333,
+      "timeEnd": 5.833333,
+      "frameStart": 35,
+      "frameEnd": 35,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.3082m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.30821875656753644
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 6.0,
+      "timeEnd": 6.0,
+      "frameStart": 36,
+      "frameEnd": 36,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2844m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.28439127074394643
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 6.166667,
+      "timeEnd": 6.166667,
+      "frameStart": 37,
+      "frameEnd": 37,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2578m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.2578382668677792
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 10.5,
+      "timeEnd": 10.5,
+      "frameStart": 63,
+      "frameEnd": 63,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1928m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.19280643395847563
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 10.666667,
+      "timeEnd": 10.666667,
+      "frameStart": 64,
+      "frameEnd": 64,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1953m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.19530577971032947
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 10.833333,
+      "timeEnd": 10.833333,
+      "frameStart": 65,
+      "frameEnd": 65,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1967m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.19673429575866913
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.0,
+      "timeEnd": 11.0,
+      "frameStart": 66,
+      "frameEnd": 66,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1974m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.19738775698164202
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.166667,
+      "timeEnd": 11.166667,
+      "frameStart": 67,
+      "frameEnd": 67,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1792m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.17922358677357692
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.333333,
+      "timeEnd": 11.333333,
+      "frameStart": 68,
+      "frameEnd": 68,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1719m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.17191682097755798
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.5,
+      "timeEnd": 11.5,
+      "frameStart": 69,
+      "frameEnd": 69,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1627m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.16266663176036242
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.666667,
+      "timeEnd": 11.666667,
+      "frameStart": 70,
+      "frameEnd": 70,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1819m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.18190797853971283
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.833333,
+      "timeEnd": 11.833333,
+      "frameStart": 71,
+      "frameEnd": 71,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1915m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.19151912725627337
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.0,
+      "timeEnd": 12.0,
+      "frameStart": 72,
+      "frameEnd": 72,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2019m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.20191862340461333
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.166667,
+      "timeEnd": 12.166667,
+      "frameStart": 73,
+      "frameEnd": 73,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2009m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.20086219446848716
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.333333,
+      "timeEnd": 12.333333,
+      "frameStart": 74,
+      "frameEnd": 74,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1954m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.19537889246331983
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.5,
+      "timeEnd": 12.5,
+      "frameStart": 75,
+      "frameEnd": 75,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1865m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.18647560809753194
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.666667,
+      "timeEnd": 12.666667,
+      "frameStart": 76,
+      "frameEnd": 76,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1693m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.16926513808216595
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.833333,
+      "timeEnd": 12.833333,
+      "frameStart": 77,
+      "frameEnd": 77,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1745m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.17450241188051374
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.0,
+      "timeEnd": 13.0,
+      "frameStart": 78,
+      "frameEnd": 78,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1908m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.1907654321110098
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.166667,
+      "timeEnd": 13.166667,
+      "frameStart": 79,
+      "frameEnd": 79,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2011m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.20113243035407874
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.333333,
+      "timeEnd": 13.333333,
+      "frameStart": 80,
+      "frameEnd": 80,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1995m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.19952006058418328
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.5,
+      "timeEnd": 13.5,
+      "frameStart": 81,
+      "frameEnd": 81,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1949m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.19488029052852288
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.666667,
+      "timeEnd": 13.666667,
+      "frameStart": 82,
+      "frameEnd": 82,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.1885m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.18853304111649202
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.0,
+      "timeEnd": 19.0,
+      "frameStart": 114,
+      "frameEnd": 114,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2674m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.26742105943980277
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.166667,
+      "timeEnd": 19.166667,
+      "frameStart": 115,
+      "frameEnd": 115,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2789m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.27886612415069545
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.333333,
+      "timeEnd": 19.333333,
+      "frameStart": 116,
+      "frameEnd": 116,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2953m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.29531930686283636
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.5,
+      "timeEnd": 19.5,
+      "frameStart": 117,
+      "frameEnd": 117,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2846m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.28458548066284667
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.666667,
+      "timeEnd": 19.666667,
+      "frameStart": 118,
+      "frameEnd": 118,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2820m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.2820360202841673
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 19.833333,
+      "timeEnd": 19.833333,
+      "frameStart": 119,
+      "frameEnd": 119,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2897m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.28968251993991784
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 20.0,
+      "timeEnd": 20.0,
+      "frameStart": 120,
+      "frameEnd": 120,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2995m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.29952462521764367
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 20.166667,
+      "timeEnd": 20.166667,
+      "frameStart": 121,
+      "frameEnd": 121,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2820m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.28195749015037896
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 20.333333,
+      "timeEnd": 20.333333,
+      "frameStart": 122,
+      "frameEnd": 122,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2800m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.2800472199741872
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 20.5,
+      "timeEnd": 20.5,
+      "frameStart": 123,
+      "frameEnd": 123,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2608m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.2608441286711074
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.833333,
+      "timeEnd": 22.833333,
+      "frameStart": 137,
+      "frameEnd": 137,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2659m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.26594092105932654
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 24.666667,
+      "timeEnd": 24.666667,
+      "frameStart": 148,
+      "frameEnd": 148,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2582m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.2581893635532063
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 24.833333,
+      "timeEnd": 24.833333,
+      "frameStart": 149,
+      "frameEnd": 149,
+      "bones": [
+        "leftLowerArm",
+        "leftHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2301m +/- 0.0276m",
+      "actual": "0.2685m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.23011623153453253,
+        "length": 0.2684657547381962
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 2.833333,
+      "timeEnd": 2.833333,
+      "frameStart": 17,
+      "frameEnd": 17,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2723m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2722518424322667
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.0,
+      "timeEnd": 3.0,
+      "frameStart": 18,
+      "frameEnd": 18,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2968m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.296838534798367
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.166667,
+      "timeEnd": 3.166667,
+      "frameStart": 19,
+      "frameEnd": 19,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.3027m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.30266617934790085
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.333333,
+      "timeEnd": 3.333333,
+      "frameStart": 20,
+      "frameEnd": 20,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2995m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.29948212991701617
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.5,
+      "timeEnd": 3.5,
+      "frameStart": 21,
+      "frameEnd": 21,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.3022m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.3021751117896731
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 3.666667,
+      "timeEnd": 3.666667,
+      "frameStart": 22,
+      "frameEnd": 22,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2983m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.298316700913819
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.166667,
+      "timeEnd": 5.166667,
+      "frameStart": 31,
+      "frameEnd": 31,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2804m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2804299940463871
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.333333,
+      "timeEnd": 5.333333,
+      "frameStart": 32,
+      "frameEnd": 32,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2958m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.295838230911101
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.5,
+      "timeEnd": 5.5,
+      "frameStart": 33,
+      "frameEnd": 33,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2825m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.28250161035621985
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 5.666667,
+      "timeEnd": 5.666667,
+      "frameStart": 34,
+      "frameEnd": 34,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2856m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2855633148390985
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 10.666667,
+      "timeEnd": 10.666667,
+      "frameStart": 64,
+      "frameEnd": 64,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2026m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20264523528962944
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 10.833333,
+      "timeEnd": 10.833333,
+      "frameStart": 65,
+      "frameEnd": 65,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2058m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2057800041470302
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.166667,
+      "timeEnd": 11.166667,
+      "frameStart": 67,
+      "frameEnd": 67,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2057m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20566479799945994
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.333333,
+      "timeEnd": 11.333333,
+      "frameStart": 68,
+      "frameEnd": 68,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2028m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2028006617706939
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.5,
+      "timeEnd": 11.5,
+      "frameStart": 69,
+      "frameEnd": 69,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.1971m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.19711015460418757
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.666667,
+      "timeEnd": 11.666667,
+      "frameStart": 70,
+      "frameEnd": 70,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.1986m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.19863939186921195
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.833333,
+      "timeEnd": 11.833333,
+      "frameStart": 71,
+      "frameEnd": 71,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2004m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20037202434649024
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.0,
+      "timeEnd": 12.0,
+      "frameStart": 72,
+      "frameEnd": 72,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2044m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20438580399865175
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.166667,
+      "timeEnd": 12.166667,
+      "frameStart": 73,
+      "frameEnd": 73,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2002m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2002044317465615
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.333333,
+      "timeEnd": 12.333333,
+      "frameStart": 74,
+      "frameEnd": 74,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.1983m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.19828870131944254
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.5,
+      "timeEnd": 12.5,
+      "frameStart": 75,
+      "frameEnd": 75,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.1979m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.19790769308750858
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.666667,
+      "timeEnd": 12.666667,
+      "frameStart": 76,
+      "frameEnd": 76,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.1967m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.1967186835528903
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.833333,
+      "timeEnd": 12.833333,
+      "frameStart": 77,
+      "frameEnd": 77,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2014m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20136905071142
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.0,
+      "timeEnd": 13.0,
+      "frameStart": 78,
+      "frameEnd": 78,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2036m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2036486233544427
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.166667,
+      "timeEnd": 13.166667,
+      "frameStart": 79,
+      "frameEnd": 79,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2081m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20806003925715352
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.333333,
+      "timeEnd": 13.333333,
+      "frameStart": 80,
+      "frameEnd": 80,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2085m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2084549451126146
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 16.0,
+      "timeEnd": 16.0,
+      "frameStart": 96,
+      "frameEnd": 96,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2054m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20537978893002093
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 16.166667,
+      "timeEnd": 16.166667,
+      "frameStart": 97,
+      "frameEnd": 97,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.1975m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.19747017575964787
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 16.333333,
+      "timeEnd": 16.333333,
+      "frameStart": 98,
+      "frameEnd": 98,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.1997m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.19968104793861868
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 21.833333,
+      "timeEnd": 21.833333,
+      "frameStart": 131,
+      "frameEnd": 131,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2073m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20732094189302408
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.0,
+      "timeEnd": 22.0,
+      "frameStart": 132,
+      "frameEnd": 132,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2059m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20592164110933045
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.166667,
+      "timeEnd": 22.166667,
+      "frameStart": 133,
+      "frameEnd": 133,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.1980m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.1979791104516722
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 22.333333,
+      "timeEnd": 22.333333,
+      "frameStart": 134,
+      "frameEnd": 134,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2080m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20803558944360942
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 24.0,
+      "timeEnd": 24.0,
+      "frameStart": 144,
+      "frameEnd": 144,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2722m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.27221852505455735
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 24.166667,
+      "timeEnd": 24.166667,
+      "frameStart": 145,
+      "frameEnd": 145,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2716m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2715701636738273
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 24.666667,
+      "timeEnd": 24.666667,
+      "frameStart": 148,
+      "frameEnd": 148,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2061m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20608982031063175
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 24.833333,
+      "timeEnd": 24.833333,
+      "frameStart": 149,
+      "frameEnd": 149,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2037m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2036861702946485
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.166667,
+      "timeEnd": 25.166667,
+      "frameStart": 151,
+      "frameEnd": 151,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.1924m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.19235125334778175
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.333333,
+      "timeEnd": 25.333333,
+      "frameStart": 152,
+      "frameEnd": 152,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2050m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20497426594757687
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 25.5,
+      "timeEnd": 25.5,
+      "frameStart": 153,
+      "frameEnd": 153,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2046m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.20456229129696077
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 28.833333,
+      "timeEnd": 28.833333,
+      "frameStart": 173,
+      "frameEnd": 173,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2680m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2680221830518744
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 29.0,
+      "timeEnd": 29.0,
+      "frameStart": 174,
+      "frameEnd": 174,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2713m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2713016712232991
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 30.0,
+      "timeEnd": 30.0,
+      "frameStart": 180,
+      "frameEnd": 180,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2695m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.26950578080293236
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 30.333333,
+      "timeEnd": 30.333333,
+      "frameStart": 182,
+      "frameEnd": 182,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2670m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.26702757201275074
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 30.5,
+      "timeEnd": 30.5,
+      "frameStart": 183,
+      "frameEnd": 183,
+      "bones": [
+        "rightLowerArm",
+        "rightHand"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.2377m +/- 0.0285m",
+      "actual": "0.2674m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.2376641820633351,
+        "length": 0.2674031329061501
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 10.166667,
+      "timeEnd": 10.166667,
+      "frameStart": 61,
+      "frameEnd": 61,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.3349m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.3349117021639342
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 10.333333,
+      "timeEnd": 10.333333,
+      "frameStart": 62,
+      "frameEnd": 62,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.2988m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.2987787571683504
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 10.5,
+      "timeEnd": 10.5,
+      "frameStart": 63,
+      "frameEnd": 63,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.2857m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.285740888173592
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 10.666667,
+      "timeEnd": 10.666667,
+      "frameStart": 64,
+      "frameEnd": 64,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.2944m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.2944186228633829
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 10.833333,
+      "timeEnd": 10.833333,
+      "frameStart": 65,
+      "frameEnd": 65,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.3011m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.3011079278595765
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.0,
+      "timeEnd": 11.0,
+      "frameStart": 66,
+      "frameEnd": 66,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.2986m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.2985961893217454
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.166667,
+      "timeEnd": 11.166667,
+      "frameStart": 67,
+      "frameEnd": 67,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.2975m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.29754631127614256
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.333333,
+      "timeEnd": 11.333333,
+      "frameStart": 68,
+      "frameEnd": 68,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.3054m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.3053503276310336
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.5,
+      "timeEnd": 11.5,
+      "frameStart": 69,
+      "frameEnd": 69,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.3071m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.3071397633733371
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.666667,
+      "timeEnd": 11.666667,
+      "frameStart": 70,
+      "frameEnd": 70,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.3051m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.30505765683516717
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 11.833333,
+      "timeEnd": 11.833333,
+      "frameStart": 71,
+      "frameEnd": 71,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.3093m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.30931796131752654
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.0,
+      "timeEnd": 12.0,
+      "frameStart": 72,
+      "frameEnd": 72,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.3054m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.30535132824974803
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.166667,
+      "timeEnd": 12.166667,
+      "frameStart": 73,
+      "frameEnd": 73,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.2999m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.29988278441445865
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.0,
+      "timeEnd": 13.0,
+      "frameStart": 78,
+      "frameEnd": 78,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.3263m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.3262637195208329
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.166667,
+      "timeEnd": 13.166667,
+      "frameStart": 79,
+      "frameEnd": 79,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.3010m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.3010483359928062
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.333333,
+      "timeEnd": 13.333333,
+      "frameStart": 80,
+      "frameEnd": 80,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.2839m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.2839384847569936
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.5,
+      "timeEnd": 13.5,
+      "frameStart": 81,
+      "frameEnd": 81,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.2816m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.2816134268613407
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 13.666667,
+      "timeEnd": 13.666667,
+      "frameStart": 82,
+      "frameEnd": 82,
+      "bones": [
+        "leftUpperLeg",
+        "leftLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3811m +/- 0.0457m",
+      "actual": "0.2932m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.38110792995920223,
+        "length": 0.2931855107614774
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 15.0,
+      "timeEnd": 15.0,
+      "frameStart": 90,
+      "frameEnd": 90,
+      "bones": [
+        "rightUpperLeg",
+        "rightLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3844m +/- 0.0461m",
+      "actual": "0.3341m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.3844356042108265,
+        "length": 0.33411318589218303
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 15.166667,
+      "timeEnd": 15.166667,
+      "frameStart": 91,
+      "frameEnd": 91,
+      "bones": [
+        "rightUpperLeg",
+        "rightLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3844m +/- 0.0461m",
+      "actual": "0.3163m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.3844356042108265,
+        "length": 0.3163468043129556
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 15.333333,
+      "timeEnd": 15.333333,
+      "frameStart": 92,
+      "frameEnd": 92,
+      "bones": [
+        "rightUpperLeg",
+        "rightLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3844m +/- 0.0461m",
+      "actual": "0.3209m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.3844356042108265,
+        "length": 0.32086501780897814
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 15.5,
+      "timeEnd": 15.5,
+      "frameStart": 93,
+      "frameEnd": 93,
+      "bones": [
+        "rightUpperLeg",
+        "rightLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3844m +/- 0.0461m",
+      "actual": "0.3258m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.3844356042108265,
+        "length": 0.3257813284168092
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 15.666667,
+      "timeEnd": 15.666667,
+      "frameStart": 94,
+      "frameEnd": 94,
+      "bones": [
+        "rightUpperLeg",
+        "rightLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3844m +/- 0.0461m",
+      "actual": "0.3286m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.3844356042108265,
+        "length": 0.3285962207050857
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 16.833333,
+      "timeEnd": 16.833333,
+      "frameStart": 101,
+      "frameEnd": 101,
+      "bones": [
+        "rightUpperLeg",
+        "rightLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3844m +/- 0.0461m",
+      "actual": "0.3353m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.3844356042108265,
+        "length": 0.3353156804296458
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 17.0,
+      "timeEnd": 17.0,
+      "frameStart": 102,
+      "frameEnd": 102,
+      "bones": [
+        "rightUpperLeg",
+        "rightLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3844m +/- 0.0461m",
+      "actual": "0.3230m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.3844356042108265,
+        "length": 0.32297172284863834
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 17.166667,
+      "timeEnd": 17.166667,
+      "frameStart": 103,
+      "frameEnd": 103,
+      "bones": [
+        "rightUpperLeg",
+        "rightLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3844m +/- 0.0461m",
+      "actual": "0.3300m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.3844356042108265,
+        "length": 0.3299581514397043
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 17.333333,
+      "timeEnd": 17.333333,
+      "frameStart": 104,
+      "frameEnd": 104,
+      "bones": [
+        "rightUpperLeg",
+        "rightLowerLeg"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.3844m +/- 0.0461m",
+      "actual": "0.3359m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.3844356042108265,
+        "length": 0.33589564537430106
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.833333,
+      "timeEnd": 12.833333,
+      "frameStart": 77,
+      "frameEnd": 77,
+      "bones": [
+        "leftLowerLeg",
+        "leftFoot"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.4052m +/- 0.0486m",
+      "actual": "0.4601m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.40521506483806147,
+        "length": 0.460144850129477
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.333333,
+      "timeEnd": 12.333333,
+      "frameStart": 74,
+      "frameEnd": 74,
+      "bones": [
+        "rightFoot",
+        "rightToes"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.1661m +/- 0.0199m",
+      "actual": "0.1413m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.1661192765028429,
+        "length": 0.14125699114536872
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.5,
+      "timeEnd": 12.5,
+      "frameStart": 75,
+      "frameEnd": 75,
+      "bones": [
+        "rightFoot",
+        "rightToes"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.1661m +/- 0.0199m",
+      "actual": "0.1374m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.1661192765028429,
+        "length": 0.137352074672769
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.666667,
+      "timeEnd": 12.666667,
+      "frameStart": 76,
+      "frameEnd": 76,
+      "bones": [
+        "rightFoot",
+        "rightToes"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.1661m +/- 0.0199m",
+      "actual": "0.1332m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.1661192765028429,
+        "length": 0.13324073858073457
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 12.833333,
+      "timeEnd": 12.833333,
+      "frameStart": 77,
+      "frameEnd": 77,
+      "bones": [
+        "rightFoot",
+        "rightToes"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.1661m +/- 0.0199m",
+      "actual": "0.1385m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.1661192765028429,
+        "length": 0.13849541636360477
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 15.0,
+      "timeEnd": 15.0,
+      "frameStart": 90,
+      "frameEnd": 90,
+      "bones": [
+        "rightFoot",
+        "rightToes"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.1661m +/- 0.0199m",
+      "actual": "0.1420m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.1661192765028429,
+        "length": 0.1419833570105674
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 15.166667,
+      "timeEnd": 15.166667,
+      "frameStart": 91,
+      "frameEnd": 91,
+      "bones": [
+        "rightFoot",
+        "rightToes"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.1661m +/- 0.0199m",
+      "actual": "0.1383m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.1661192765028429,
+        "length": 0.13826241778163567
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 16.0,
+      "timeEnd": 16.0,
+      "frameStart": 96,
+      "frameEnd": 96,
+      "bones": [
+        "rightFoot",
+        "rightToes"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.1661m +/- 0.0199m",
+      "actual": "0.1936m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.1661192765028429,
+        "length": 0.19362893856718885
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 16.166667,
+      "timeEnd": 16.166667,
+      "frameStart": 97,
+      "frameEnd": 97,
+      "bones": [
+        "rightFoot",
+        "rightToes"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.1661m +/- 0.0199m",
+      "actual": "0.2017m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.1661192765028429,
+        "length": 0.20173847861695812
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 16.333333,
+      "timeEnd": 16.333333,
+      "frameStart": 98,
+      "frameEnd": 98,
+      "bones": [
+        "rightFoot",
+        "rightToes"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.1661m +/- 0.0199m",
+      "actual": "0.1992m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.1661192765028429,
+        "length": 0.19918102104812724
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 16.5,
+      "timeEnd": 16.5,
+      "frameStart": 99,
+      "frameEnd": 99,
+      "bones": [
+        "rightFoot",
+        "rightToes"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.1661m +/- 0.0199m",
+      "actual": "0.1893m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.1661192765028429,
+        "length": 0.18927323986803826
+      }
+    },
+    {
+      "id": "world-bone-length-change",
+      "severity": "warning",
+      "category": "bone-length",
+      "timeStart": 17.333333,
+      "timeEnd": 17.333333,
+      "frameStart": 104,
+      "frameEnd": 104,
+      "bones": [
+        "rightFoot",
+        "rightToes"
+      ],
+      "metric": "parent-child world distance",
+      "expected": "0.1661m +/- 0.0199m",
+      "actual": "0.1461m",
+      "likelyCause": "World positions come from inconsistent spaces or the retargeter is stretching the chain.",
+      "suggestedFix": "Verify source/target scale and make sure world positions are sampled after final skeleton update.",
+      "evidence": {
+        "medianLength": 0.1661192765028429,
+        "length": 0.1461482578660139
+      }
+    }
+  ]
+}

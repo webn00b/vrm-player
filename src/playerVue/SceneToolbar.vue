@@ -17,6 +17,7 @@ function applySceneControls(): void {
   props.skelViz.setVisible(scene.skeletonOn);
   props.skelViz.setShowBody(scene.skelBodyOn);
   props.skelViz.setShowFingers(scene.skelFingersOn);
+  props.skelViz.setShowLabels(scene.skelLabelsOn);
   props.boneDrag.setEnabled(scene.dragOn);
 }
 
@@ -30,6 +31,15 @@ function toggleModel(): void {
 function toggleSkeleton(): void {
   scene.skeletonOn = !scene.skeletonOn;
   props.skelViz.setVisible(scene.skeletonOn);
+}
+
+function toggleLabels(): void {
+  scene.skelLabelsOn = !scene.skelLabelsOn;
+  props.skelViz.setShowLabels(scene.skelLabelsOn);
+  if (scene.skelLabelsOn && !scene.skeletonOn) {
+    scene.skeletonOn = true;
+    props.skelViz.setVisible(true);
+  }
 }
 
 function toggleDrag(): void {
@@ -94,6 +104,18 @@ function onVrmFileChange(e: Event): void {
       aria-label="Show skeleton"
       title="Show skeleton (S)"
       @click="toggleSkeleton"
+    />
+    <Button
+      class="scene-tool"
+      :class="{ active: scene.skelLabelsOn }"
+      icon="pi pi-tag"
+      text
+      rounded
+      size="small"
+      :aria-pressed="scene.skelLabelsOn"
+      aria-label="Show bone labels"
+      title="Show bone labels"
+      @click="toggleLabels"
     />
     <Button
       class="scene-tool"

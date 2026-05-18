@@ -32,6 +32,7 @@ onMounted(() => {
   props.skelViz.setVisible(scene.skeletonOn);
   props.skelViz.setShowBody(scene.skelBodyOn);
   props.skelViz.setShowFingers(scene.skelFingersOn);
+  props.skelViz.setShowLabels(scene.skelLabelsOn);
   props.boneDrag.setEnabled(scene.dragOn);
 });
 
@@ -50,6 +51,14 @@ function toggleBody(): void {
 function toggleFingers(): void {
   scene.skelFingersOn = !scene.skelFingersOn;
   props.skelViz.setShowFingers(scene.skelFingersOn);
+}
+function toggleLabels(): void {
+  scene.skelLabelsOn = !scene.skelLabelsOn;
+  props.skelViz.setShowLabels(scene.skelLabelsOn);
+  if (scene.skelLabelsOn && !scene.skeletonOn) {
+    scene.skeletonOn = true;
+    props.skelViz.setVisible(true);
+  }
 }
 function toggleDrag(): void {
   scene.dragOn = !scene.dragOn;
@@ -88,6 +97,17 @@ function resetDrag(): void {
         {{ scene.skelFingersOn ? 'ON' : 'OFF' }}
       </button>
     </div>
+  </div>
+  <div v-show="scene.skeletonOn" class="dbg-row">
+    <span class="dbg-label">🏷 Bone labels</span>
+    <button
+      class="dbg-toggle"
+      :class="{ off: !scene.skelLabelsOn }"
+      title="Show humanoid bone names in the 3D view"
+      @click="toggleLabels"
+    >
+      {{ scene.skelLabelsOn ? 'ON' : 'OFF' }}
+    </button>
   </div>
   <div class="dbg-row">
     <span class="dbg-label">🎯 Drag bones</span>

@@ -5,10 +5,11 @@ import { retargetBvhToVrm } from './retarget';
 import { loadVrmaFromFile } from './animationLoaders/vrmaFile';
 import { loadFbxFromFile } from './animationLoaders/fbxFile';
 import type { ManualFbxBoneMapping } from './animationLoaders/fbxBoneMapping';
+import { channelAnimationJsonToClip, isChannelAnimationJson } from './animationLoaders/channelJsonFile';
 import { parseCanonicalMotionJson } from './mocap/offline/canonicalMotion';
 import { retargetCanonicalMotionToVrm, type OfflineRetargetOptions } from './mocap/offline/motionRetargeter';
 
-export type ImportFormat = 'bvh' | 'vrma' | 'fbx' | 'motion-json';
+export type ImportFormat = 'bvh' | 'vrma' | 'fbx' | 'motion-json' | 'channel-json';
 
 export interface LoadedAnimation {
   name: string;
@@ -68,7 +69,13 @@ export async function loadAnimationFile(
   }
 
   if (fmt === 'motion-json') {
-    const motion = parseCanonicalMotionJson(await file.text(), baseName);
+    const text = await file.text();
+    const raw = JSON.parse(text) as unknown;
+    if (isChannelAnimationJson(raw)) {
+      const clip = channelAnimationJsonToClip(raw, vrm, baseName);
+      return { name: baseName, clip, parsedBvh: null, format: 'channel-json' };
+    }
+    const motion = parseCanonicalMotionJson(text, baseName);
     const offlineOpts: OfflineRetargetOptions = { clampOutOfRange: true };
     if (motion.source === 'gvhmr' || motion.source === 'smpl' || motion.coordinateSpace === 'smpl') {
       offlineOpts.positionSmoothingAlpha = 0.45;

@@ -178,6 +178,8 @@ export function startRenderLoop(
     // 5c. BVH-export sink — same timing, separate slot so the verifier and the
     // export recorder don't have to share a single callback.
     renderLoopHooks.poseCaptureSink?.(delta);
+    // 5c2. Motion trace sink — final local/world pose for offline validation.
+    renderLoopHooks.motionTraceCaptureSink?.(delta);
 
     // 5d. Hip force tracker — diagnostic only. Reads final world positions of
     // upper-body bones, accumulates gravity + inertia, exposes via .latest for

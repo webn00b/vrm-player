@@ -12,6 +12,7 @@ import type { BoneDragController } from './boneDragController';
 import type { HipForceTracker } from './physics/hipForce';
 import type { HipBalanceCorrector } from './physics/hipBalanceCorrector';
 import type { SkeletonLogger } from './diagnostics/skeletonLogger';
+import type { MotionTraceRecorder } from './diagnostics/motionTraceRecorder';
 
 export interface PlaybackSystems {
   controller: AnimationController | null;
@@ -34,4 +35,5 @@ export interface ToolingSystems {
   hipForce: HipForceTracker;
   hipBalance: HipBalanceCorrector;
   skeletonLogger: SkeletonLogger;
+  motionTraceRecorder: MotionTraceRecorder;
 }

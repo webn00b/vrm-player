@@ -1,0 +1,57 @@
+{
+  "input": "animations/idle/idle_0.json",
+  "output": "validation-reports/idle_0.repaired_smooth.json",
+  "stats": {
+    "tracksVisited": 50,
+    "quaternionsVisited": 300,
+    "normalized": 0,
+    "hemisphereFlips": 0,
+    "romClamped": 8,
+    "jitterSmoothed": 1,
+    "unsupportedChannels": 1
+  },
+  "before": {
+    "issueCount": 10,
+    "suppressedIssueCount": 0,
+    "severityCounts": {
+      "warning": 7,
+      "error": 3
+    },
+    "categoryCounts": {
+      "rom": 8,
+      "flip": 2
+    },
+    "rawEventCounts": {
+      "rom": 8,
+      "flip": 2
+    }
+  },
+  "after": {
+    "issueCount": 0,
+    "suppressedIssueCount": 0,
+    "severityCounts": {},
+    "categoryCounts": {},
+    "rawEventCounts": {}
+  },
+  "diff": {
+    "matchedTracks": 50,
+    "matchedKeyframes": 300,
+    "componentChangedKeyframes": 9,
+    "visualChangedKeyframes": 9,
+    "hemisphereOnlyKeyframes": 0,
+    "changedBones": 4,
+    "maxDeltaDeg": 65.8734,
+    "maxEulerDeltaDeg": 65.2504,
+    "maxChange": {
+      "frame": 1,
+      "time": 0.0125,
+      "deltaDeg": 65.8734,
+      "componentDelta": 0.53586979,
+      "eulerDeltaDeg": 65.2504,
+      "bone": "rightHand"
+    },
+    "missingBefore": [],
+    "missingAfter": [],
+    "timeMismatch": []
+  }
+}

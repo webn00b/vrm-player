@@ -1,11 +1,13 @@
 node_modules/
 dist/
+.venv*/
 .tmp-regression/
 .DS_Store
 *.log
 
 # Asset files — keep out of git, add your own locally
 animations/*.bvh
+data/multiview-test/
 
 # Playwright e2e artifacts
 playwright-report/

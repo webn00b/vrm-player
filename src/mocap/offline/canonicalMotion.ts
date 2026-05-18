@@ -50,7 +50,7 @@ export interface CanonicalMotionClip {
   version: 1;
   name: string;
   fps: number;
-  source?: 'canonical' | 'wham' | 'gvhmr' | 'smpl' | 'unknown';
+  source?: 'canonical' | 'wham' | 'gvhmr' | 'smpl' | 'multiview' | 'unknown';
   coordinateSpace?: 'vrm' | 'smpl' | 'camera' | 'unknown';
   frames: CanonicalMotionFrame[];
 }
@@ -187,6 +187,7 @@ function inferName(raw: Record<string, unknown>, fallbackName: string): string {
 
 function inferSource(raw: Record<string, unknown>): CanonicalMotionClip['source'] {
   const s = `${raw.source ?? raw.model ?? raw.generator ?? ''}`.toLowerCase();
+  if (s.includes('multiview') || s.includes('multi-view')) return 'multiview';
   if (s.includes('wham')) return 'wham';
   if (s.includes('gvhmr') || s.includes('hmr4d')) return 'gvhmr';
   if (s.includes('smpl')) return 'smpl';
@@ -299,4 +300,3 @@ export function parseCanonicalMotionJson(
     frames: frames.sort((a, b) => a.time - b.time),
   };
 }
-

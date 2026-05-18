@@ -35,6 +35,13 @@ export const renderLoopHooks: {
    */
   poseCaptureSink: ((delta: number) => void) | null;
   /**
+   * Motion trace capture sink — fires after vrm.update so both local rotations
+   * and world positions match the final on-screen skeleton. Separate from
+   * poseCaptureSink because BVH export owns that slot while this debug recorder
+   * may be used independently.
+   */
+  motionTraceCaptureSink: ((delta: number) => void) | null;
+  /**
    * SkeletonLogger tick — fires immediately after `validator.clampAll(...)`
    * (so it sees the final on-screen pose) and before any per-frame recorder.
    * Inert when no logger is mounted; the logger gates itself by `active`.
@@ -46,5 +53,6 @@ export const renderLoopHooks: {
   suspendValidatorClamp: false,
   onAfterVrmUpdate: null,
   poseCaptureSink: null,
+  motionTraceCaptureSink: null,
   skeletonLoggerTick: null,
 };

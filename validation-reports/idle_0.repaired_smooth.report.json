@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "trace": {
+    "name": "idle_0.repaired_smooth",
+    "sourceFormat": "channels",
+    "fps": 30.0,
+    "duration": 3.0,
+    "frameCount": 6
+  },
+  "summary": {
+    "issueCount": 0,
+    "suppressedIssueCount": 0,
+    "severityCounts": {},
+    "categoryCounts": {},
+    "rawEventCounts": {}
+  },
+  "issues": []
+}
