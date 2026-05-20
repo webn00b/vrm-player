@@ -161,9 +161,9 @@ export class AnimationController {
   }
 
   /** Jump to a position in the queue. */
-  jumpTo(queueIndex: number): void {
+  jumpTo(queueIndex: number, options: { immediate?: boolean } = {}): void {
     if (queueIndex < 0 || queueIndex >= this.queue.length) return;
-    this.activateQueuePos(queueIndex);
+    this.activateQueuePos(queueIndex, options);
   }
 
   // ── Mute (demo mode) ───────────────────────────────────────────────────────
@@ -316,13 +316,28 @@ export class AnimationController {
 
   // ── Private ────────────────────────────────────────────────────────────────
 
-  private activateQueuePos(pos: number): void {
+  private activateQueuePos(pos: number, options: { immediate?: boolean } = {}): void {
     if (pos < 0 || pos >= this.queue.length) return;
     this.stopPreview();
     const itemIndex = this.queue[pos];
     const next = this.items[itemIndex];
+    if (!next) return;
+    let activation: 'immediate' | 'crossfade' | 'direct' = 'direct';
 
-    if (this.prevItemIndex >= 0 && this.prevItemIndex !== itemIndex) {
+    if (options.immediate) {
+      activation = 'immediate';
+      for (const item of this.items) {
+        if (item.action !== next.action) {
+          item.action.setEffectiveWeight(0);
+          item.action.stop();
+        }
+      }
+      next.action.play();
+      next.action.reset();
+      next.action.setEffectiveWeight(1);
+      this.crossfade = null;
+    } else if (this.prevItemIndex >= 0 && this.prevItemIndex !== itemIndex) {
+      activation = 'crossfade';
       const from = this.items[this.prevItemIndex].action;
       next.action.play();
       next.action.reset();
@@ -337,6 +352,14 @@ export class AnimationController {
     this.prevItemIndex = itemIndex;
     this.queuePos = pos;
     this.timeInCurrent = 0;
+    console.info('[animation:play]', {
+      name: next.name,
+      queuePos: pos,
+      itemIndex,
+      activation,
+      durationSec: Number(next.duration.toFixed(3)),
+      tracks: next.action.getClip().tracks.length,
+    });
     this.listener?.(pos, next);
   }
 

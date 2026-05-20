@@ -19,6 +19,25 @@ html, body { margin: 0; padding: 0; height: 100%; background: #111; overflow: hi
 #app { position: fixed; inset: 0; }
 canvas { display: block; }
 
+#main-render-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
+#main-render-canvas.compact-viewport {
+  inset: 50% 12px auto auto;
+  width: 256px !important;
+  height: 256px !important;
+  transform: translateY(-50%);
+  z-index: 25;
+  background: #1a1a1a;
+  border: 1px solid rgba(123, 225, 232, 0.26);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.4);
+}
+
 #queue-list-wrap {
   flex: 1 1 0;
   overflow-y: auto;

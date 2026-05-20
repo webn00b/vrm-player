@@ -69,8 +69,12 @@ export async function buildGlbBlobForClip(
     'rightLittleProximal', 'rightLittleIntermediate', 'rightLittleDistal',
   ] as const;
 
-  // First pass: clone each bone as a plain Object3D positioned at its
-  // normalized rest. Skipping bones the VRM doesn't have.
+  const _childWorld = new THREE.Vector3();
+  const _parentWorld = new THREE.Vector3();
+  const _parentWorldInv = new THREE.Quaternion();
+
+  // First pass: clone each bone as a plain Object3D. Skipping bones the VRM
+  // doesn't have.
   const cloned = new Map<string, THREE.Object3D>();
   const getNode = (name: string): THREE.Object3D | null =>
     vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
@@ -79,7 +83,6 @@ export async function buildGlbBlobForClip(
     if (!node) continue;
     const out = new THREE.Object3D();
     out.name = name;
-    out.position.copy(node.position);
     // quaternion stays identity (bind pose)
     cloned.set(name, out);
   }
@@ -89,16 +92,28 @@ export async function buildGlbBlobForClip(
   const root = new THREE.Group();
   root.name = 'mocap-skeleton';
   for (const [name, node] of cloned) {
-    const original = getNode(name);
-    let parent = original?.parent ?? null;
+    const original = getNode(name)!;
+    let parent = original.parent ?? null;
     let parentBoneName: string | null = null;
     while (parent) {
       const matchName = [...cloned.keys()].find((n) => getNode(n) === parent);
       if (matchName) { parentBoneName = matchName; break; }
       parent = parent.parent;
     }
-    if (parentBoneName) cloned.get(parentBoneName)!.add(node);
-    else                root.add(node);
+    if (parentBoneName) {
+      const parentNode = cloned.get(parentBoneName)!;
+      parentNode.add(node);
+
+      const originalParent = getNode(parentBoneName)!;
+      vrm.scene.updateMatrixWorld(true);
+      original.getWorldPosition(_childWorld);
+      originalParent.getWorldPosition(_parentWorld);
+      originalParent.getWorldQuaternion(_parentWorldInv).invert();
+      node.position.copy(_childWorld.sub(_parentWorld).applyQuaternion(_parentWorldInv));
+    } else {
+      root.add(node);
+      node.position.copy(original.position);
+    }
   }
 
   // ── 2. Export via GLTFExporter ───────────────────────────────────────

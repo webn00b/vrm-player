@@ -220,6 +220,10 @@ function cancelAnimRecord(): void {
 let previewPanel: HTMLElement | null = null;
 let previewCvs: HTMLCanvasElement | null = null;
 
+function setPreviewVisible(visible: boolean): void {
+  if (previewPanel) previewPanel.style.display = visible ? 'flex' : 'none';
+}
+
 function updateMocapUI(state: MocapState): void {
   clearInterval(framesTimer);
   const m = props.getMocap();
@@ -233,7 +237,7 @@ function updateMocapUI(state: MocapState): void {
   if (currentSource.value === 'animfile') {
     showStopCam.value  = false;
     showPlayback.value = false;
-    if (previewPanel) previewPanel.style.display = 'none';
+    setPreviewVisible(false);
     m?.setCanvas(null);
     updateAnimUI();
     return;
@@ -241,7 +245,7 @@ function updateMocapUI(state: MocapState): void {
   if (currentSource.value === 'multiview') {
     showStopCam.value  = false;
     showPlayback.value = false;
-    if (previewPanel) previewPanel.style.display = 'none';
+    setPreviewVisible(false);
     m?.setCanvas(null);
     updateMultiviewUI();
     return;
@@ -261,7 +265,7 @@ function updateMocapUI(state: MocapState): void {
     }
     showStopCam.value  = false;
     showPlayback.value = false;
-    if (previewPanel) previewPanel.style.display = hasFrozenFrame ? 'block' : 'none';
+    setPreviewVisible(hasFrozenFrame);
     m?.setCanvas(null);
     // Auto-stop debug recorder when file processing completes.
     if (props.dbgRecorder.active) props.dbgRecorder.stop();
@@ -270,7 +274,7 @@ function updateMocapUI(state: MocapState): void {
     primaryLabel.value = '⏺ Record';
     showStopCam.value  = true;
     showPlayback.value = true;
-    if (previewPanel) previewPanel.style.display = 'block';
+    setPreviewVisible(true);
     if (previewCvs) m?.setCanvas(previewCvs);
   } else if (state === 'recording') {
     const isFile = (m?.duration ?? 0) > 0;
@@ -279,7 +283,7 @@ function updateMocapUI(state: MocapState): void {
     primaryRecording.value = true;
     showStopCam.value  = false;
     showPlayback.value = true;
-    if (previewPanel) previewPanel.style.display = 'block';
+    setPreviewVisible(true);
     if (previewCvs) m?.setCanvas(previewCvs);
     framesTimer = trackInterval(() => {
       const mm = props.getMocap();
@@ -557,9 +561,9 @@ const onLoadedMetadata = (): void => { refreshSourceInfo(); };
 onMounted(() => {
   previewPanel = document.getElementById('mocap-preview-panel');
   previewCvs   = document.getElementById('mocap-canvas') as HTMLCanvasElement | null;
-  // 4:3 at 2× panel width for sharpness.
+  // 4:3 at 2x panel width for sharpness.
   if (previewCvs) {
-    previewCvs.width  = 440;
+    previewCvs.width = 440;
     previewCvs.height = 330;
   }
 

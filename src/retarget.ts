@@ -21,6 +21,15 @@ type HumanoidWithNormalizedRestPose = VRM['humanoid'] & {
   normalizedRestPose?: NormalizedRestPoseLike;
 };
 
+function uniqueTrackTargets(clip: THREE.AnimationClip): number {
+  const targets = new Set<string>();
+  for (const track of clip.tracks) {
+    const dot = track.name.lastIndexOf('.');
+    if (dot > 0) targets.add(track.name.slice(0, dot));
+  }
+  return targets.size;
+}
+
 export interface RetargetOptions {
   /** If true, keyframes outside anatomical ROM are clamped in-place. Default false (log only). */
   clampOutOfRange?: boolean;
@@ -59,6 +68,9 @@ export async function retargetBvhToVrm(
   const blob = new Blob([vrmaBuffer], { type: 'model/gltf-binary' });
   const url = URL.createObjectURL(blob);
   let clip: THREE.AnimationClip;
+  let correctedTracks = 0;
+  let signFlips = 0;
+  let signFlipTracks = 0;
   try {
     const gltf = await loader.loadAsync(url);
     const vrmAnimations = gltf.userData.vrmAnimations;
@@ -66,21 +78,14 @@ export async function retargetBvhToVrm(
     clip = createVRMAnimationClip(vrmAnimations[0], vrm);
     clip.name = name;
     if (!opts.skipRestCorrection) {
-      const correctedTracks = applyHumanoidRestCorrectionsToClip(clip, vrm);
-      if (correctedTracks > 0) {
-        console.info(`[retarget] applied rest-pose correction to ${correctedTracks} quaternion track(s) in "${name}"`);
-      }
+      correctedTracks = applyHumanoidRestCorrectionsToClip(clip, vrm);
     }
     // Step 2b: defensive quaternion sign continuity, after rest correction so
     // every downstream reader sees a clip without hemisphere-cross
     // discontinuities. See quaternionContinuity.ts for the why.
     const flipReport = normalizeQuaternionSignsAcrossClip(clip);
-    if (flipReport.totalFlips > 0) {
-      console.info(
-        `[retarget] '${name}' quaternion sign-continuity pass: flipped ${flipReport.totalFlips} keyframes ` +
-        `across ${flipReport.tracksAffected} track(s); worst track: ${flipReport.worstTrack} (${flipReport.worstFlips} flips)`,
-      );
-    }
+    signFlips = flipReport.totalFlips;
+    signFlipTracks = flipReport.tracksAffected;
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -96,6 +101,21 @@ export async function retargetBvhToVrm(
       `[validator] clip "${name}": ${report.violationCount} ${action} keyframes across ${report.trackedBones} bones; ${worst}`,
     );
   }
+
+  console.info('[animation:retarget]', {
+    name,
+    source: 'bvh',
+    sourceBones: bvh.skeleton.bones.length,
+    sourceTracks: bvh.clip.tracks.length,
+    clipDurationSec: Number(clip.duration.toFixed(3)),
+    clipTracks: clip.tracks.length,
+    clipTargets: uniqueTrackTargets(clip),
+    restCorrectionTracks: correctedTracks,
+    signFlips,
+    signFlipTracks,
+    validationViolations: report.violationCount,
+    validationWorstBone: report.worstBone ?? null,
+  });
 
   return clip;
 }

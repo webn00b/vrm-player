@@ -4,7 +4,8 @@ import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import { PoseDetector, type PoseModelQuality, type PoseFrame } from './poseDetector';
 import { DirectPoseApplier } from '../retargeters/directPoseApplier';
 import { FaceApplier } from '../retargeters/faceApplier';
-import { BvhRecorder, downloadBvh } from '../bvh/bvhRecorder';
+import { BvhRecorder, BVH_FRAME_RATE, downloadBvh } from '../bvh/bvhRecorder';
+import { getJointOffset, type BvhRecorderCompatibility } from '../bvh/bvhRecorderFactory';
 import { MocapCalibration, type CalibrationStatus } from '../trackers/mocapCalibration';
 import { getCachedHumanoidRestAxes } from '../../humanoidRestPose';
 import { captureSnapshot, type PoseSnapshot } from '../bvh/bvhRoundtripVerifier';
@@ -19,6 +20,37 @@ type AvatarJointPositionMap = {
   rightUpperLeg: THREE.Vector3; rightLowerLeg: THREE.Vector3; rightFoot: THREE.Vector3;
 };
 
+function textHash(text: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+function logRecordedAnimation(params: {
+  name: string;
+  source: 'camera' | 'video';
+  vrmVersion: string;
+  externalFrames: number;
+  internalFrames: number;
+  externalText: string;
+  savedText: string;
+}): void {
+  console.info('[animation:record]', {
+    name: params.name,
+    source: params.source,
+    vrmVersion: params.vrmVersion,
+    savedFrames: params.internalFrames,
+    externalFrames: params.externalFrames,
+    durationSec: Number((params.internalFrames / BVH_FRAME_RATE).toFixed(3)),
+    savedHash: textHash(params.savedText),
+    externalHash: textHash(params.externalText),
+    savedEqualsExternal: params.savedText === params.externalText,
+  });
+}
+
 /**
  * Orchestrates the webcam → pose → VRM → BVH pipeline.
  *
@@ -31,6 +63,7 @@ export class MocapController {
   private applier: DirectPoseApplier;
   private faceApplier: FaceApplier;
   private liveRecorder: BvhRecorder;
+  private liveReplayRecorder: BvhRecorder | null = null;
   private grabRecorder: BvhRecorder;
   private _calibration: MocapCalibration;
 
@@ -42,8 +75,9 @@ export class MocapController {
   // Latest detected frame — applied each render tick via applyLatestFrame()
   // so mocap overlays on top of the BVH mixer output rather than fighting it.
   private _latestFrame: PoseFrame | null = null;
-  // Set to false each time a new frame arrives; set to true after we record it.
-  // Prevents double-recording if the render loop runs faster than detection.
+  // Set to false each time a new frame arrives. Kept for UI / future diagnostics;
+  // BVH recording itself samples the latest pose at fixed 30 Hz, so repeated
+  // detector frames are intentionally written to preserve wall-clock duration.
   private _frameRecorded = false;
 
   onStateChange:          ((state: MocapState) => void) | null = null;
@@ -102,13 +136,11 @@ export class MocapController {
     this.detector.setCanvas(canvas);
   }
 
-  private _createRecorder(): BvhRecorder {
+  private _createRecorder(compatibility: BvhRecorderCompatibility = 'external'): BvhRecorder {
     const correctionInvMap = this._buildCorrectionInvMap();
-    // VRM 0.x avatars use a flipped (left-handed-ish) coordinate system.
-    // `@pixiv/three-vrm-animation/createVRMAnimationClip` automatically negates
-    // x/z components on load when target avatar is 0.x; pre-flip here to make
-    // the round-trip cancel.
-    const flipForVrm0 = this._vrm.meta.metaVersion === '0';
+    // External-tool BVH keeps plain coordinates. Internal round-trip BVH uses
+    // the VRM0 x/z pre-flip so `createVRMAnimationClip` cancels it on import.
+    const flipForVrm0 = compatibility === 'internal-roundtrip' && this._vrm.meta.metaVersion === '0';
     return new BvhRecorder({
       getJointOffset: (name) => this._getBvhJointOffset(name),
       getRestCorrectionInv: (name) => correctionInvMap.get(name) ?? null,
@@ -134,10 +166,7 @@ export class MocapController {
   }
 
   private _getBvhJointOffset(name: string): [number, number, number] | null {
-    if (name === 'hips') return [0, 0, 0];
-    const node = this._getNormalizedBoneNode(name);
-    if (!node) return null;
-    return [node.position.x, node.position.y, node.position.z];
+    return getJointOffset(this._vrm, name);
   }
 
   private _getBvhHipsPosition(): [number, number, number] | null {
@@ -165,11 +194,13 @@ export class MocapController {
     return out;
   }
 
-  private _addCurrentPoseFrame(recorder: BvhRecorder): void {
+  private _addCurrentPoseFrame(recorder: BvhRecorder): boolean {
+    const before = recorder.frameCount;
     recorder.addFrame(
       (name) => this.applier.getQuaternion(name),
       () => this._getBvhHipsPosition(),
     );
+    return recorder.frameCount > before;
   }
 
   private _captureCurrentPoseFrame(recorder: BvhRecorder): void {
@@ -254,15 +285,24 @@ export class MocapController {
 
   /**
    * Snapshot the current normalized-bone state into the live recorder when in
-   * 'recording' state. Reads bone.quaternion *now* — meant to run after the
-   * render loop's clamp + overlay stages so what we record matches what is
-   * about to be drawn. Rate-limited to 30 Hz inside the recorder.
+   * 'recording' state. Reads bone.quaternion *now* after clamp + overlays, and
+   * samples at the BVH recorder's fixed 30 Hz clock. We do not gate on "new
+   * detector frame" here: if pose detection runs at 12-20 fps, repeating the
+   * latest pose is what preserves playback speed.
    */
   captureRecordedFrame(): void {
     if (this._state !== 'recording') return;
-    if (!this._latestFrame || this._frameRecorded) return;
+    if (!this._latestFrame) return;
 
-    this._addCurrentPoseFrame(this.liveRecorder);
+    const accepted = this._addCurrentPoseFrame(this.liveRecorder);
+    if (!accepted) return;
+
+    // Keep a parallel internal-roundtrip stream whose x/z convention cancels
+    // the loader's VRM0 conversion. This is what we auto-replay and save for
+    // drag-and-drop back into this player.
+    if (this.liveReplayRecorder) {
+      this._captureCurrentPoseFrame(this.liveReplayRecorder);
+    }
     this._frameRecorded = true;
 
     // Round-trip verification: snapshot a full pose only when the recorder
@@ -310,6 +350,7 @@ export class MocapController {
    */
   startVerifyRecording(): void {
     if (this._state !== 'live') return;
+    this.liveRecorder = this._createRecorder('internal-roundtrip');
     this.liveRecorder.start();
     this._setState('recording');
   }
@@ -318,6 +359,7 @@ export class MocapController {
   stopVerifyRecording(): string {
     if (this._state !== 'recording') return '';
     const bvhText = this.liveRecorder.stop();
+    this.liveRecorder = this._createRecorder();
     this._setState('live');
     return bvhText;
   }
@@ -341,6 +383,7 @@ export class MocapController {
 
     this.applier.setHighQualityMode(true);
     this._fileCaptureActive = true;
+    this.liveRecorder = this._createRecorder('internal-roundtrip');
 
     this.startVerifyCapture();
 
@@ -354,6 +397,7 @@ export class MocapController {
         const expected = this.stopVerifyCapture();
         if (tickInterval) clearInterval(tickInterval);
         this._teardownFileCapture();
+        this.liveRecorder = this._createRecorder();
         this._setState('off');
         resolve({ bvh: bvhText, expected });
       };
@@ -368,6 +412,7 @@ export class MocapController {
           this.stopVerifyCapture();
           this.detector.stop();
           this._teardownFileCapture();
+          this.liveRecorder = this._createRecorder();
           reject(err);
         },
       );
@@ -718,7 +763,9 @@ export class MocapController {
   /** Begin recording (must be in 'live' state first). */
   startRecording(): void {
     if (this._state !== 'live') return;
+    this.liveReplayRecorder = this._createRecorder('internal-roundtrip');
     this.liveRecorder.start();
+    this.liveReplayRecorder.start();
     this._setState('recording');
   }
 
@@ -732,10 +779,23 @@ export class MocapController {
       this.stop();
       return;
     }
+    const externalFrames = this.liveRecorder.frameCount;
+    const internalFrames = this.liveReplayRecorder?.frameCount ?? externalFrames;
     const bvhText = this.liveRecorder.stop();
+    const replayBvhText = this.liveReplayRecorder?.stop() ?? bvhText;
+    this.liveReplayRecorder = null;
     const name    = `mocap_${++this._recordingIndex}`;
-    downloadBvh(bvhText, `${name}.bvh`);
-    this.onBvhReady?.(bvhText, name);
+    logRecordedAnimation({
+      name,
+      source: 'camera',
+      vrmVersion: this._vrm.meta.metaVersion,
+      externalFrames,
+      internalFrames,
+      externalText: bvhText,
+      savedText: replayBvhText,
+    });
+    downloadBvh(replayBvhText, `${name}.bvh`);
+    this.onBvhReady?.(replayBvhText, name);
     this._setState('live');
   }
 
@@ -753,12 +813,26 @@ export class MocapController {
     // so the output BVH matches the source video instead of the smoothed preview.
     this.applier.setHighQualityMode(true);
     this._fileCaptureActive = true;
+    this.liveReplayRecorder = this._createRecorder('internal-roundtrip');
 
     this.detector.onEnd = () => {
+      const externalFrames = this.liveRecorder.frameCount;
+      const internalFrames = this.liveReplayRecorder?.frameCount ?? externalFrames;
       const bvhText = this.liveRecorder.stop();
+      const replayBvhText = this.liveReplayRecorder?.stop() ?? bvhText;
+      this.liveReplayRecorder = null;
       const name    = `mocap_${++this._recordingIndex}`;
-      downloadBvh(bvhText, `${name}.bvh`);
-      this.onBvhReady?.(bvhText, name);
+      logRecordedAnimation({
+        name,
+        source: 'video',
+        vrmVersion: this._vrm.meta.metaVersion,
+        externalFrames,
+        internalFrames,
+        externalText: bvhText,
+        savedText: replayBvhText,
+      });
+      downloadBvh(replayBvhText, `${name}.bvh`);
+      this.onBvhReady?.(replayBvhText, name);
       this._teardownFileCapture();
       this._setState('off');
     };
@@ -766,10 +840,12 @@ export class MocapController {
     try {
       await this.detector.startFromFile(file);
       this.liveRecorder.start();
+      this.liveReplayRecorder.start();
       this._setState('recording');
     } catch (err) {
       this.detector.stop();
       this._teardownFileCapture();
+      this.liveReplayRecorder = null;
       throw err;
     }
   }
@@ -777,6 +853,8 @@ export class MocapController {
   /** Stop everything, close camera. */
   stop(): void {
     if (this._state === 'recording' && this.liveRecorder.recording) this.liveRecorder.stop(); // discard
+    if (this.liveReplayRecorder?.recording) this.liveReplayRecorder.stop(); // discard
+    this.liveReplayRecorder = null;
     this.detector.stop();
     this._teardownFileCapture();
     this.applier.resetHipBaseline();

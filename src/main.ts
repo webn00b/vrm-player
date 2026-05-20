@@ -44,6 +44,7 @@ type CleanupFn = () => void;
 let selectedVrmUrl: string | null = null;
 let selectedVrmName = '';
 const QUEUE_LOOP_KEY = 'vrm-player.queue-loop-mode';
+const VIEWPORT_COMPACT_KEY = 'vrm-player.viewport-compact';
 
 declare global {
   interface Window {
@@ -141,6 +142,21 @@ async function main() {
   // ── Skeleton visualizer ────────────────────────────────────────────────────
   const skelViz = new SkeletonVisualizer(vrm, ctx.scene);
 
+  const forceSkeletonVisibleForCompact = (): void => {
+    sceneControlsState.skeletonOn = true;
+    sceneControlsState.skelBodyOn = true;
+    sceneControlsState.skelFingersOn = true;
+    skelViz.setVisible(true);
+    skelViz.setShowBody(true);
+    skelViz.setShowFingers(true);
+  };
+
+  try {
+    if (localStorage.getItem(VIEWPORT_COMPACT_KEY) === '1') {
+      forceSkeletonVisibleForCompact();
+    }
+  } catch { /* ignore */ }
+
   // ── Mocap debug skeleton ───────────────────────────────────────────────────
   const mocapDebugViz = new MocapDebugViz(ctx.scene);
 
@@ -207,6 +223,17 @@ async function main() {
   installPrimeVueOn(sceneToolbarApp);
   sceneToolbarApp.mount('#scene-toolbar-root');
   registerCleanup(() => sceneToolbarApp.unmount());
+
+  const onViewportCompactChanged = (event: Event): void => {
+    const compact = !!(event as CustomEvent<boolean>).detail;
+    if (!compact) return;
+
+    forceSkeletonVisibleForCompact();
+  };
+  window.addEventListener('vrm-player:viewport-compact-changed', onViewportCompactChanged);
+  registerCleanup(() => {
+    window.removeEventListener('vrm-player:viewport-compact-changed', onViewportCompactChanged);
+  });
 
   const playerStartApp = createApp(PlayerStartPanel, {
     controller,
@@ -526,15 +553,17 @@ async function main() {
     bvh: ParsedBVH | null,
     clip: THREE.AnimationClip,
     sourceFile?: File,
-  ): void => {
+  ): number => {
     controller.register(name, clip);
     const itemIdx = names.length;
     names.push(name);
     if (bvh) bvhByIndex.set(itemIdx, bvh);
     if (sourceFile) sourceFileByIndex.set(itemIdx, sourceFile);
+    const queuePos = controller.queueLength;
     controller.addToQueue(itemIdx);
     queue.push(name, clip.duration);
     reexportQueue?.push(name, clip.duration);
+    return queuePos;
   };
 
   interface AnimationLoadResult {
@@ -743,7 +772,8 @@ async function main() {
     try {
       const bvh  = parseBVH(bvhText);
       const clip = await retargetBvhToVrm(vrm, bvh, name);
-      registerAndEnqueue(name, bvh, clip, new File([bvhText], `${name}.bvh`, { type: 'text/plain' }));
+      const queuePos = registerAndEnqueue(name, bvh, clip, new File([bvhText], `${name}.bvh`, { type: 'text/plain' }));
+      controller.jumpTo(queuePos, { immediate: true });
       setStatus(`▶ replaying ${name}`);
       notify({ severity: 'success', summary: 'Mocap BVH ready', detail: name });
     } catch (e) {

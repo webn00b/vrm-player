@@ -18,6 +18,8 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { BVHLoader } from 'three/examples/jsm/loaders/BVHLoader.js';
 import { BvhRecorder, BVH_JOINTS, BVH_FRAME_TIME, downloadBvh } from './bvhRecorder';
+import { createBvhRecorderForVrm, getJointOffset } from './bvhRecorderFactory';
+import { buildMockVRM } from '../../../tests/fixtures/mockVrm';
 
 const IDENT: [number, number, number, number] = [0, 0, 0, 1];
 
@@ -117,6 +119,56 @@ test('getJointOffset hook: OFFSETs come from supplied callback', () => {
   // The recorder formats OFFSETs with .toFixed(2), so we match the rounded form.
   assert.match(offsetSection, /OFFSET 0\.12 0\.46 0\.79/,
     `expected custom offset in leftUpperArm block; got: ${offsetSection.slice(0, 100)}`);
+});
+
+test('getJointOffset: measures offsets against the declared BVH parent when intermediate bones are skipped', () => {
+  const vrm = buildMockVRM();
+  const chest = vrm.bones.get('chest')!;
+  const neck = vrm.bones.get('neck')!;
+
+  const upperChest = new THREE.Object3D();
+  upperChest.name = 'upperChest';
+  upperChest.position.set(0, 0.1, 0);
+  chest.add(upperChest);
+  upperChest.add(neck);
+  neck.position.set(0, 0.1, 0);
+  vrm.bones.set('upperChest', upperChest);
+  (vrm.humanoid.humanBones as any).upperChest = { node: upperChest };
+  vrm.scene.updateMatrixWorld(true);
+
+  const offset = getJointOffset(vrm as any, 'neck');
+  assert.ok(offset, 'neck offset should exist');
+  assert.ok(Math.abs(offset![0]) < 1e-6);
+  assert.ok(Math.abs(offset![1] - 0.2) < 1e-6, `expected chest->neck offset 0.2, got ${offset![1]}`);
+  assert.ok(Math.abs(offset![2]) < 1e-6);
+});
+
+test('createBvhRecorderForVrm: external BVH does not pre-flip VRM0 hips position', () => {
+  const vrm = buildMockVRM({ version: '0' });
+  const recorder = createBvhRecorderForVrm(vrm as any);
+
+  recorder.captureFrame(() => IDENT, () => [0.5, 1.2, -0.3]);
+  const text = recorder.stop();
+  const row = text.trim().split('\n').at(-1)!;
+
+  assert.ok(
+    row.startsWith('0.5000 1.2000 -0.3000 '),
+    `external BVH should keep VRM0 root position unflipped; got ${row}`,
+  );
+});
+
+test('createBvhRecorderForVrm: internal round-trip mode keeps the old VRM0 pre-flip', () => {
+  const vrm = buildMockVRM({ version: '0' });
+  const recorder = createBvhRecorderForVrm(vrm as any, { compatibility: 'internal-roundtrip' });
+
+  recorder.captureFrame(() => IDENT, () => [0.5, 1.2, -0.3]);
+  const text = recorder.stop();
+  const row = text.trim().split('\n').at(-1)!;
+
+  assert.ok(
+    row.startsWith('-0.5000 1.2000 0.3000 '),
+    `internal round-trip BVH should pre-flip VRM0 root position; got ${row}`,
+  );
 });
 
 // ── Round-trip via stock three.js BVHLoader ─────────────────────────────

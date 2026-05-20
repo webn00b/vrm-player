@@ -19,6 +19,8 @@ const PANEL_KEY = 'vrm-player.panel-collapsed';
 const PAGE_KEY = 'vrm-player.active-page';
 const MODE_KEY = 'vrm-player.ui-mode';
 const ZEN_KEY = 'vrm-player.zen-mode';
+const VIEWPORT_COMPACT_KEY = 'vrm-player.viewport-compact';
+const VIEWPORT_LOG_PREFIX = '[viewport-compact]';
 const collapsed = reactive<Record<string, boolean>>({});
 type AppPage = 'player' | 'retarget' | 'tools';
 type UiMode = 'play' | 'capture' | 'inspect';
@@ -48,6 +50,16 @@ const uiMode = ref<UiMode>(
 );
 const zenMode = ref((() => {
   try { return localStorage.getItem(ZEN_KEY) === '1'; } catch { return false; }
+})());
+const viewportCompact = ref((() => {
+  try {
+    const stored = localStorage.getItem(VIEWPORT_COMPACT_KEY);
+    console.info(VIEWPORT_LOG_PREFIX, 'shell init', { stored, compact: stored === '1' });
+    return stored === '1';
+  } catch (err) {
+    console.warn(VIEWPORT_LOG_PREFIX, 'shell init failed to read localStorage', err);
+    return false;
+  }
 })());
 const helpOpen = ref(false);
 const toast = useToast();
@@ -85,11 +97,40 @@ function toggleZen(): void {
   try { localStorage.setItem(ZEN_KEY, zenMode.value ? '1' : '0'); } catch { /* ignore */ }
 }
 
+function syncViewportCompact(): void {
+  console.info(VIEWPORT_LOG_PREFIX, 'dispatch compact changed', {
+    compact: viewportCompact.value,
+  });
+  window.dispatchEvent(new CustomEvent<boolean>(
+    'vrm-player:viewport-compact-changed',
+    { detail: viewportCompact.value },
+  ));
+}
+
+function toggleViewportCompact(): void {
+  const prev = viewportCompact.value;
+  viewportCompact.value = !viewportCompact.value;
+  try {
+    localStorage.setItem(VIEWPORT_COMPACT_KEY, viewportCompact.value ? '1' : '0');
+  } catch (err) {
+    console.warn(VIEWPORT_LOG_PREFIX, 'failed to persist compact state', err);
+  }
+  console.info(VIEWPORT_LOG_PREFIX, 'button clicked', {
+    prev,
+    next: viewportCompact.value,
+    stored: (() => {
+      try { return localStorage.getItem(VIEWPORT_COMPACT_KEY); } catch { return null; }
+    })(),
+  });
+  syncViewportCompact();
+}
+
 function toggleHelp(): void {
   helpOpen.value = !helpOpen.value;
 }
 
 onMounted(() => {
+  syncViewportCompact();
   window.addEventListener('vrm-player:toggle-zen', toggleZen);
   window.addEventListener('vrm-player:toggle-help', toggleHelp);
   window.addEventListener('vrm-player:toast', onToast);
@@ -172,6 +213,17 @@ function onShellClick(event: MouseEvent): void {
         @click="toggleZen"
       />
       <Button
+        class="shell-action viewport-compact-action"
+        :icon="viewportCompact ? 'pi pi-window-maximize' : 'pi pi-window-minimize'"
+        text
+        rounded
+        size="small"
+        :aria-pressed="viewportCompact"
+        :title="viewportCompact ? 'Restore viewport' : 'Shrink viewport to 256 x 256'"
+        :aria-label="viewportCompact ? 'Restore viewport' : 'Shrink viewport'"
+        @click="toggleViewportCompact"
+      />
+      <Button
         class="shell-action"
         icon="pi pi-question-circle"
         text
@@ -236,6 +288,7 @@ function onShellClick(event: MouseEvent): void {
         :class="{ collapsed: isCollapsed('mocap-preview-panel') }"
         style="display:none"
       >
+        <p class="panel-title"><span>Performer skeleton</span></p>
         <canvas id="mocap-canvas"></canvas>
       </div>
       <div id="queue-panel" class="panel" :class="{ collapsed: isCollapsed('queue-panel') }">
@@ -665,9 +718,16 @@ kbd {
   flex-shrink: 0;
 }
 
+#mocap-preview-panel {
+  display: flex;
+  flex-direction: column;
+}
+
 #mocap-canvas {
   display: block;
   width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
   border-radius: 3px;
   background: #000;
 }

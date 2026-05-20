@@ -65,6 +65,8 @@ const ALL_JOINT_NAMES: string[] = (() => {
 
 const BODY_JOINT_NAMES = new Set<string>(BODY_CONNECTIONS.flat());
 const FINGER_JOINT_NAMES = new Set<string>(FINGER_CONNECTIONS.flat());
+const SKEL_LOG_PREFIX = '[skeleton-visualizer]';
+const SKEL_LOG_INTERVAL_MS = 1000;
 
 interface BoneLabel {
   name: string;
@@ -98,6 +100,8 @@ export class SkeletonVisualizer {
   private _showFingers = true;
   private _showLabels  = false;
   private _visible     = false;
+  private _lastUpdateLogMs = 0;
+  private _updateCount = 0;
 
   // Scratch vectors
   private _pa = new THREE.Vector3();
@@ -107,15 +111,29 @@ export class SkeletonVisualizer {
     this.vrm   = vrm;
     this.scene = scene;
     this._buildCache();
+    console.info(SKEL_LOG_PREFIX, 'created', {
+      cachedNodes: this.nodeCache.size,
+      expectedNodes: ALL_JOINT_NAMES.length,
+      missingNodes: ALL_JOINT_NAMES.filter((name) => !this.nodeCache.has(name)),
+      bodyConnections: BODY_CONNECTIONS.length,
+      fingerConnections: FINGER_CONNECTIONS.length,
+    });
 
     const lineMat = (color: number) =>
-      new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.85 });
+      new THREE.LineBasicMaterial({
+        color,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.85,
+      });
 
     const dotMat = new THREE.PointsMaterial({
       color: 0xffffff,
       size: 0.018,
       sizeAttenuation: true,
       depthTest: false,
+      depthWrite: false,
       transparent: true,
       opacity: 0.9,
     });
@@ -124,6 +142,12 @@ export class SkeletonVisualizer {
     this.fingerLines = this._makeLines(FINGER_CONNECTIONS, lineMat(0xffee00));  // yellow
     this.dots        = this._makeDots(dotMat);
     this.labels      = this._makeLabels();
+    this.bodyLines.renderOrder = 1000;
+    this.fingerLines.renderOrder = 1001;
+    this.dots.renderOrder = 1002;
+    this.bodyLines.frustumCulled = false;
+    this.fingerLines.frustumCulled = false;
+    this.dots.frustumCulled = false;
 
     // Everything hidden by default
     this.bodyLines.visible   = false;
@@ -142,35 +166,56 @@ export class SkeletonVisualizer {
   get showLabels():  boolean { return this._showLabels; }
 
   setVisible(v: boolean): void {
+    const prev = this._visible;
     this._visible = v;
+    console.info(SKEL_LOG_PREFIX, 'setVisible', { prev, next: v });
     this._syncVisibility();
   }
 
   setShowBody(v: boolean): void {
+    const prev = this._showBody;
     this._showBody = v;
+    console.info(SKEL_LOG_PREFIX, 'setShowBody', { prev, next: v });
     this._syncVisibility();
   }
 
   setShowFingers(v: boolean): void {
+    const prev = this._showFingers;
     this._showFingers = v;
+    console.info(SKEL_LOG_PREFIX, 'setShowFingers', { prev, next: v });
     this._syncVisibility();
   }
 
   setShowLabels(v: boolean): void {
+    const prev = this._showLabels;
     this._showLabels = v;
+    console.info(SKEL_LOG_PREFIX, 'setShowLabels', { prev, next: v });
     this._syncVisibility();
   }
 
   /** Call every frame (after vrm.update) to sync positions. */
   update(): void {
-    if (!this._visible) return;
-    if (this._showBody)    this._updateLines(this.bodyLines,   BODY_CONNECTIONS);
-    if (this._showFingers) this._updateLines(this.fingerLines, FINGER_CONNECTIONS);
-    this._updateDots();
+    this._updateCount++;
+    if (!this._visible) {
+      this._maybeLogUpdate('skipped hidden');
+      return;
+    }
+    const body = this._showBody
+      ? this._updateLines(this.bodyLines, BODY_CONNECTIONS)
+      : { valid: 0, missing: BODY_CONNECTIONS.length };
+    const fingers = this._showFingers
+      ? this._updateLines(this.fingerLines, FINGER_CONNECTIONS)
+      : { valid: 0, missing: FINGER_CONNECTIONS.length };
+    const dots = this._updateDots();
     if (this._showLabels) this._updateLabels();
+    this._maybeLogUpdate('updated', { body, fingers, dots });
   }
 
   dispose(): void {
+    console.info(SKEL_LOG_PREFIX, 'dispose', {
+      updateCount: this._updateCount,
+      cachedNodes: this.nodeCache.size,
+    });
     this.scene.remove(this.bodyLines, this.fingerLines, this.dots, ...this.labels.map(l => l.sprite));
     this.bodyLines.geometry.dispose();
     this.fingerLines.geometry.dispose();
@@ -228,7 +273,7 @@ export class SkeletonVisualizer {
       });
       const sprite = new THREE.Sprite(material);
       sprite.renderOrder = 1000;
-      sprite.scale.set(0.15 * aspect, 0.15, 1);
+      sprite.scale.set(0.05 * aspect, 0.05, 1);
       return { name, sprite, texture, material };
     });
   }
@@ -288,9 +333,14 @@ export class SkeletonVisualizer {
     ctx.closePath();
   }
 
-  private _updateLines(ls: THREE.LineSegments, connections: [string, string][]): void {
+  private _updateLines(
+    ls: THREE.LineSegments,
+    connections: [string, string][],
+  ): { valid: number; missing: number } {
     const attr = ls.geometry.attributes.position as THREE.BufferAttribute;
     let i = 0;
+    let valid = 0;
+    let missing = 0;
     for (const [a, b] of connections) {
       const na = this._node(a);
       const nb = this._node(b);
@@ -299,22 +349,32 @@ export class SkeletonVisualizer {
         nb.getWorldPosition(this._pb);
         attr.setXYZ(i,     this._pa.x, this._pa.y, this._pa.z);
         attr.setXYZ(i + 1, this._pb.x, this._pb.y, this._pb.z);
+        valid++;
+      } else {
+        missing++;
       }
       i += 2;
     }
     attr.needsUpdate = true;
+    return { valid, missing };
   }
 
-  private _updateDots(): void {
+  private _updateDots(): { valid: number; missing: number } {
     const attr = this.dots.geometry.attributes.position as THREE.BufferAttribute;
+    let valid = 0;
+    let missing = 0;
     ALL_JOINT_NAMES.forEach((name, i) => {
       const n = this._node(name);
       if (n) {
         n.getWorldPosition(this._pa);
         attr.setXYZ(i, this._pa.x, this._pa.y, this._pa.z);
+        valid++;
+      } else {
+        missing++;
       }
     });
     attr.needsUpdate = true;
+    return { valid, missing };
   }
 
   private _updateLabels(): void {
@@ -344,5 +404,56 @@ export class SkeletonVisualizer {
     for (const label of this.labels) {
       label.sprite.visible = this._labelAllowed(label.name);
     }
+    console.info(SKEL_LOG_PREFIX, 'syncVisibility', {
+      visible: this._visible,
+      showBody: this._showBody,
+      showFingers: this._showFingers,
+      showLabels: this._showLabels,
+      bodyLinesVisible: this.bodyLines.visible,
+      fingerLinesVisible: this.fingerLines.visible,
+      dotsVisible: this.dots.visible,
+      labelVisibleCount: this.labels.filter((label) => label.sprite.visible).length,
+      sceneAttached: !!this.bodyLines.parent && !!this.fingerLines.parent && !!this.dots.parent,
+    });
+  }
+
+  private _maybeLogUpdate(
+    reason: string,
+    stats?: {
+      body: { valid: number; missing: number };
+      fingers: { valid: number; missing: number };
+      dots: { valid: number; missing: number };
+    },
+  ): void {
+    const now = performance.now();
+    if (now - this._lastUpdateLogMs < SKEL_LOG_INTERVAL_MS) return;
+    this._lastUpdateLogMs = now;
+    const hips = this._node('hips');
+    const head = this._node('head');
+    const sample: Record<string, [number, number, number] | null> = {};
+    for (const [name, node] of [['hips', hips], ['head', head]] as const) {
+      if (!node) {
+        sample[name] = null;
+        continue;
+      }
+      node.getWorldPosition(this._pa);
+      sample[name] = [
+        Number(this._pa.x.toFixed(3)),
+        Number(this._pa.y.toFixed(3)),
+        Number(this._pa.z.toFixed(3)),
+      ];
+    }
+    console.info(SKEL_LOG_PREFIX, reason, {
+      updateCount: this._updateCount,
+      visible: this._visible,
+      showBody: this._showBody,
+      showFingers: this._showFingers,
+      bodyLinesVisible: this.bodyLines.visible,
+      fingerLinesVisible: this.fingerLines.visible,
+      dotsVisible: this.dots.visible,
+      cachedNodes: this.nodeCache.size,
+      sample,
+      stats,
+    });
   }
 }
