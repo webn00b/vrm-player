@@ -8,21 +8,8 @@ import { MicroAnimations } from '../../microAnimations';
 import { PriorityAnimator } from '../../priorityAnimator';
 import type { PlaybackSystems } from '../../playerSystems';
 import { requireVrm } from '../assertions';
+import { readQueueLoopMode } from '../queueLoopMode';
 import type { PlayerModule } from '../types';
-
-const QUEUE_LOOP_KEY = 'vrm-player.queue-loop-mode';
-
-function readQueueLoopMode(): QueueLoopMode {
-  try {
-    return localStorage.getItem(QUEUE_LOOP_KEY) === 'one' ? 'one' : 'queue';
-  } catch {
-    return 'queue';
-  }
-}
-
-export function writeQueueLoopMode(mode: QueueLoopMode): void {
-  try { localStorage.setItem(QUEUE_LOOP_KEY, mode); } catch { /* ignore */ }
-}
 
 export const playbackModule: PlayerModule = {
   name: 'playback',

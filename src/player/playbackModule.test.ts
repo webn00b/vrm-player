@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
+import { writeQueueLoopMode } from './queueLoopMode';
 import type { PlayerContext } from './types';
-import { playbackModule, writeQueueLoopMode } from './modules/playbackModule';
+import { playbackModule } from './modules/playbackModule';
 
 const animationControllerState = vi.hoisted(() => ({
   instances: [] as Array<{

@@ -62,7 +62,7 @@ vi.mock('../gltfExportRecorder', () => ({
 vi.mock('../retarget', () => ({
   exportBvhAsVrma: vi.fn(async () => undefined),
 }));
-vi.mock('./modules/playbackModule', () => ({
+vi.mock('./queueLoopMode', () => ({
   writeQueueLoopMode: vi.fn(),
 }));
 

@@ -16,8 +16,8 @@ import { sceneControlsState } from '../../playerVue/sceneControlsState';
 import { exportBvhAsVrma } from '../../retarget';
 import { notify, setStatus } from '../../ui';
 import { requireAnimation, requirePlayback, requireTooling, requireVrm } from '../assertions';
+import { writeQueueLoopMode } from '../queueLoopMode';
 import type { PlayerModule, QueueHandle } from '../types';
-import { writeQueueLoopMode } from './playbackModule';
 
 interface QueuePanelProps extends Record<string, unknown> {
   mode?: 'full' | 'exportsOnly';
