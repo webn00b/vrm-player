@@ -263,8 +263,11 @@ export class AnimationController {
 
   // ── Listener ───────────────────────────────────────────────────────────────
 
-  onChange(listener: PlaybackListener): void {
+  onChange(listener: PlaybackListener): () => void {
     this.listener = listener;
+    return () => {
+      if (this.listener === listener) this.listener = null;
+    };
   }
 
   // ── Per-frame update ───────────────────────────────────────────────────────

@@ -38,3 +38,17 @@ test('AnimationController can loop only the active queue item', () => {
   assert.equal(controller.currentQueuePos, 0);
   assert.equal(controller.currentTime, 0);
 });
+
+test('AnimationController onChange unsubscribe only clears the same listener', () => {
+  const controller = makeController();
+  let firstCalls = 0;
+  let secondCalls = 0;
+
+  const unsubscribeFirst = controller.onChange(() => { firstCalls += 1; });
+  controller.onChange(() => { secondCalls += 1; });
+  unsubscribeFirst();
+  controller.jumpTo(1);
+
+  assert.equal(firstCalls, 0);
+  assert.equal(secondCalls, 1);
+});
