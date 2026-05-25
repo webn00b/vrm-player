@@ -1,20 +1,14 @@
 import type * as THREE from 'three';
 import './styles/player.css';
-import { createScene } from './scene';
-import { loadVRM } from './vrmLoader';
 import { parseBVH } from './bvhLoader';
 import { retargetBvhToVrm, exportBvhAsVrma } from './retarget';
 import type { ParsedBVH } from './bvhLoader';
 import { loadAnimationFile, isSupportedAnimationFile } from './animationImport';
 import { exportClipAsBvh } from './bvhExportRecorder';
 import { exportClipAsGlb } from './gltfExportRecorder';
-import { AnimationController, type QueueLoopMode } from './animationController';
-import { PriorityAnimator } from './priorityAnimator';
-import { MicroAnimations } from './microAnimations';
-import { IdleLoop } from './idleLoop';
+import type { AnimationController, QueueLoopMode } from './animationController';
 import { notify, setStatus } from './ui';
 import { createApp } from 'vue';
-import PlayerShell from './playerVue/PlayerShell.vue';
 import QueuePanel from './playerVue/QueuePanel.vue';
 import BottomBar from './playerVue/BottomBar.vue';
 import RetargetLab from './playerVue/RetargetLab.vue';
@@ -25,77 +19,30 @@ import { sceneControlsState } from './playerVue/sceneControlsState';
 import type { ManualFbxBoneMapping } from './animationLoaders/fbxBoneMapping';
 import { applyQuaternionCorrectionsToClip, type QuaternionCorrection } from './retargetCorrections';
 import { mountDebugPanel } from './debugPanel';
-import { BonePosePanel } from './bonePosePanel';
-import { BoneDragController } from './boneDragController';
 import { MocapController } from './mocap/pipeline/mocapController';
 import { MocapDebugViz } from './mocap/diagnostics/mocapDebugViz';
 import { MocapDebugRecorder } from './mocap/diagnostics/mocapDebugRecorder';
-import { SkeletonVisualizer } from './skeletonVisualizer';
-import { BoneValidator } from './validation/boneValidator';
-import { HipForceTracker } from './physics/hipForce';
-import { HipBalanceCorrector } from './physics/hipBalanceCorrector';
-import { createSkeletonLogger } from './diagnostics/skeletonLogger';
-import { MotionTraceRecorder } from './diagnostics/motionTraceRecorder';
-import { renderLoopHooks } from './renderLoopHooks';
 import { startRenderLoop } from './renderLoop';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
+import { runPlayerModules } from './player/bootstrap';
+import type { PlayerContext } from './player/types';
+import { coreSceneModule } from './player/modules/coreSceneModule';
+import { shellModule } from './player/modules/shellModule';
+import { vrmModule } from './player/modules/vrmModule';
+import { playbackModule, writeQueueLoopMode } from './player/modules/playbackModule';
+import { toolingModule } from './player/modules/toolingModule';
 
 type CleanupFn = () => void;
 let selectedVrmUrl: string | null = null;
 let selectedVrmName = '';
-const QUEUE_LOOP_KEY = 'vrm-player.queue-loop-mode';
-const VIEWPORT_COMPACT_KEY = 'vrm-player.viewport-compact';
 
 declare global {
   interface Window {
     __vrmPlayerCleanup?: CleanupFn;
     __mocapDbg?: MocapDebugRecorder;
-    __skelLog?: ReturnType<typeof createSkeletonLogger>;
-    __motionTrace?: MotionTraceRecorder;
+    __skelLog?: ToolingSystems['skeletonLogger'];
+    __motionTrace?: ToolingSystems['motionTraceRecorder'];
   }
-}
-
-/**
- * Resolve which VRM to load via runtime fetch of `models/index.json`.
- *
- * Why not `import.meta.glob` like before: with the build-time glob, .vrm
- * files had to be present in the repo at CI time for Vite to copy them into
- * `dist/assets/`. We don't want 16-50 MB binaries in git, so .vrm files
- * stay gitignored and live in `public/models/` locally + `/var/www/<site>/
- * models/` on the VPS. The CI rsync deploys excludes `models/*.vrm` so the
- * server-side copies persist; the site reads `models/index.json` (kept in
- * git inside `public/models/`) to know what's available at runtime.
- */
-async function resolveVrmUrl(): Promise<string> {
-  if (selectedVrmUrl) return selectedVrmUrl;
-  const res = await fetch('/models/index.json', { cache: 'no-cache' });
-  if (!res.ok) {
-    throw new Error(
-      `models/index.json not found (HTTP ${res.status}). ` +
-      `Add a JSON array of .vrm filenames to public/models/index.json ` +
-      `and place the .vrm files in public/models/ locally / ` +
-      `/var/www/<site>/models/ on the server.`,
-    );
-  }
-  const list = await res.json() as string[];
-  if (!Array.isArray(list) || list.length === 0) {
-    throw new Error('models/index.json is empty — add at least one .vrm filename');
-  }
-  // Sort alphabetically for deterministic "first" pick across runs.
-  const sorted = [...list].sort();
-  return `/models/${sorted[0]}`;
-}
-
-function readQueueLoopMode(): QueueLoopMode {
-  try {
-    return localStorage.getItem(QUEUE_LOOP_KEY) === 'one' ? 'one' : 'queue';
-  } catch {
-    return 'queue';
-  }
-}
-
-function writeQueueLoopMode(mode: QueueLoopMode): void {
-  try { localStorage.setItem(QUEUE_LOOP_KEY, mode); } catch { /* ignore */ }
 }
 
 function installGlobalCleanup(cleanup: CleanupFn): void {
@@ -115,47 +62,41 @@ async function main() {
   previousCleanup?.();
   const container = document.getElementById('app');
   if (!container) throw new Error('#app not found');
-  const ctx = createScene(container);
-
   const shellHost = document.getElementById('ui-shell');
   if (!shellHost) throw new Error('#ui-shell not found');
-  const shellApp = createApp(PlayerShell);
-  installPrimeVueOn(shellApp);
-  shellApp.mount(shellHost);
 
-  setStatus('loading VRM…');
-  const vrm = await loadVRM(await resolveVrmUrl());
-  if (selectedVrmName) notify({ severity: 'success', summary: 'VRM loaded', detail: selectedVrmName });
-  // NOTE: mirror effect for mocap is applied at the landmark level in
-  // DirectPoseApplier (_mirrorX flag) — do NOT scale the scene negatively,
-  // that breaks the direct-math's getWorldQuaternion calls on parent bones.
-  ctx.scene.add(vrm.scene);
-
-  // ── Procedural systems ─────────────────────────────────────────────────────
-  const pa       = new PriorityAnimator(vrm);
-  const micro    = new MicroAnimations();
-  const idleLoop = new IdleLoop();
-
-  // ── Bone rotation validator (AAOS/ISB ROM) ─────────────────────────────────
-  const validator = new BoneValidator(vrm);
-
-  // ── Skeleton visualizer ────────────────────────────────────────────────────
-  const skelViz = new SkeletonVisualizer(vrm, ctx.scene);
-
-  const forceSkeletonVisibleForCompact = (): void => {
-    sceneControlsState.skeletonOn = true;
-    sceneControlsState.skelBodyOn = true;
-    sceneControlsState.skelFingersOn = true;
-    skelViz.setVisible(true);
-    skelViz.setShowBody(true);
-    skelViz.setShowFingers(true);
+  const playerCtx: PlayerContext = {
+    roots: { app: container, shell: shellHost },
+    options: {
+      selectedVrmUrl,
+      selectedVrmName,
+      onVrmFileSelected: (file) => { selectedVrmName = file.name; },
+    },
   };
-
-  try {
-    if (localStorage.getItem(VIEWPORT_COMPACT_KEY) === '1') {
-      forceSkeletonVisibleForCompact();
-    }
-  } catch { /* ignore */ }
+  const app = await runPlayerModules(playerCtx, [
+    coreSceneModule,
+    shellModule,
+    vrmModule,
+    playbackModule,
+    toolingModule,
+  ]);
+  const ctx = playerCtx.scene;
+  const vrm = playerCtx.vrm;
+  const playback = playerCtx.playback;
+  const tooling = playerCtx.tooling;
+  const controller = playback?.controller;
+  if (!ctx) throw new Error('Player scene failed to initialize');
+  if (!vrm) throw new Error('Player VRM failed to initialize');
+  if (!playback || !controller) throw new Error('Player playback failed to initialize');
+  if (!tooling) throw new Error('Player tooling failed to initialize');
+  const {
+    skelViz,
+    validator,
+    bonePanel,
+    boneDrag,
+    hipForce,
+    hipBalance,
+  } = tooling;
 
   // ── Mocap debug skeleton ───────────────────────────────────────────────────
   const mocapDebugViz = new MocapDebugViz(ctx.scene);
@@ -169,14 +110,6 @@ async function main() {
   };
   // Expose globally so it can be controlled from the browser console too
   window.__mocapDbg = dbgRecorder;
-
-  // ── Bone pose panel ────────────────────────────────────────────────────────
-  const bonePanel = new BonePosePanel(vrm);
-
-  // ── Bone drag controller (in-scene rotation gizmo) ─────────────────────────
-  const boneDrag = new BoneDragController(
-    vrm, ctx.scene, ctx.camera, ctx.renderer.domElement, ctx.controls,
-  );
 
   // ── Mocap ──────────────────────────────────────────────────────────────────
   const videoEl = document.getElementById('mocap-video') as HTMLVideoElement;
@@ -192,23 +125,12 @@ async function main() {
     for (let i = cleanupFns.length - 1; i >= 0; i--) cleanupFns[i]();
     cleanupFns.length = 0;
     if (window.__mocapDbg === dbgRecorder) delete window.__mocapDbg;
-    if (window.__motionTrace?.active) window.__motionTrace.stop();
-    if (window.__motionTrace === motionTraceRecorder) delete window.__motionTrace;
   };
   registerCleanup(
-    () => shellApp.unmount(),
+    () => app.dispose(),
     () => mocap.dispose(),
     () => mocapDebugViz.dispose(),
-    () => skelViz.dispose(),
-    () => boneDrag.dispose(),
-    () => {
-      vrm.scene.parent?.remove(vrm.scene);
-      ctx.dispose();
-    },
   );
-
-  const controller = new AnimationController(vrm);
-  controller.setLoopMode(readQueueLoopMode());
 
   const bottomBarApp = createApp(BottomBar, { controller });
   installPrimeVueOn(bottomBarApp);
@@ -223,17 +145,6 @@ async function main() {
   installPrimeVueOn(sceneToolbarApp);
   sceneToolbarApp.mount('#scene-toolbar-root');
   registerCleanup(() => sceneToolbarApp.unmount());
-
-  const onViewportCompactChanged = (event: Event): void => {
-    const compact = !!(event as CustomEvent<boolean>).detail;
-    if (!compact) return;
-
-    forceSkeletonVisibleForCompact();
-  };
-  window.addEventListener('vrm-player:viewport-compact-changed', onViewportCompactChanged);
-  registerCleanup(() => {
-    window.removeEventListener('vrm-player:viewport-compact-changed', onViewportCompactChanged);
-  });
 
   const playerStartApp = createApp(PlayerStartPanel, {
     controller,
@@ -314,46 +225,6 @@ async function main() {
   const sourceFileByIndex = new Map<number, File>();
 
   setStatus('drop a .bvh file or record from mocap to start');
-
-  // ── Hip force tracker (gravity + inertia diagnostic) ──────────────────────
-  // Reads world positions of upper-body bones AFTER the full render pipeline
-  // (BVH/mocap/manual offsets/validator clamp/micro), computes Σ-force at the
-  // hip in world & hip-local space. Auto-resets on pause→resume; we explicitly
-  // reset on clip change below in controller.onChange.
-  const hipForce = new HipForceTracker(vrm, { isPaused: () => controller.paused });
-
-  // ── Hip balance corrector (off by default) ────────────────────────────────
-  // Closed-loop counter-rotation around hip-local X/Z driven by horizontal
-  // components of `hipForce.latest`. Toggle from debug panel; reset shares
-  // the same controller.onChange hook as hipForce.
-  const hipBalance = new HipBalanceCorrector(vrm);
-
-  // ── Skeleton logger (compact diagnostic, hooked post-clamp) ───────────────
-  // Inert until `start()` is called from the debug-panel toggle. Wires into
-  // renderLoopHooks.skeletonLoggerTick so the snapshot reflects the same
-  // final on-screen pose that the BVH recorder sees.
-  const skeletonLogger = createSkeletonLogger(vrm, validator);
-  renderLoopHooks.skeletonLoggerTick = () => skeletonLogger.tick();
-  registerCleanup(() => { renderLoopHooks.skeletonLoggerTick = null; });
-  window.__skelLog = skeletonLogger;
-
-  // ── Motion trace recorder (JSON for Python animation validator) ──────────
-  const motionTraceRecorder = new MotionTraceRecorder(vrm);
-  renderLoopHooks.motionTraceCaptureSink = () => motionTraceRecorder.capture();
-  registerCleanup(() => { renderLoopHooks.motionTraceCaptureSink = null; });
-  window.__motionTrace = motionTraceRecorder;
-
-  const playback: PlaybackSystems = { controller, pa, micro, idle: idleLoop };
-  const tooling: ToolingSystems   = {
-    skelViz,
-    validator,
-    bonePanel,
-    boneDrag,
-    hipForce,
-    hipBalance,
-    skeletonLogger,
-    motionTraceRecorder,
-  };
 
   vrm.scene.visible = sceneControlsState.modelOn;
 
