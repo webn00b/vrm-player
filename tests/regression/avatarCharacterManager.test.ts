@@ -128,10 +128,22 @@ describe('AvatarCharacterManager', () => {
     const manager = new AvatarCharacterManager({ scene, loadVrm });
 
     await manager.swapTo(resolveLanguageHostProfile('en-US'));
-    await expect(manager.swapTo(resolveLanguageHostProfile('ja-JP'))).rejects.toThrow('missing file');
+    await expect(manager.swapTo(resolveLanguageHostProfile('ja-JP')))
+      .rejects
+      .toThrow('Host asset unavailable: /models/hosts/ja-JP/host.vrm');
 
     expect(scene.children).toContain(first.scene);
     expect(manager.current?.profile.locale).toBe('en-US');
+  });
+
+  it('wraps failed host asset loads with a user-facing message', async () => {
+    const scene = new THREE.Scene();
+    const loadVrm = vi.fn().mockRejectedValue(new SyntaxError('Unexpected token \'<\', "<!doctype "... is not valid JSON'));
+    const manager = new AvatarCharacterManager({ scene, loadVrm });
+
+    await expect(manager.swapTo(resolveLanguageHostProfile('en-US')))
+      .rejects
+      .toThrow('Host asset unavailable: /models/hosts/en-US/host.vrm');
   });
 
   it('ignores stale slower loads when a newer swap finishes first', async () => {

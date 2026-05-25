@@ -19,6 +19,16 @@ export class AvatarSwapSupersededError extends Error {
   }
 }
 
+export class AvatarHostAssetLoadError extends Error {
+  constructor(
+    readonly profile: LanguageHostProfile,
+    cause: unknown,
+  ) {
+    super(`Host asset unavailable: ${profile.modelUrl}`, { cause });
+    this.name = 'AvatarHostAssetLoadError';
+  }
+}
+
 export class AvatarCharacterManager {
   private readonly scene: THREE.Scene;
   private readonly loadVrm: (url: string) => Promise<VRM>;
@@ -43,7 +53,7 @@ export class AvatarCharacterManager {
       if (serial !== this.swapSerial) {
         throw new AvatarSwapSupersededError();
       }
-      throw error;
+      throw new AvatarHostAssetLoadError(profile, error);
     }
 
     if (serial !== this.swapSerial) {
