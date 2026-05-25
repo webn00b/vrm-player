@@ -1,3 +1,5 @@
+import type { ToolingSystems } from './playerSystems';
+
 /**
  * Ambient global types for dev-tool hooks that we attach to `window`.
  *
@@ -15,6 +17,8 @@ declare global {
      * tuning fold invokes.
      */
     dumpSkeleton?: () => void;
+    __skelLog?: ToolingSystems['skeletonLogger'];
+    __motionTrace?: ToolingSystems['motionTraceRecorder'];
   }
 }
 

@@ -1,8 +1,7 @@
 import './styles/player.css';
 import { notify, setStatus } from './ui';
-import type { ToolingSystems } from './playerSystems';
 import { runPlayerModules } from './player/bootstrap';
-import type { PlayerContext } from './player/types';
+import type { PlayerApp, PlayerContext } from './player/types';
 import { coreSceneModule } from './player/modules/coreSceneModule';
 import { shellModule } from './player/modules/shellModule';
 import { vrmModule } from './player/modules/vrmModule';
@@ -18,30 +17,54 @@ import { renderLoopModule } from './player/modules/renderLoopModule';
 type CleanupFn = () => void;
 let selectedVrmUrl: string | null = null;
 let selectedVrmName = '';
+let activeApp: PlayerApp | null = null;
+let playerGeneration = 0;
+let hmrDisposeRegistered = false;
 
 declare global {
   interface Window {
     __vrmPlayerCleanup?: CleanupFn;
-    __skelLog?: ToolingSystems['skeletonLogger'];
-    __motionTrace?: ToolingSystems['motionTraceRecorder'];
   }
 }
 
-function installGlobalCleanup(cleanup: CleanupFn): void {
-  let disposed = false;
-  const wrapped = (): void => {
-    if (disposed) return;
-    disposed = true;
-    cleanup();
-    if (window.__vrmPlayerCleanup === wrapped) delete window.__vrmPlayerCleanup;
-  };
-  window.__vrmPlayerCleanup = wrapped;
-  import.meta.hot?.dispose(() => wrapped());
+function disposeActiveApp(): void {
+  playerGeneration += 1;
+  const app = activeApp;
+  activeApp = null;
+  if (window.__vrmPlayerCleanup === disposeActiveApp) delete window.__vrmPlayerCleanup;
+  app?.dispose();
 }
 
-async function main() {
-  const previousCleanup = window.__vrmPlayerCleanup as CleanupFn | undefined;
-  previousCleanup?.();
+function disposePreviousGlobalCleanup(): void {
+  const cleanup = window.__vrmPlayerCleanup;
+  if (cleanup && cleanup !== disposeActiveApp) cleanup();
+}
+
+function installGlobalCleanup(): void {
+  window.__vrmPlayerCleanup = disposeActiveApp;
+  if (!hmrDisposeRegistered) {
+    import.meta.hot?.dispose(disposeActiveApp);
+    hmrDisposeRegistered = true;
+  }
+}
+
+function requestVrmFile(file: File): void {
+  if (selectedVrmUrl?.startsWith('blob:')) URL.revokeObjectURL(selectedVrmUrl);
+  selectedVrmUrl = URL.createObjectURL(file);
+  selectedVrmName = file.name;
+  void startPlayer().catch((err) => {
+    console.error(err);
+    setStatus(`error: ${(err as Error).message}`);
+    notify({ severity: 'error', summary: 'VRM load failed', detail: (err as Error).message, life: 6000 });
+  });
+}
+
+async function startPlayer(): Promise<void> {
+  disposePreviousGlobalCleanup();
+  disposeActiveApp();
+  const startGeneration = ++playerGeneration;
+  installGlobalCleanup();
+
   const container = document.getElementById('app');
   if (!container) throw new Error('#app not found');
   const shellHost = document.getElementById('ui-shell');
@@ -52,47 +75,42 @@ async function main() {
     options: {
       selectedVrmUrl,
       selectedVrmName,
-      onVrmFileSelected: (file) => {
-        if (selectedVrmUrl?.startsWith('blob:')) URL.revokeObjectURL(selectedVrmUrl);
-        selectedVrmUrl = URL.createObjectURL(file);
-        selectedVrmName = file.name;
-        void main().catch((err) => {
-          console.error(err);
-          setStatus(`error: ${(err as Error).message}`);
-          notify({ severity: 'error', summary: 'VRM load failed', detail: (err as Error).message, life: 6000 });
-        });
-      },
+      onVrmFileSelected: requestVrmFile,
     },
   };
-  const app = await runPlayerModules(playerCtx, [
-    coreSceneModule,
-    shellModule,
-    vrmModule,
-    playbackModule,
-    toolingModule,
-    animationImportModule,
-    playerUiModule,
-    mocapModule,
-    debugModule,
-    inputModule,
-    renderLoopModule,
-  ]);
+  let app: PlayerApp;
+  try {
+    app = await runPlayerModules(playerCtx, [
+      coreSceneModule,
+      shellModule,
+      vrmModule,
+      playbackModule,
+      toolingModule,
+      animationImportModule,
+      playerUiModule,
+      mocapModule,
+      debugModule,
+      inputModule,
+      renderLoopModule,
+    ]);
+  } catch (err) {
+    if (startGeneration !== playerGeneration) return;
+    throw err;
+  }
 
-  const cleanupFns: CleanupFn[] = [];
-  const registerCleanup = (...fns: Array<CleanupFn | undefined>): void => {
-    for (const fn of fns) if (fn) cleanupFns.push(fn);
-  };
-  const cleanup = (): void => {
-    for (let i = cleanupFns.length - 1; i >= 0; i--) cleanupFns[i]();
-    cleanupFns.length = 0;
-  };
-  registerCleanup(
-    () => app.dispose(),
-  );
-  installGlobalCleanup(cleanup);
+  if (startGeneration !== playerGeneration) {
+    try {
+      app.dispose();
+    } catch (err) {
+      console.error('Failed to dispose stale player app', err);
+    }
+    return;
+  }
+
+  activeApp = app;
 }
 
-main().catch((err) => {
+startPlayer().catch((err) => {
   console.error(err);
   setStatus(`error: ${(err as Error).message}`);
   notify({ severity: 'error', summary: 'Startup error', detail: (err as Error).message, life: 6000 });
