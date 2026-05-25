@@ -76,11 +76,17 @@ export class AvatarCharacterManager {
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     const textures = new Set<THREE.Texture>();
+    const skeletons = new Set<THREE.Skeleton>();
 
     vrm.scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.geometry) {
         geometries.add(mesh.geometry);
+      }
+
+      const skinnedMesh = obj as THREE.SkinnedMesh;
+      if (skinnedMesh.skeleton) {
+        skeletons.add(skinnedMesh.skeleton);
       }
 
       const material = mesh.material;
@@ -94,6 +100,7 @@ export class AvatarCharacterManager {
     geometries.forEach((geometry) => geometry.dispose());
     materials.forEach((material) => material.dispose());
     textures.forEach((texture) => texture.dispose());
+    skeletons.forEach((skeleton) => skeleton.dispose());
   }
 
   private collectMaterialResources(
@@ -104,8 +111,28 @@ export class AvatarCharacterManager {
     materials.add(material);
 
     Object.values(material).forEach((value) => {
-      this.collectTextureResources(value, textures);
+      if (value instanceof THREE.Texture) {
+        textures.add(value);
+      }
     });
+
+    const maybeUniforms = (material as THREE.Material & {
+      uniforms?: Record<string, { value: unknown } | unknown>;
+    }).uniforms;
+
+    if (maybeUniforms) {
+      Object.values(maybeUniforms).forEach((uniform) => {
+        if (
+          uniform
+          && typeof uniform === 'object'
+          && 'value' in uniform
+        ) {
+          this.collectTextureResources(uniform.value, textures);
+        } else {
+          this.collectTextureResources(uniform, textures);
+        }
+      });
+    }
   }
 
   private collectTextureResources(

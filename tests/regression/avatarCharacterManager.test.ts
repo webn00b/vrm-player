@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { VRM } from '@pixiv/three-vrm';
-import { AvatarCharacterManager } from '../../src/avatarCharacterManager';
+import {
+  AvatarCharacterManager,
+  AvatarSwapSupersededError,
+} from '../../src/avatarCharacterManager';
 import { resolveLanguageHostProfile } from '../../src/languageHosts';
 
 function mockVrm(name: string): VRM {
@@ -18,6 +21,7 @@ interface DisposableVrmMock {
   geometryDispose: ReturnType<typeof vi.spyOn>;
   materialDispose: ReturnType<typeof vi.spyOn>;
   textureDispose: ReturnType<typeof vi.spyOn>;
+  skeletonDispose: ReturnType<typeof vi.spyOn>;
 }
 
 type UniformTextureMaterial = THREE.MeshBasicMaterial & {
@@ -30,6 +34,7 @@ function mockDisposableVrm(name: string): DisposableVrmMock {
   const geometry = new THREE.BoxGeometry();
   const texture = new THREE.Texture();
   const material = new THREE.MeshBasicMaterial() as UniformTextureMaterial;
+  const skeleton = new THREE.Skeleton([new THREE.Bone()]);
   material.uniforms = {
     mainTexture: { value: texture },
     sharedTexture: { value: texture },
@@ -37,15 +42,46 @@ function mockDisposableVrm(name: string): DisposableVrmMock {
   const geometryDispose = vi.spyOn(geometry, 'dispose');
   const materialDispose = vi.spyOn(material, 'dispose');
   const textureDispose = vi.spyOn(texture, 'dispose');
+  const skeletonDispose = vi.spyOn(skeleton, 'dispose');
 
   scene.add(new THREE.Mesh(geometry, material));
   scene.add(new THREE.Mesh(geometry, material));
+  const firstSkinnedMesh = new THREE.SkinnedMesh(geometry, material);
+  const secondSkinnedMesh = new THREE.SkinnedMesh(geometry, material);
+  firstSkinnedMesh.bind(skeleton);
+  secondSkinnedMesh.bind(skeleton);
+  scene.add(firstSkinnedMesh);
+  scene.add(secondSkinnedMesh);
 
   return {
     vrm: { scene } as VRM,
     geometryDispose,
     materialDispose,
     textureDispose,
+    skeletonDispose,
+  };
+}
+
+function mockUserDataTextureVrm(name: string) {
+  const scene = new THREE.Group();
+  scene.name = name;
+  const geometry = new THREE.BoxGeometry();
+  const material = new THREE.MeshBasicMaterial();
+  const userDataTexture = new THREE.Texture();
+  material.userData = {
+    cachedPreviewTexture: userDataTexture,
+  };
+  const geometryDispose = vi.spyOn(geometry, 'dispose');
+  const materialDispose = vi.spyOn(material, 'dispose');
+  const userDataTextureDispose = vi.spyOn(userDataTexture, 'dispose');
+
+  scene.add(new THREE.Mesh(geometry, material));
+
+  return {
+    vrm: { scene } as VRM,
+    geometryDispose,
+    materialDispose,
+    userDataTextureDispose,
   };
 }
 
@@ -80,6 +116,7 @@ describe('AvatarCharacterManager', () => {
     expect(first.geometryDispose).toHaveBeenCalledTimes(1);
     expect(first.materialDispose).toHaveBeenCalledTimes(1);
     expect(first.textureDispose).toHaveBeenCalledTimes(1);
+    expect(first.skeletonDispose).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the current host when a new host fails to load', async () => {
@@ -119,6 +156,7 @@ describe('AvatarCharacterManager', () => {
     expect(stale.geometryDispose).toHaveBeenCalledTimes(1);
     expect(stale.materialDispose).toHaveBeenCalledTimes(1);
     expect(stale.textureDispose).toHaveBeenCalledTimes(1);
+    expect(stale.skeletonDispose).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces superseded when a stale slower load rejects after a newer swap', async () => {
@@ -134,10 +172,24 @@ describe('AvatarCharacterManager', () => {
     const slowSwap = manager.swapTo(resolveLanguageHostProfile('fr-FR'));
     await manager.swapTo(resolveLanguageHostProfile('ru-RU'));
     rejectSlow(new Error('missing stale file'));
-    await expect(slowSwap).rejects.toThrow('superseded');
+    await expect(slowSwap).rejects.toThrow(AvatarSwapSupersededError);
 
     expect(manager.current?.profile.locale).toBe('ru-RU');
     expect(scene.children.map((child) => child.name)).toEqual(['fast']);
+  });
+
+  it('does not dispose textures reachable only through material userData', async () => {
+    const scene = new THREE.Scene();
+    const active = mockUserDataTextureVrm('cached');
+    const loadVrm = vi.fn(async () => active.vrm);
+    const manager = new AvatarCharacterManager({ scene, loadVrm });
+
+    await manager.swapTo(resolveLanguageHostProfile('en-US'));
+    manager.dispose();
+
+    expect(active.geometryDispose).toHaveBeenCalledTimes(1);
+    expect(active.materialDispose).toHaveBeenCalledTimes(1);
+    expect(active.userDataTextureDispose).not.toHaveBeenCalled();
   });
 
   it('removes the active host when disposed', async () => {
@@ -154,5 +206,6 @@ describe('AvatarCharacterManager', () => {
     expect(active.geometryDispose).toHaveBeenCalledTimes(1);
     expect(active.materialDispose).toHaveBeenCalledTimes(1);
     expect(active.textureDispose).toHaveBeenCalledTimes(1);
+    expect(active.skeletonDispose).toHaveBeenCalledTimes(1);
   });
 });
