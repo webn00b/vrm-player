@@ -38,6 +38,17 @@ function persistLocale(locale: SupportedLocale): void {
   try { localStorage.setItem(LANGUAGE_LOCALE_KEY, locale); } catch { /* ignore */ }
 }
 
+function errorMessage(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) {
+    return err.message;
+  }
+  if (err !== null && err !== undefined) {
+    const message = String(err).trim();
+    if (message) return message;
+  }
+  return 'Language host preview failed';
+}
+
 function isCurrentSelection(serial: number): boolean {
   return mounted && serial === selectionSerial;
 }
@@ -56,7 +67,7 @@ async function selectHost(profile: LanguageHostProfile): Promise<void> {
     }
   } catch (err) {
     if (isCurrentSelection(serial)) {
-      loadError.value = (err as Error).message;
+      loadError.value = errorMessage(err);
       status.value = `${profile.label} asset unavailable`;
     }
   } finally {
@@ -70,9 +81,16 @@ onMounted(async () => {
   mounted = true;
   await nextTick();
   if (!mounted || !previewRoot.value) return;
-  const scene = createLanguageHostPreviewScene(previewRoot.value);
-  previewScene.value = scene;
-  await selectHost(selectedProfile.value);
+  try {
+    const scene = createLanguageHostPreviewScene(previewRoot.value);
+    previewScene.value = scene;
+    await selectHost(selectedProfile.value);
+  } catch (err) {
+    if (!mounted) return;
+    loadError.value = errorMessage(err);
+    status.value = 'Preview unavailable';
+    loading.value = false;
+  }
 });
 
 onUnmounted(() => {
