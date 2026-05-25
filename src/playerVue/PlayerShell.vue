@@ -13,6 +13,7 @@ import SelectButton from 'primevue/selectbutton';
 import Toast from 'primevue/toast';
 import { useToast } from 'primevue/usetoast';
 import FileConverter from '../exports/FileConverter.vue';
+import LanguageHostsPage from './LanguageHostsPage.vue';
 import type { AppToastPayload } from '../ui';
 
 const PANEL_KEY = 'vrm-player.panel-collapsed';
@@ -22,12 +23,13 @@ const ZEN_KEY = 'vrm-player.zen-mode';
 const VIEWPORT_COMPACT_KEY = 'vrm-player.viewport-compact';
 const VIEWPORT_LOG_PREFIX = '[viewport-compact]';
 const collapsed = reactive<Record<string, boolean>>({});
-type AppPage = 'player' | 'retarget' | 'tools';
+type AppPage = 'player' | 'retarget' | 'tools' | 'hosts';
 type UiMode = 'play' | 'capture' | 'inspect';
 const pageOptions: Array<{ label: string; value: AppPage }> = [
   { label: 'Player', value: 'player' },
   { label: 'Retarget', value: 'retarget' },
   { label: 'Export', value: 'tools' },
+  { label: 'Hosts', value: 'hosts' },
 ];
 const modeOptions: Array<{ label: string; value: UiMode }> = [
   { label: 'Play', value: 'play' },
@@ -38,7 +40,9 @@ const storedPage = (() => {
   try { return localStorage.getItem(PAGE_KEY); } catch { return null; }
 })();
 const activePage = ref<AppPage>(
-  storedPage === 'tools' || storedPage === 'retarget' ? storedPage : 'player',
+  storedPage === 'tools' || storedPage === 'retarget' || storedPage === 'hosts'
+    ? storedPage
+    : 'player',
 );
 const storedMode = (() => {
   try { return localStorage.getItem(MODE_KEY); } catch { return null; }
@@ -159,7 +163,9 @@ function onToast(event: Event): void {
 
 function onSetPage(event: Event): void {
   const page = (event as CustomEvent<AppPage>).detail;
-  if (page === 'player' || page === 'retarget' || page === 'tools') setPage(page, false);
+  if (page === 'player' || page === 'retarget' || page === 'tools' || page === 'hosts') {
+    setPage(page, false);
+  }
 }
 
 function onHelpKeydown(event: KeyboardEvent): void {
@@ -338,6 +344,10 @@ function onShellClick(event: MouseEvent): void {
 
   <div id="retarget-page" v-show="activePage === 'retarget'">
     <div id="retarget-lab-root"></div>
+  </div>
+
+  <div id="hosts-page-root" v-show="activePage === 'hosts'">
+    <LanguageHostsPage />
   </div>
 
   <video id="mocap-video" playsinline></video>
