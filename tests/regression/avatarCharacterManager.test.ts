@@ -192,6 +192,22 @@ describe('AvatarCharacterManager', () => {
     expect(active.userDataTextureDispose).not.toHaveBeenCalled();
   });
 
+  it('does not remove a host from an external parent on dispose', async () => {
+    const scene = new THREE.Scene();
+    const externalScene = new THREE.Scene();
+    const active = mockVrm('reparented');
+    const loadVrm = vi.fn(async () => active);
+    const manager = new AvatarCharacterManager({ scene, loadVrm });
+
+    await manager.swapTo(resolveLanguageHostProfile('en-US'));
+    externalScene.add(active.scene);
+    manager.dispose();
+
+    expect(scene.children).toEqual([]);
+    expect(externalScene.children).toContain(active.scene);
+    expect(manager.current).toBeNull();
+  });
+
   it('removes the active host when disposed', async () => {
     const scene = new THREE.Scene();
     const active = mockDisposableVrm('english-host');

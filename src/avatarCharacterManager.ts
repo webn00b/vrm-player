@@ -57,7 +57,7 @@ export class AvatarCharacterManager {
     this.active = next;
 
     if (previous) {
-      previous.vrm.scene.parent?.remove(previous.vrm.scene);
+      this.scene.remove(previous.vrm.scene);
       this.disposeVrm(previous.vrm);
     }
 
@@ -67,7 +67,7 @@ export class AvatarCharacterManager {
   dispose(): void {
     this.swapSerial += 1;
     if (!this.active) return;
-    this.active.vrm.scene.parent?.remove(this.active.vrm.scene);
+    this.scene.remove(this.active.vrm.scene);
     this.disposeVrm(this.active.vrm);
     this.active = null;
   }
