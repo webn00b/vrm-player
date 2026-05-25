@@ -20,12 +20,20 @@ interface DisposableVrmMock {
   textureDispose: ReturnType<typeof vi.spyOn>;
 }
 
+type UniformTextureMaterial = THREE.MeshBasicMaterial & {
+  uniforms: Record<string, { value: unknown }>;
+};
+
 function mockDisposableVrm(name: string): DisposableVrmMock {
   const scene = new THREE.Group();
   scene.name = name;
   const geometry = new THREE.BoxGeometry();
   const texture = new THREE.Texture();
-  const material = new THREE.MeshBasicMaterial({ map: texture });
+  const material = new THREE.MeshBasicMaterial() as UniformTextureMaterial;
+  material.uniforms = {
+    mainTexture: { value: texture },
+    sharedTexture: { value: texture },
+  };
   const geometryDispose = vi.spyOn(geometry, 'dispose');
   const materialDispose = vi.spyOn(material, 'dispose');
   const textureDispose = vi.spyOn(texture, 'dispose');
@@ -111,6 +119,25 @@ describe('AvatarCharacterManager', () => {
     expect(stale.geometryDispose).toHaveBeenCalledTimes(1);
     expect(stale.materialDispose).toHaveBeenCalledTimes(1);
     expect(stale.textureDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces superseded when a stale slower load rejects after a newer swap', async () => {
+    const scene = new THREE.Scene();
+    let rejectSlow!: (error: Error) => void;
+    const slow = new Promise<VRM>((_, reject) => { rejectSlow = reject; });
+    const fast = Promise.resolve(mockVrm('fast'));
+    const loadVrm = vi.fn()
+      .mockReturnValueOnce(slow)
+      .mockReturnValueOnce(fast);
+    const manager = new AvatarCharacterManager({ scene, loadVrm });
+
+    const slowSwap = manager.swapTo(resolveLanguageHostProfile('fr-FR'));
+    await manager.swapTo(resolveLanguageHostProfile('ru-RU'));
+    rejectSlow(new Error('missing stale file'));
+    await expect(slowSwap).rejects.toThrow('superseded');
+
+    expect(manager.current?.profile.locale).toBe('ru-RU');
+    expect(scene.children.map((child) => child.name)).toEqual(['fast']);
   });
 
   it('removes the active host when disposed', async () => {

@@ -36,7 +36,16 @@ export class AvatarCharacterManager {
 
   async swapTo(profile: LanguageHostProfile): Promise<ActiveAvatar> {
     const serial = ++this.swapSerial;
-    const nextVrm = await this.loadVrm(profile.modelUrl);
+    let nextVrm: VRM;
+    try {
+      nextVrm = await this.loadVrm(profile.modelUrl);
+    } catch (error) {
+      if (serial !== this.swapSerial) {
+        throw new AvatarSwapSupersededError();
+      }
+      throw error;
+    }
+
     if (serial !== this.swapSerial) {
       this.disposeVrm(nextVrm);
       throw new AvatarSwapSupersededError();
@@ -95,9 +104,26 @@ export class AvatarCharacterManager {
     materials.add(material);
 
     Object.values(material).forEach((value) => {
-      if (value instanceof THREE.Texture) {
-        textures.add(value);
-      }
+      this.collectTextureResources(value, textures);
+    });
+  }
+
+  private collectTextureResources(
+    value: unknown,
+    textures: Set<THREE.Texture>,
+    seen = new WeakSet<object>(),
+  ): void {
+    if (value instanceof THREE.Texture) {
+      textures.add(value);
+      return;
+    }
+
+    if (!value || typeof value !== 'object') return;
+    if (seen.has(value)) return;
+    seen.add(value);
+
+    Object.values(value).forEach((child) => {
+      this.collectTextureResources(child, textures, seen);
     });
   }
 }
