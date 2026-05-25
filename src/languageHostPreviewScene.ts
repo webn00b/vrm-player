@@ -52,11 +52,13 @@ export function createLanguageHostPreviewScene(container: HTMLElement): Language
   let disposed = false;
 
   const resize = (): void => {
+    if (disposed) return;
     const rect = container.getBoundingClientRect();
     const width = Math.max(1, Math.floor(rect.width));
     const height = Math.max(1, Math.floor(rect.height));
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height, false);
   };
 
@@ -78,15 +80,25 @@ export function createLanguageHostPreviewScene(container: HTMLElement): Language
     canvas: renderer.domElement,
     manager,
     async load(profile: LanguageHostProfile): Promise<void> {
+      if (disposed) {
+        throw new Error('language host preview scene has been disposed');
+      }
       await manager.swapTo(profile);
     },
     resize,
     dispose: () => {
+      if (disposed) return;
       disposed = true;
       cancelAnimationFrame(rafId);
       window.removeEventListener('resize', onResize);
       manager.dispose();
       controls.dispose();
+      grid.geometry.dispose();
+      if (Array.isArray(grid.material)) {
+        grid.material.forEach((material) => material.dispose());
+      } else {
+        grid.material.dispose();
+      }
       renderer.dispose();
       renderer.domElement.remove();
     },
