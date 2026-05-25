@@ -12,6 +12,7 @@ const gridGeometryDispose = vi.fn();
 const gridMaterialDispose = vi.fn();
 const managerSwapTo = vi.fn();
 const managerDispose = vi.fn();
+let controlsConstructorError: Error | null = null;
 
 vi.mock('three', async (importOriginal) => {
   const actual = await importOriginal<typeof import('three')>();
@@ -59,6 +60,12 @@ vi.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
     maxDistance = 0;
     update = controlsUpdate;
     dispose = controlsDispose;
+
+    constructor() {
+      if (controlsConstructorError) {
+        throw controlsConstructorError;
+      }
+    }
   },
 }));
 
@@ -81,6 +88,7 @@ const makeContainer = () => ({
 
 describe('createLanguageHostPreviewScene', () => {
   afterEach(() => {
+    controlsConstructorError = null;
     vi.resetModules();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
@@ -127,5 +135,23 @@ describe('createLanguageHostPreviewScene', () => {
 
     expect(gridGeometryDispose).toHaveBeenCalledTimes(1);
     expect(gridMaterialDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans up renderer resources when setup throws after appending the canvas', async () => {
+    vi.stubGlobal('window', {
+      devicePixelRatio: 1,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    controlsConstructorError = new Error('controls setup failed');
+
+    const { createLanguageHostPreviewScene } = await import('./languageHostPreviewScene');
+
+    expect(() => createLanguageHostPreviewScene(makeContainer() as unknown as HTMLElement))
+      .toThrow('controls setup failed');
+    expect(rendererDispose).toHaveBeenCalledTimes(1);
+    expect(rendererCanvasRemove).toHaveBeenCalledTimes(1);
   });
 });
