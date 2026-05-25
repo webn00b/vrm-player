@@ -250,19 +250,19 @@ camera or file
 
 Это полезно для рефакторинга: не всё в проекте связано со всем.
 
-## Language host preview
+## Превью language hosts
 
-Language hosts previewed in separate top-level `Hosts` tab. Tab uses
-`src/languageHosts.ts` -> `LanguageHostProfile` records, then mounts
-`LanguageHostsPage.vue` owning isolated Three.js preview scene through
-`createLanguageHostPreviewScene()`.
+Language hosts показываются в отдельной верхнеуровневой вкладке `Hosts`.
+Вкладка берёт `LanguageHostProfile`-записи из `src/languageHosts.ts`, затем
+монтирует `src/playerVue/LanguageHostsPage.vue`, которая владеет изолированной
+Three.js preview-сценой через `createLanguageHostPreviewScene()`.
 
-Hosts tab does not replace active VRM in Player tab. It has own scene, camera,
-renderer, controls, render loop, and `AvatarCharacterManager`.
+Вкладка `Hosts` не заменяет active VRM во вкладке `Player`. У неё свои scene,
+camera, renderer, controls, render loop и `AvatarCharacterManager`.
 
 Main player modules (`vrmModule`, `playbackModule`, `toolingModule`,
-`mocapModule`, `renderLoopModule`) continue to use normal player VRM selected by
-startup/upload flow.
+`mocapModule`, `renderLoopModule`) продолжают использовать обычный Player VRM,
+выбранный через startup/upload flow.
 
 ## Главные runtime-объекты
 
