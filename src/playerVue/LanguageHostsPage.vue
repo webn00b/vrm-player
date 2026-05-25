@@ -21,6 +21,7 @@ const status = ref('Preparing preview');
 const loading = ref(false);
 const loadError = ref('');
 const profiles = getLanguageHostProfiles();
+const controlsDisabled = computed(() => !previewScene.value || loading.value);
 let selectionSerial = 0;
 let mounted = false;
 
@@ -57,11 +58,17 @@ async function selectHost(profile: LanguageHostProfile): Promise<void> {
   const serial = ++selectionSerial;
   selectedLocale.value = profile.locale;
   persistLocale(profile.locale);
+  if (!previewScene.value) {
+    loadError.value ||= 'Language host preview is unavailable';
+    status.value = 'Preview unavailable';
+    loading.value = false;
+    return;
+  }
   loadError.value = '';
   loading.value = true;
   status.value = `Loading ${profile.label}`;
   try {
-    await previewScene.value?.load(profile);
+    await previewScene.value.load(profile);
     if (isCurrentSelection(serial)) {
       status.value = `${profile.label} host selected`;
     }
@@ -124,6 +131,7 @@ onUnmounted(() => {
           class="host-option"
           :class="{ active: profile.locale === selectedLocale }"
           type="button"
+          :disabled="controlsDisabled"
           :aria-pressed="profile.locale === selectedLocale"
           @click="selectHost(profile)"
         >
@@ -150,7 +158,7 @@ onUnmounted(() => {
         </dl>
       </div>
 
-      <p v-if="loadError" class="hosts-error">
+      <p v-if="loadError" class="hosts-error" role="alert" aria-live="assertive">
         {{ loadError }}
       </p>
 
@@ -159,7 +167,7 @@ onUnmounted(() => {
         icon="pi pi-refresh"
         label="Reload"
         size="small"
-        :disabled="loading"
+        :disabled="controlsDisabled"
         @click="selectHost(selectedProfile)"
       />
     </aside>
@@ -257,6 +265,15 @@ onUnmounted(() => {
 
 .host-option:hover {
   background: rgba(255, 255, 255, 0.07);
+}
+
+.host-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.host-option:disabled:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .host-option.active {
