@@ -21,6 +21,8 @@ const status = ref('Preparing preview');
 const loading = ref(false);
 const loadError = ref('');
 const profiles = getLanguageHostProfiles();
+let selectionSerial = 0;
+let mounted = false;
 
 const selectedLocale = ref<SupportedLocale>((() => {
   try {
@@ -36,7 +38,12 @@ function persistLocale(locale: SupportedLocale): void {
   try { localStorage.setItem(LANGUAGE_LOCALE_KEY, locale); } catch { /* ignore */ }
 }
 
+function isCurrentSelection(serial: number): boolean {
+  return mounted && serial === selectionSerial;
+}
+
 async function selectHost(profile: LanguageHostProfile): Promise<void> {
+  const serial = ++selectionSerial;
   selectedLocale.value = profile.locale;
   persistLocale(profile.locale);
   loadError.value = '';
@@ -44,24 +51,33 @@ async function selectHost(profile: LanguageHostProfile): Promise<void> {
   status.value = `Loading ${profile.label}`;
   try {
     await previewScene.value?.load(profile);
-    status.value = `${profile.label} host selected`;
+    if (isCurrentSelection(serial)) {
+      status.value = `${profile.label} host selected`;
+    }
   } catch (err) {
-    loadError.value = (err as Error).message;
-    status.value = `${profile.label} asset unavailable`;
+    if (isCurrentSelection(serial)) {
+      loadError.value = (err as Error).message;
+      status.value = `${profile.label} asset unavailable`;
+    }
   } finally {
-    loading.value = false;
+    if (isCurrentSelection(serial)) {
+      loading.value = false;
+    }
   }
 }
 
 onMounted(async () => {
+  mounted = true;
   await nextTick();
-  if (!previewRoot.value) return;
+  if (!mounted || !previewRoot.value) return;
   const scene = createLanguageHostPreviewScene(previewRoot.value);
   previewScene.value = scene;
   await selectHost(selectedProfile.value);
 });
 
 onUnmounted(() => {
+  mounted = false;
+  selectionSerial += 1;
   previewScene.value?.dispose();
   previewScene.value = null;
 });
