@@ -178,6 +178,7 @@ onUnmounted(() => {
 #hosts-page {
   position: fixed;
   inset: 54px 0 0;
+  z-index: 26;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
   gap: 14px;

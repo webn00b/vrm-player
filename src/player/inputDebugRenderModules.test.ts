@@ -32,6 +32,8 @@ vi.mock('../ui', () => ({
   setStatus: vi.fn(),
 }));
 
+const PAGE_KEY = 'vrm-player.active-page';
+
 function createAnimationBridge(): AnimationBridge {
   return {
     names: [],
@@ -96,6 +98,7 @@ beforeEach(() => {
   sceneControlsState.modelOn = true;
   sceneControlsState.skeletonOn = true;
   sceneControlsState.dragOn = false;
+  localStorage.removeItem(PAGE_KEY);
 });
 
 test('debugModule mounts the debug panel with playback, mocap, tooling, model visibility, and animation import wiring', () => {
@@ -164,6 +167,7 @@ test('inputModule owns shortcuts, VRM file validation, page changes, drag/drop a
   window.dispatchEvent(new CustomEvent<string>('vrm-player:page-changed', { detail: 'retarget' }));
   expect(animation?.openQueueItemInRetargetLab).toHaveBeenCalledWith(2, false);
 
+  window.dispatchEvent(new CustomEvent<string>('vrm-player:page-changed', { detail: 'player' }));
   const animationFile = new File(['HIERARCHY'], 'walk.bvh');
   const drop = new Event('drop') as DragEvent;
   Object.defineProperty(drop, 'dataTransfer', {
@@ -181,4 +185,81 @@ test('inputModule owns shortcuts, VRM file validation, page changes, drag/drop a
   document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }));
   expect(skelViz?.setVisible).not.toHaveBeenCalled();
   expect(setStatus).not.toHaveBeenCalled();
+});
+
+test('inputModule ignores player shortcuts and animation drops outside the player page', () => {
+  const ctx = createContext();
+  const cleanup = inputModule.setup(ctx);
+  const controller = ctx.playback?.controller;
+  const animation = ctx.animation;
+
+  window.dispatchEvent(new CustomEvent<string>('vrm-player:page-changed', { detail: 'hosts' }));
+
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  expect(controller?.togglePaused).not.toHaveBeenCalled();
+
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true }));
+  expect(sceneControlsState.modelOn).toBe(true);
+  expect(ctx.vrm?.scene.visible).toBe(true);
+
+  const animationFile = new File(['HIERARCHY'], 'walk.bvh');
+  const drop = new Event('drop') as DragEvent;
+  Object.defineProperty(drop, 'dataTransfer', {
+    value: {
+      files: [animationFile],
+      items: [{ kind: 'file' }],
+    },
+  });
+  window.dispatchEvent(drop);
+  expect(animation?.handleAnimationFiles).not.toHaveBeenCalled();
+
+  window.dispatchEvent(new CustomEvent<string>('vrm-player:page-changed', { detail: 'player' }));
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  expect(controller?.togglePaused).toHaveBeenCalledTimes(1);
+
+  cleanup?.();
+});
+
+test('inputModule initializes page gate from persisted active page', () => {
+  localStorage.setItem(PAGE_KEY, 'hosts');
+  const ctx = createContext();
+  const cleanup = inputModule.setup(ctx);
+  const controller = ctx.playback?.controller;
+
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  expect(controller?.togglePaused).not.toHaveBeenCalled();
+
+  window.dispatchEvent(new CustomEvent<string>('vrm-player:page-changed', { detail: 'player' }));
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  expect(controller?.togglePaused).toHaveBeenCalledTimes(1);
+
+  cleanup?.();
+});
+
+test('inputModule tracks programmatic page changes', () => {
+  const ctx = createContext();
+  const cleanup = inputModule.setup(ctx);
+  const controller = ctx.playback?.controller;
+
+  window.dispatchEvent(new CustomEvent<string>('vrm-player:set-page', { detail: 'hosts' }));
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  expect(controller?.togglePaused).not.toHaveBeenCalled();
+
+  window.dispatchEvent(new CustomEvent<string>('vrm-player:set-page', { detail: 'player' }));
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  expect(controller?.togglePaused).toHaveBeenCalledTimes(1);
+
+  cleanup?.();
+});
+
+test('inputModule does not auto-open the current queue item for programmatic retarget navigation', () => {
+  const ctx = createContext();
+  const cleanup = inputModule.setup(ctx);
+  const animation = ctx.animation;
+
+  window.dispatchEvent(new CustomEvent<string>('vrm-player:set-page', { detail: 'retarget' }));
+
+  expect(animation?.openQueueItemInRetargetLab).not.toHaveBeenCalled();
+
+  cleanup?.();
 });

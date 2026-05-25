@@ -71,6 +71,44 @@ test('hosts tab mounts preview, selects Japanese, and cleans up on return to pla
   ).toEqual([]);
 });
 
+test('hosts page stays above compact player canvas', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#app canvas')).toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole('button', { name: /^Shrink viewport$/ }).click();
+  await expect(page.locator('#main-render-canvas')).toHaveClass(/compact-viewport/);
+
+  await page.getByRole('button', { name: /^Hosts$/ }).click();
+  await expect(page.locator('#hosts-page')).toBeVisible();
+
+  const stacking = await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLElement>('#main-render-canvas');
+    const hosts = document.querySelector<HTMLElement>('#hosts-page');
+    if (!canvas || !hosts) return null;
+    return {
+      canvasZIndex: getComputedStyle(canvas).zIndex,
+      hostsZIndex: getComputedStyle(hosts).zIndex,
+    };
+  });
+
+  expect(stacking).not.toBeNull();
+  expect(Number(stacking?.hostsZIndex)).toBeGreaterThan(Number(stacking?.canvasZIndex));
+});
+
+test('persisted hosts page still ignores player shortcuts', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('vrm-player.active-page', 'hosts');
+    localStorage.removeItem('vrm-player.zen-mode');
+  });
+
+  await page.goto('/');
+  await expect(page.locator('#hosts-page')).toBeVisible();
+
+  await page.keyboard.press('KeyZ');
+
+  await expect.poll(async () => page.evaluate(() => localStorage.getItem('vrm-player.zen-mode'))).toBeNull();
+});
+
 test('hosts preview reports selected status when host assets are ready', async ({ page }) => {
   test.skip(!process.env.VRM_HOST_ASSETS_READY, 'Set VRM_HOST_ASSETS_READY to run host asset status smoke.');
 

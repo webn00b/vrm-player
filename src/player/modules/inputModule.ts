@@ -7,6 +7,22 @@ import { notify, setStatus } from '../../ui';
 import { requireAnimation, requirePlayback, requireTooling, requireVrm } from '../assertions';
 import type { CleanupFn, PlayerModule } from '../types';
 
+type AppPage = 'player' | 'retarget' | 'tools' | 'hosts';
+const PAGE_KEY = 'vrm-player.active-page';
+
+const isAppPage = (page: string | null | undefined): page is AppPage => (
+  page === 'player' || page === 'retarget' || page === 'tools' || page === 'hosts'
+);
+
+function getPersistedActivePage(): AppPage {
+  try {
+    const page = localStorage.getItem(PAGE_KEY);
+    return isAppPage(page) ? page : 'player';
+  } catch {
+    return 'player';
+  }
+}
+
 const isTypingTarget = (target: EventTarget | null): boolean => {
   const el = target as HTMLElement | null;
   if (!el) return false;
@@ -26,11 +42,13 @@ export const inputModule: PlayerModule = {
 
     const { skelViz, boneDrag } = tooling;
     const cleanupFns: CleanupFn[] = [];
+    let activePage = getPersistedActivePage();
     const registerCleanup = (...fns: Array<CleanupFn | undefined>): void => {
       for (const fn of fns) if (fn) cleanupFns.push(fn);
     };
 
     const onShortcutKey = (e: KeyboardEvent): void => {
+      if (activePage !== 'player') return;
       if (e.repeat || e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target)) return;
       const key = e.key.toLowerCase();
       if (key === ' ') {
@@ -61,6 +79,7 @@ export const inputModule: PlayerModule = {
     registerCleanup(() => window.removeEventListener('keydown', onShortcutKey));
 
     const onLoadVrmFile = (e: Event): void => {
+      if (activePage !== 'player') return;
       const file = (e as CustomEvent<File>).detail;
       if (!file) return;
       if (!file.name.toLowerCase().endsWith('.vrm')) {
@@ -80,21 +99,33 @@ export const inputModule: PlayerModule = {
 
     const onPageChanged = (e: Event): void => {
       const page = (e as CustomEvent<string>).detail;
+      if (!isAppPage(page)) return;
+      activePage = page;
       if (page !== 'retarget') return;
       const queueIndex = controller.currentQueuePos;
       if (queueIndex < 0) return;
       animation.openQueueItemInRetargetLab(queueIndex, false);
     };
+    const onSetPage = (e: Event): void => {
+      const page = (e as CustomEvent<string>).detail;
+      if (isAppPage(page)) activePage = page;
+    };
     window.addEventListener('vrm-player:page-changed', onPageChanged);
-    registerCleanup(() => window.removeEventListener('vrm-player:page-changed', onPageChanged));
+    window.addEventListener('vrm-player:set-page', onSetPage);
+    registerCleanup(() => {
+      window.removeEventListener('vrm-player:page-changed', onPageChanged);
+      window.removeEventListener('vrm-player:set-page', onSetPage);
+    });
 
     const onWindowDragOver = (e: DragEvent): void => {
+      if (activePage !== 'player') return;
       if (Array.from(e.dataTransfer?.items ?? []).some((it) => it.kind === 'file')) {
         e.preventDefault();
         e.dataTransfer!.dropEffect = 'copy';
       }
     };
     const onWindowDrop = (e: DragEvent): void => {
+      if (activePage !== 'player') return;
       const files = Array.from(e.dataTransfer?.files ?? []);
       if (!files.length) return;
       e.preventDefault();
