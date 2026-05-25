@@ -1,21 +1,40 @@
 import { expect, test, type Page } from '@playwright/test';
 
-function collectRuntimeErrors(page: Page): string[] {
-  const errors: string[] = [];
+interface RuntimeErrorEntry {
+  text: string;
+  url: string;
+}
+
+function collectRuntimeErrors(page: Page): RuntimeErrorEntry[] {
+  const errors: RuntimeErrorEntry[] = [];
   page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(msg.text());
+    if (msg.type() === 'error') {
+      errors.push({ text: msg.text(), url: msg.location().url });
+    }
   });
   page.on('pageerror', (err) => {
-    errors.push(`pageerror: ${err.message}`);
+    errors.push({ text: `pageerror: ${err.message}`, url: '' });
   });
   return errors;
 }
 
-function filterExpectedRuntimeNoise(errors: string[]): string[] {
-  return errors.filter((line) => {
-    if (/Failed to load resource/i.test(line)) return false;
-    if (/AbortError/i.test(line)) return false;
-    if (/No VRM data/i.test(line)) return false;
+function formatRuntimeError(error: RuntimeErrorEntry): string {
+  return error.url ? `${error.text} (${error.url})` : error.text;
+}
+
+function isExpectedHostAssetFailure(error: RuntimeErrorEntry): boolean {
+  const target = `${error.text}\n${error.url}`;
+  if (!/\/models\/hosts\//i.test(target)) return false;
+  return (
+    /Failed to load resource/i.test(error.text)
+    || /AbortError/i.test(error.text)
+    || /No VRM data/i.test(error.text)
+  );
+}
+
+function filterExpectedRuntimeNoise(errors: RuntimeErrorEntry[]): RuntimeErrorEntry[] {
+  return errors.filter((error) => {
+    if (isExpectedHostAssetFailure(error)) return false;
     return true;
   });
 }
@@ -46,19 +65,25 @@ test('hosts tab mounts preview, selects Japanese, and cleans up on return to pla
   await expect(page.locator('#language-host-preview-canvas')).toHaveCount(0);
 
   const filtered = filterExpectedRuntimeNoise(runtimeErrors);
-  expect(filtered, `console errors found:\n${filtered.join('\n')}`).toEqual([]);
+  expect(
+    filtered.map(formatRuntimeError),
+    `console errors found:\n${filtered.map(formatRuntimeError).join('\n')}`,
+  ).toEqual([]);
 });
 
-test('hosts preview reports selected or unavailable asset status when host assets are ready', async ({ page }) => {
+test('hosts preview reports selected status when host assets are ready', async ({ page }) => {
   test.skip(!process.env.VRM_HOST_ASSETS_READY, 'Set VRM_HOST_ASSETS_READY to run host asset status smoke.');
 
+  await page.addInitScript(() => {
+    localStorage.removeItem('vrm-player.language-locale');
+  });
   await page.goto('/');
   await page.getByRole('button', { name: /^Hosts$/ }).click();
 
   await expect(page.locator('#hosts-page')).toBeVisible();
   await expect(page.locator('#language-host-preview-canvas')).toBeAttached({ timeout: 10_000 });
   await expect(page.locator('.hosts-preview-status')).toContainText(
-    /host selected|asset unavailable/i,
+    /English host selected/i,
     { timeout: 20_000 },
   );
 });
