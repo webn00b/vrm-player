@@ -347,7 +347,7 @@ function onShellClick(event: MouseEvent): void {
   </div>
 
   <div id="hosts-page-root" v-show="activePage === 'hosts'">
-    <LanguageHostsPage />
+    <LanguageHostsPage v-if="activePage === 'hosts'" />
   </div>
 
   <video id="mocap-video" playsinline></video>
