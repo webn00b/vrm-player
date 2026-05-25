@@ -250,6 +250,20 @@ camera or file
 
 Это полезно для рефакторинга: не всё в проекте связано со всем.
 
+## Language host preview
+
+Language hosts previewed in separate top-level `Hosts` tab. Tab uses
+`src/languageHosts.ts` -> `LanguageHostProfile` records, then mounts
+`LanguageHostsPage.vue` owning isolated Three.js preview scene through
+`createLanguageHostPreviewScene()`.
+
+Hosts tab does not replace active VRM in Player tab. It has own scene, camera,
+renderer, controls, render loop, and `AvatarCharacterManager`.
+
+Main player modules (`vrmModule`, `playbackModule`, `toolingModule`,
+`mocapModule`, `renderLoopModule`) continue to use normal player VRM selected by
+startup/upload flow.
+
 ## Главные runtime-объекты
 
 ### `AnimationController`
