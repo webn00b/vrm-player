@@ -1,4 +1,4 @@
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import type { LanguageHostProfile } from './languageHosts';
 
@@ -64,14 +64,39 @@ export class AvatarCharacterManager {
   }
 
   private disposeVrm(vrm: VRM): void {
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    const textures = new Set<THREE.Texture>();
+
     vrm.scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
-      mesh.geometry?.dispose();
+      if (mesh.geometry) {
+        geometries.add(mesh.geometry);
+      }
+
       const material = mesh.material;
       if (Array.isArray(material)) {
-        material.forEach((item) => item.dispose());
-      } else {
-        material?.dispose();
+        material.forEach((item) => this.collectMaterialResources(item, materials, textures));
+      } else if (material) {
+        this.collectMaterialResources(material, materials, textures);
+      }
+    });
+
+    geometries.forEach((geometry) => geometry.dispose());
+    materials.forEach((material) => material.dispose());
+    textures.forEach((texture) => texture.dispose());
+  }
+
+  private collectMaterialResources(
+    material: THREE.Material,
+    materials: Set<THREE.Material>,
+    textures: Set<THREE.Texture>,
+  ): void {
+    materials.add(material);
+
+    Object.values(material).forEach((value) => {
+      if (value instanceof THREE.Texture) {
+        textures.add(value);
       }
     });
   }
