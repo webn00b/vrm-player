@@ -42,6 +42,7 @@ test('page loads, viewport canvas is mounted, no console errors', async ({ page 
 
 test('debug panel is rendered with expected mocap controls', async ({ page }) => {
   await page.goto('/');
+  await page.getByRole('button', { name: /^Capture$/ }).click();
 
   // The primary CTA is the one universally-visible element in the tuning panel.
   await expect(page.getByTestId('capture-primary')).toBeVisible({ timeout: 10_000 });
@@ -50,6 +51,8 @@ test('debug panel is rendered with expected mocap controls', async ({ page }) =>
   await expect(page.getByTestId('capture-src-camera')).toBeVisible();
   await expect(page.getByTestId('capture-src-video')).toBeVisible();
   await expect(page.getByTestId('capture-src-animfile')).toBeVisible();
+
+  await page.getByRole('button', { name: /^Inspect$/ }).click();
 
   // Tab buttons (Main / Video) in the left-side debug panel.
   await expect(page.getByTestId('dbg-tab-main')).toBeVisible();

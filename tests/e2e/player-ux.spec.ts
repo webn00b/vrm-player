@@ -105,7 +105,7 @@ test.describe('Player UX shell', () => {
       }) as EventListener, { once: true });
     }));
 
-    await page.getByText('Retarget Lab', { exact: true }).click();
+    await page.getByRole('button', { name: /^Retarget$/ }).click();
     await expect(page.locator('.retarget-lab')).toBeVisible();
     await expect(changedPage).resolves.toBe('retarget');
   });
