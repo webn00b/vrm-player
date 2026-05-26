@@ -7,6 +7,17 @@ export interface ActiveAvatar {
   vrm: VRM;
 }
 
+interface PendingAvatarSwap {
+  previous: ActiveAvatar | null;
+  next: ActiveAvatar;
+}
+
+interface PreparedAvatarResources {
+  emptyChildNodes: THREE.Object3D[];
+  materialsWithTextures: THREE.Material[];
+  renderableNodes: THREE.Object3D[];
+}
+
 export interface AvatarCharacterManagerDeps {
   scene: THREE.Scene;
   loadVrm: (url: string) => Promise<VRM>;
@@ -32,7 +43,10 @@ export class AvatarHostAssetLoadError extends Error {
 export class AvatarCharacterManager {
   private readonly scene: THREE.Scene;
   private readonly loadVrm: (url: string) => Promise<VRM>;
+  private readonly preparedResources = new WeakMap<VRM, PreparedAvatarResources>();
   private active: ActiveAvatar | null = null;
+  private pending: PendingAvatarSwap | null = null;
+  private retiredAfterRender: VRM[] = [];
   private swapSerial = 0;
 
   constructor(deps: AvatarCharacterManagerDeps) {
@@ -46,6 +60,8 @@ export class AvatarCharacterManager {
 
   async swapTo(profile: LanguageHostProfile): Promise<ActiveAvatar> {
     const serial = ++this.swapSerial;
+    this.disposePendingSwap();
+
     let nextVrm: VRM;
     try {
       nextVrm = await this.loadVrm(profile.modelUrl);
@@ -61,28 +77,121 @@ export class AvatarCharacterManager {
       throw new AvatarSwapSupersededError();
     }
 
-    const previous = this.active;
     const next = { profile, vrm: nextVrm };
+    nextVrm.scene.visible = false;
+    this.preparedResources.set(nextVrm, this.prepareVrmForSwap(nextVrm));
     this.scene.add(nextVrm.scene);
-    this.active = next;
-
-    if (previous) {
-      this.scene.remove(previous.vrm.scene);
-      this.disposeVrm(previous.vrm);
-    }
+    this.pending = { previous: this.active, next };
 
     return next;
   }
 
+  beforeRender(): void {
+    if (!this.pending) return;
+
+    const { previous, next } = this.pending;
+    if (previous) previous.vrm.scene.visible = false;
+    next.vrm.scene.visible = true;
+    this.active = next;
+    this.pending = null;
+    if (previous) this.retiredAfterRender.push(previous.vrm);
+  }
+
+  afterRender(): void {
+    if (!this.retiredAfterRender.length) return;
+
+    const retired = this.retiredAfterRender;
+    this.retiredAfterRender = [];
+    retired.forEach((vrm) => {
+      this.scene.remove(vrm.scene);
+      this.disposeVrm(vrm);
+    });
+  }
+
   dispose(): void {
     this.swapSerial += 1;
-    if (!this.active) return;
-    this.scene.remove(this.active.vrm.scene);
-    this.disposeVrm(this.active.vrm);
+    this.disposePendingSwap();
+    this.afterRender();
+    if (this.active) {
+      this.scene.remove(this.active.vrm.scene);
+      this.disposeVrm(this.active.vrm);
+    }
     this.active = null;
   }
 
+  private disposePendingSwap(): void {
+    if (!this.pending) return;
+    this.scene.remove(this.pending.next.vrm.scene);
+    this.disposeVrm(this.pending.next.vrm);
+    this.pending = null;
+  }
+
+  private prepareVrmForSwap(vrm: VRM): PreparedAvatarResources {
+    const emptyChildNodes: THREE.Object3D[] = [];
+    const materialsWithTextures = new Set<THREE.Material>();
+    const renderableNodes: THREE.Object3D[] = [];
+
+    vrm.scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      const hasGeometry = !!mesh.geometry;
+      const material = mesh.material;
+
+      if (hasGeometry || material) {
+        renderableNodes.push(obj);
+      } else if (obj.children.length === 0) {
+        emptyChildNodes.push(obj);
+      }
+
+      const inspectMaterial = (item: THREE.Material): void => {
+        if (this.materialHasTexture(item)) materialsWithTextures.add(item);
+      };
+
+      if (Array.isArray(material)) {
+        material.forEach(inspectMaterial);
+      } else if (material) {
+        inspectMaterial(material);
+      }
+    });
+
+    return {
+      emptyChildNodes,
+      materialsWithTextures: [...materialsWithTextures],
+      renderableNodes,
+    };
+  }
+
+  private materialHasTexture(material: THREE.Material): boolean {
+    let hasTexture = false;
+
+    Object.values(material).forEach((value) => {
+      if (value instanceof THREE.Texture) hasTexture = true;
+    });
+
+    const maybeUniforms = (material as THREE.Material & {
+      uniforms?: Record<string, { value: unknown } | unknown>;
+    }).uniforms;
+
+    if (maybeUniforms) {
+      const textures = new Set<THREE.Texture>();
+      Object.values(maybeUniforms).forEach((uniform) => {
+        if (
+          uniform
+          && typeof uniform === 'object'
+          && 'value' in uniform
+        ) {
+          this.collectTextureResources(uniform.value, textures);
+        } else {
+          this.collectTextureResources(uniform, textures);
+        }
+      });
+      if (textures.size > 0) hasTexture = true;
+    }
+
+    return hasTexture;
+  }
+
   private disposeVrm(vrm: VRM): void {
+    this.preparedResources.delete(vrm);
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     const textures = new Set<THREE.Texture>();

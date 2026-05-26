@@ -96,9 +96,16 @@ describe('AvatarCharacterManager', () => {
     expect(loadVrm).toHaveBeenCalledWith('/models/hosts/en-US/host.vrm');
     expect(active.profile.locale).toBe('en-US');
     expect(scene.children).toContain(active.vrm.scene);
+    expect(active.vrm.scene.visible).toBe(false);
+    expect(manager.current).toBeNull();
+
+    manager.beforeRender();
+
+    expect(active.vrm.scene.visible).toBe(true);
+    expect(manager.current).toBe(active);
   });
 
-  it('removes the previous host after a successful swap', async () => {
+  it('keeps exactly one host visible during staged render swap and retires the old host after render', async () => {
     const scene = new THREE.Scene();
     const first = mockDisposableVrm('first');
     const second = mockVrm('second');
@@ -107,12 +114,29 @@ describe('AvatarCharacterManager', () => {
       .mockResolvedValueOnce(second);
     const manager = new AvatarCharacterManager({ scene, loadVrm });
 
-    await manager.swapTo(resolveLanguageHostProfile('en-US'));
-    await manager.swapTo(resolveLanguageHostProfile('ja-JP'));
+    const firstActive = await manager.swapTo(resolveLanguageHostProfile('en-US'));
+    manager.beforeRender();
+    manager.afterRender();
+    const secondActive = await manager.swapTo(resolveLanguageHostProfile('ja-JP'));
+
+    expect(scene.children).toContain(first.vrm.scene);
+    expect(scene.children).toContain(second.scene);
+    expect(firstActive.vrm.scene.visible).toBe(true);
+    expect(secondActive.vrm.scene.visible).toBe(false);
+    expect(manager.current?.profile.locale).toBe('en-US');
+
+    manager.beforeRender();
+
+    expect(firstActive.vrm.scene.visible).toBe(false);
+    expect(secondActive.vrm.scene.visible).toBe(true);
+    expect(manager.current?.profile.locale).toBe('ja-JP');
+    expect(scene.children).toContain(first.vrm.scene);
+    expect(scene.children).toContain(second.scene);
+
+    manager.afterRender();
 
     expect(scene.children).not.toContain(first.vrm.scene);
     expect(scene.children).toContain(second.scene);
-    expect(manager.current?.profile.locale).toBe('ja-JP');
     expect(first.geometryDispose).toHaveBeenCalledTimes(1);
     expect(first.materialDispose).toHaveBeenCalledTimes(1);
     expect(first.textureDispose).toHaveBeenCalledTimes(1);
@@ -128,12 +152,46 @@ describe('AvatarCharacterManager', () => {
     const manager = new AvatarCharacterManager({ scene, loadVrm });
 
     await manager.swapTo(resolveLanguageHostProfile('en-US'));
+    manager.beforeRender();
+    manager.afterRender();
     await expect(manager.swapTo(resolveLanguageHostProfile('ja-JP')))
       .rejects
       .toThrow('Host asset unavailable: /models/hosts/ja-JP/host.vrm');
 
     expect(scene.children).toContain(first.scene);
+    expect(first.scene.visible).toBe(true);
     expect(manager.current?.profile.locale).toBe('en-US');
+  });
+
+  it('cancels an unapplied pending host when a newer selection starts', async () => {
+    const scene = new THREE.Scene();
+    const first = mockVrm('first');
+    const pending = mockDisposableVrm('pending');
+    const loadVrm = vi.fn()
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(pending.vrm)
+      .mockRejectedValueOnce(new Error('missing newer file'));
+    const manager = new AvatarCharacterManager({ scene, loadVrm });
+
+    await manager.swapTo(resolveLanguageHostProfile('en-US'));
+    manager.beforeRender();
+    manager.afterRender();
+    await manager.swapTo(resolveLanguageHostProfile('ja-JP'));
+    await expect(manager.swapTo(resolveLanguageHostProfile('ru-RU')))
+      .rejects
+      .toThrow('Host asset unavailable: /models/hosts/ru-RU/host.vrm');
+
+    manager.beforeRender();
+    manager.afterRender();
+
+    expect(scene.children).toContain(first.scene);
+    expect(scene.children).not.toContain(pending.vrm.scene);
+    expect(first.scene.visible).toBe(true);
+    expect(manager.current?.profile.locale).toBe('en-US');
+    expect(pending.geometryDispose).toHaveBeenCalledTimes(1);
+    expect(pending.materialDispose).toHaveBeenCalledTimes(1);
+    expect(pending.textureDispose).toHaveBeenCalledTimes(1);
+    expect(pending.skeletonDispose).toHaveBeenCalledTimes(1);
   });
 
   it('wraps failed host asset loads with a user-facing message', async () => {
@@ -160,6 +218,8 @@ describe('AvatarCharacterManager', () => {
     const slowSwap = manager.swapTo(resolveLanguageHostProfile('fr-FR'));
     const fastSwap = manager.swapTo(resolveLanguageHostProfile('ru-RU'));
     await fastSwap;
+    manager.beforeRender();
+    manager.afterRender();
     resolveSlow(stale.vrm);
     await expect(slowSwap).rejects.toThrow('superseded');
 
@@ -183,6 +243,8 @@ describe('AvatarCharacterManager', () => {
 
     const slowSwap = manager.swapTo(resolveLanguageHostProfile('fr-FR'));
     await manager.swapTo(resolveLanguageHostProfile('ru-RU'));
+    manager.beforeRender();
+    manager.afterRender();
     rejectSlow(new Error('missing stale file'));
     await expect(slowSwap).rejects.toThrow(AvatarSwapSupersededError);
 
@@ -197,6 +259,8 @@ describe('AvatarCharacterManager', () => {
     const manager = new AvatarCharacterManager({ scene, loadVrm });
 
     await manager.swapTo(resolveLanguageHostProfile('en-US'));
+    manager.beforeRender();
+    manager.afterRender();
     manager.dispose();
 
     expect(active.geometryDispose).toHaveBeenCalledTimes(1);
@@ -212,6 +276,8 @@ describe('AvatarCharacterManager', () => {
     const manager = new AvatarCharacterManager({ scene, loadVrm });
 
     await manager.swapTo(resolveLanguageHostProfile('en-US'));
+    manager.beforeRender();
+    manager.afterRender();
     externalScene.add(active.scene);
     manager.dispose();
 
@@ -227,6 +293,8 @@ describe('AvatarCharacterManager', () => {
     const manager = new AvatarCharacterManager({ scene, loadVrm });
 
     await manager.swapTo(resolveLanguageHostProfile('en-US'));
+    manager.beforeRender();
+    manager.afterRender();
     manager.dispose();
 
     expect(scene.children).toEqual([]);

@@ -111,8 +111,10 @@ export function createLanguageHostPreviewScene(container: HTMLElement): Language
       if (disposed) return;
       const delta = clock.getDelta();
       activeControls.update();
+      activeManager.beforeRender();
       activeManager.current?.vrm.update(delta);
       activeRenderer.render(scene, camera);
+      activeManager.afterRender();
       rafId = requestAnimationFrame(tick);
     };
 

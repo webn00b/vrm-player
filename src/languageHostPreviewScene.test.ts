@@ -12,6 +12,8 @@ const gridGeometryDispose = vi.fn();
 const gridMaterialDispose = vi.fn();
 const managerSwapTo = vi.fn();
 const managerDispose = vi.fn();
+const managerBeforeRender = vi.fn();
+const managerAfterRender = vi.fn();
 let controlsConstructorError: Error | null = null;
 
 vi.mock('three', async (importOriginal) => {
@@ -73,6 +75,8 @@ vi.mock('./avatarCharacterManager', () => ({
   AvatarCharacterManager: class MockAvatarCharacterManager {
     current = null;
     swapTo = managerSwapTo;
+    beforeRender = managerBeforeRender;
+    afterRender = managerAfterRender;
     dispose = managerDispose;
   },
 }));
@@ -135,6 +139,26 @@ describe('createLanguageHostPreviewScene', () => {
 
     expect(gridGeometryDispose).toHaveBeenCalledTimes(1);
     expect(gridMaterialDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies staged host swaps around the render call', async () => {
+    vi.stubGlobal('window', {
+      devicePixelRatio: 1,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
+    const order: string[] = [];
+    managerBeforeRender.mockImplementation(() => order.push('beforeRender'));
+    rendererRender.mockImplementation(() => order.push('render'));
+    managerAfterRender.mockImplementation(() => order.push('afterRender'));
+
+    const { createLanguageHostPreviewScene } = await import('./languageHostPreviewScene');
+    createLanguageHostPreviewScene(makeContainer() as unknown as HTMLElement);
+
+    expect(order).toEqual(['beforeRender', 'render', 'afterRender']);
   });
 
   it('cleans up renderer resources when setup throws after appending the canvas', async () => {
