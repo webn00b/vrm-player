@@ -22,6 +22,7 @@
 
 import { ref, computed } from 'vue';
 import Button from 'primevue/button';
+import Checkbox from 'primevue/checkbox';
 import { formatLibraryName, readLibraryAlias, writeLibraryAlias } from '../ui';
 import type { QueueLoopMode } from '../animationController';
 
@@ -33,7 +34,7 @@ interface QueueItem {
   id: number;
 }
 
-type ExportKind = 'bvh' | 'glb' | 'vrma';
+type ExportKind = 'bvh' | 'glb' | 'vrma' | 'agent';
 type ExportPhase = 'loading' | 'done' | 'error';
 type ExportCallback = (queueIndex: number) => void | Promise<unknown>;
 
@@ -56,6 +57,7 @@ const props = defineProps<{
   onExportVrma?: ExportCallback;
   onExportBvh?:  ExportCallback;
   onExportGlb?:  ExportCallback;
+  onExportAgentOgi?: ExportCallback;
   onRename?:     (queueIndex: number, newDisplayName: string) => void;
 }>();
 
@@ -71,6 +73,7 @@ const addInputRef   = ref<HTMLInputElement | null>(null);
 const loopMode      = ref<QueueLoopMode>(props.loopMode ?? 'queue');
 const emptyDropActive = ref(false);
 const exportStates = ref<Record<number, RowExportState | undefined>>({});
+const agentOgiExportEnabled = ref(false);
 
 const activeTab = ref<'queue' | 'exports'>(props.mode === 'exportsOnly' ? 'exports' : 'queue');
 
@@ -162,6 +165,7 @@ function exportButtonClass(qi: number, kind: ExportKind): Record<string, boolean
 }
 
 function exportKindLabel(kind: ExportKind): string {
+  if (kind === 'agent') return 'AGENT';
   return kind === 'vrma' ? 'VRMA' : kind.toUpperCase();
 }
 
@@ -376,7 +380,19 @@ const emptyText = computed(() =>
         <code>.gltf</code> / <code>.vrma</code> → JSON.
       </div>
       <div class="title spaced">Per-clip downloads</div>
-      <div class="hint">Use BVH, GLB, or VRMA next to each item below</div>
+      <label v-if="onExportAgentOgi" class="agent-export-toggle">
+        <Checkbox
+          v-model="agentOgiExportEnabled"
+          binary
+          input-id="agent-ogi-export-toggle"
+          data-testid="agent-ogi-export-toggle"
+        />
+        <span>Agent OGI JSON</span>
+      </label>
+      <div class="hint">
+        Use BVH, GLB, or VRMA next to each item below.
+        <span v-if="onExportAgentOgi">Enable Agent OGI JSON to create files for agent_ogi_front.</span>
+      </div>
     </div>
 
     <!-- Items list (visible in both tabs; action buttons swap via CSS classes) -->
@@ -458,6 +474,20 @@ const emptyText = computed(() =>
           aria-label="Download as VRMA"
           title="Export this clip as VRMA"
           @click.stop="runExport(qi, 'vrma', onExportVrma)"
+        />
+        <Button
+          v-if="onExportAgentOgi && agentOgiExportEnabled"
+          class="q-action q-export-agent"
+          :class="exportButtonClass(qi, 'agent')"
+          label="AGENT"
+          text
+          size="small"
+          :disabled="isExporting(qi)"
+          :loading="isExporting(qi, 'agent')"
+          aria-label="Download agent_ogi_front JSON"
+          title="Export this clip as agent_ogi_front JSON"
+          data-testid="agent-ogi-export-button"
+          @click.stop="runExport(qi, 'agent', onExportAgentOgi)"
         />
         <span
           v-if="exportStatusText(qi)"
@@ -643,6 +673,17 @@ const emptyText = computed(() =>
 .exports-tools .title       { font-weight: 600; opacity: .7; margin-bottom: 4px; }
 .exports-tools .title.spaced { margin-top: 10px; }
 .exports-tools .hint        { opacity: .55; font-size: 10px; }
+.agent-export-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  margin: 3px 0 5px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
 .converter-link {
   display: inline-block;
   padding: 6px 10px;
@@ -748,6 +789,7 @@ const emptyText = computed(() =>
 .q-action:hover { background: #2a3550; color: #fff; border-color: #3b5bdb; }
 .q-export-bvh,
 .q-export-glb,
+.q-export-agent,
 .q-export {
   font-size: 9px;
   padding: 0 5px;
@@ -795,7 +837,8 @@ const emptyText = computed(() =>
 /* Per-tab button visibility — same rules as the vanilla CSS in index.html. */
 .queue-panel-root[data-tab="queue"]   .q-export,
 .queue-panel-root[data-tab="queue"]   .q-export-bvh,
-.queue-panel-root[data-tab="queue"]   .q-export-glb { display: none; }
+.queue-panel-root[data-tab="queue"]   .q-export-glb,
+.queue-panel-root[data-tab="queue"]   .q-export-agent { display: none; }
 .queue-panel-root[data-tab="exports"] .q-remove,
 .queue-panel-root[data-tab="exports"] .q-play,
 .queue-panel-root[data-tab="exports"] .q-duplicate,

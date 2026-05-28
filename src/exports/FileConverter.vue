@@ -13,10 +13,13 @@ import Card from 'primevue/card';
 import FileUpload, { type FileUploadUploaderEvent } from 'primevue/fileupload';
 import Button from 'primevue/button';
 import Tag from 'primevue/tag';
+import Checkbox from 'primevue/checkbox';
 import { useToast } from 'primevue/usetoast';
 
 import {
+  animationJsonToAgentOgiJson,
   animationFileToJson,
+  downloadAgentOgiJson,
   downloadAnimationJson,
   SUPPORTED_INPUT_EXTENSIONS,
   type SourceFormat,
@@ -35,6 +38,7 @@ interface HistoryItem {
   at: Date;
 }
 const history = ref<HistoryItem[]>([]);
+const agentOgiOutputEnabled = ref(false);
 
 /** Comma-separated accept attribute for the FileUpload — single source of
  *  truth lives in the converter module, we just reuse it. */
@@ -45,8 +49,14 @@ async function processFile(file: File): Promise<void> {
   try {
     const output = await animationFileToJson(file);
     const baseName = file.name.replace(/\.[a-z]+$/i, '');
-    const filename = `${baseName}.json`;
-    downloadAnimationJson(output, filename);
+    const filename = agentOgiOutputEnabled.value
+      ? `${baseName}.agent_ogi.json`
+      : `${baseName}.json`;
+    if (agentOgiOutputEnabled.value) {
+      downloadAgentOgiJson(animationJsonToAgentOgiJson(output), filename);
+    } else {
+      downloadAnimationJson(output, filename);
+    }
 
     const totalTracks = output.animations.reduce((sum, a) => sum + a.tracks.length, 0);
     const totalDuration = output.animations.reduce((sum, a) => sum + a.duration, 0);
@@ -128,6 +138,16 @@ const formatColor = (f: SourceFormat): 'info' | 'success' | 'warn' | 'secondary'
         </template>
       </FileUpload>
 
+      <label class="agent-export-toggle">
+        <Checkbox
+          v-model="agentOgiOutputEnabled"
+          binary
+          input-id="exports-agent-ogi-toggle"
+          data-testid="exports-agent-ogi-toggle"
+        />
+        <span>Create agent_ogi_front JSON</span>
+      </label>
+
       <div v-if="history.length > 0" class="history">
         <h3>Recent conversions</h3>
         <ul>
@@ -189,6 +209,20 @@ const formatColor = (f: SourceFormat): 'info' | 'success' | 'warn' | 'secondary'
 .empty-zone .hint {
   font-size: 11px;
   opacity: 0.6;
+}
+.agent-export-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 7px 10px;
+  color: #e6e6e6;
+  background: rgba(30, 188, 196, 0.12);
+  border: 1px solid rgba(123, 225, 232, 0.18);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 .history {
   margin-top: 16px;

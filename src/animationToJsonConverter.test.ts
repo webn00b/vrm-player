@@ -15,7 +15,13 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { clipToJson, fbxBufferToJson, detectFormat } from './animationToJsonConverter';
+import {
+  clipToJson,
+  fbxBufferToJson,
+  detectFormat,
+  clipToAgentOgiJson,
+  animationJsonToAgentOgiJson,
+} from './animationToJsonConverter';
 // `clipToFbxJson` is preserved as a backward-compat alias for the rename.
 const clipToFbxJson = clipToJson;
 
@@ -180,3 +186,96 @@ test('detectFormat: maps known extensions, returns null for unsupported', () => 
   assert.equal(detectFormat('no-extension'),   null);
 });
 
+test('clipToAgentOgiJson: maps normalized VRM node names to agent_ogi_front humanoid channels', () => {
+  const times = new Float32Array([0, 1]);
+  const track = new THREE.QuaternionKeyframeTrack(
+    'normalizedLeftUpperArm.quaternion',
+    times,
+    new Float32Array([
+      0, 0, 0, 1,
+      0.2, 0.4, 0.6, 0.8,
+    ]),
+  );
+  const clip = new THREE.AnimationClip('wave', 1, [track]);
+  const vrm = {
+    humanoid: {
+      humanBones: { leftUpperArm: {} },
+      getNormalizedBoneNode(name: string) {
+        return name === 'leftUpperArm' ? { name: 'normalizedLeftUpperArm', uuid: 'left-arm-uuid' } : null;
+      },
+      getRawBoneNode() { return null; },
+    },
+  };
+
+  const output = clipToAgentOgiJson(clip, vrm as never, {
+    normalizeQuaternions: false,
+    runtimeArmSpace: [2, 4, 5],
+  });
+
+  assert.equal(output.duration, 1);
+  assert.deepEqual(output.channels.leftUpperArm.times, [0, 1]);
+  assert.deepEqual(output.channels.leftUpperArm.values, [
+    0, 0, 0, 1,
+    0.1, 0.1, 0.12, 0.8,
+  ]);
+  assert.deepEqual(output.channels['Bone Position'].times, [0, 1]);
+  assert.deepEqual(output.channels['Bone Position'].values, [0, 0, 0, 0, 0, 0]);
+});
+
+test('clipToAgentOgiJson: maps hips position track to Bone Position channel', () => {
+  const times = new Float32Array([0, 0.5]);
+  const track = new THREE.VectorKeyframeTrack(
+    'normalizedHips.position',
+    times,
+    new Float32Array([
+      1, 2, 3,
+      4, 5, 6,
+    ]),
+  );
+  const clip = new THREE.AnimationClip('root-motion', 0.5, [track]);
+  const vrm = {
+    humanoid: {
+      humanBones: { hips: {} },
+      getNormalizedBoneNode(name: string) {
+        return name === 'hips' ? { name: 'normalizedHips', uuid: 'hips-uuid' } : null;
+      },
+      getRawBoneNode() { return null; },
+    },
+  };
+
+  const output = clipToAgentOgiJson(clip, vrm as never);
+
+  assert.deepEqual(output.channels['Bone Position'].times, [0, 0.5]);
+  assert.deepEqual(output.channels['Bone Position'].values, [1, 2, 3, 4, 5, 6]);
+});
+
+test('animationJsonToAgentOgiJson: converts standalone converter output to agent_ogi_front channels', () => {
+  const output = animationJsonToAgentOgiJson({
+    source: 'wave.json',
+    sourceFormat: 'gltf',
+    exportedAt: '2026-01-01T00:00:00.000Z',
+    bones: ['leftUpperArm', 'hips'],
+    animations: [{
+      name: 'wave',
+      duration: 1,
+      fps: 30,
+      tracks: [
+        {
+          bone: 'leftUpperArm',
+          property: 'quaternion',
+          times: [0],
+          values: [[0.2, 0.4, 0.6, 0.8]],
+        },
+        {
+          bone: 'hips',
+          property: 'position',
+          times: [0],
+          values: [[1, 2, 3]],
+        },
+      ],
+    }],
+  }, 0, { normalizeQuaternions: false, runtimeArmSpace: [2, 4, 5] });
+
+  assert.deepEqual(output.channels.leftUpperArm.values, [0.1, 0.1, 0.12, 0.8]);
+  assert.deepEqual(output.channels['Bone Position'].values, [1, 2, 3]);
+});

@@ -3,6 +3,7 @@
  */
 import { createApp } from 'vue';
 import type { AnimationController, QueueLoopMode } from '../../animationController';
+import { clipToAgentOgiJson, downloadAgentOgiJson } from '../../animationToJsonConverter';
 import { exportClipAsBvh } from '../../bvhExportRecorder';
 import type { ParsedBVH } from '../../bvhLoader';
 import { exportClipAsGlb } from '../../gltfExportRecorder';
@@ -32,6 +33,7 @@ interface QueuePanelProps extends Record<string, unknown> {
   onExportVrma?: (queueIndex: number) => void | Promise<unknown>;
   onExportBvh?: (queueIndex: number) => void | Promise<unknown>;
   onExportGlb?: (queueIndex: number) => void | Promise<unknown>;
+  onExportAgentOgi?: (queueIndex: number) => void | Promise<unknown>;
   onRename?: (queueIndex: number, newDisplayName: string) => void;
 }
 
@@ -53,7 +55,7 @@ const createExportCallbacks = (
   namesRef: string[],
   bvhByIndexRef: Map<number, ParsedBVH>,
   controllerRef: AnimationController,
-): Pick<QueuePanelProps, 'onExportVrma' | 'onExportBvh' | 'onExportGlb'> => ({
+): Pick<QueuePanelProps, 'onExportVrma' | 'onExportBvh' | 'onExportGlb' | 'onExportAgentOgi'> => ({
   onExportVrma: async (qi: number) => {
     const itemIdx = controllerRef.getItemIndexAtQueuePos(qi);
     const bvh = bvhByIndexRef.get(itemIdx);
@@ -108,6 +110,30 @@ const createExportCallbacks = (
       const msg = (e as Error).message;
       setStatus(`glb export failed: ${msg}`);
       notify({ severity: 'error', summary: 'GLB export failed', detail: msg, life: 4200 });
+      throw e;
+    }
+  },
+  onExportAgentOgi: async (qi: number) => {
+    const clip = controllerRef.getClipAtQueuePos(qi);
+    if (!clip) {
+      const msg = 'No animation clip for this item.';
+      setStatus('no animation clip for this item');
+      notify({ severity: 'warn', summary: 'Agent JSON unavailable', detail: msg, life: 4200 });
+      throw new Error(msg);
+    }
+    const itemIdx = controllerRef.getItemIndexAtQueuePos(qi);
+    const name = namesRef[itemIdx] || 'export';
+    setStatus('exporting Agent OGI JSON…');
+    try {
+      const output = clipToAgentOgiJson(clip, vrmInst);
+      const filename = `${name}.agent_ogi.json`;
+      downloadAgentOgiJson(output, filename);
+      setStatus(`saved ${filename}`);
+      notify({ severity: 'success', summary: 'Agent OGI JSON saved', detail: filename });
+    } catch (e) {
+      const msg = (e as Error).message;
+      setStatus(`agent json export failed: ${msg}`);
+      notify({ severity: 'error', summary: 'Agent JSON export failed', detail: msg, life: 4200 });
       throw e;
     }
   },

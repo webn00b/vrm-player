@@ -1,4 +1,5 @@
 import { beforeEach, expect, test, vi } from 'vitest';
+import { clipToAgentOgiJson, downloadAgentOgiJson } from '../animationToJsonConverter';
 import { exportClipAsBvh } from '../bvhExportRecorder';
 import { notify, setStatus } from '../ui';
 import { playerUiModule } from './modules/playerUiModule';
@@ -55,6 +56,10 @@ vi.mock('../ui', () => ({
 }));
 vi.mock('../bvhExportRecorder', () => ({
   exportClipAsBvh: vi.fn(() => ({ promise: Promise.resolve('take.bvh') })),
+}));
+vi.mock('../animationToJsonConverter', () => ({
+  clipToAgentOgiJson: vi.fn(() => ({ duration: 1, channels: { 'Bone Position': { times: [0], values: [0, 0, 0] } } })),
+  downloadAgentOgiJson: vi.fn(),
 }));
 vi.mock('../gltfExportRecorder', () => ({
   exportClipAsGlb: vi.fn(async () => 'take.glb'),
@@ -246,5 +251,30 @@ test('playerUiModule keeps BVH export failure status and toast behavior', async 
     summary: 'BVH export failed',
     detail: 'recorder failed',
     life: 4200,
+  });
+});
+
+test('playerUiModule exports queued clips as agent_ogi_front JSON', async () => {
+  const ctx = createContext();
+
+  playerUiModule.setup(ctx);
+  const onExportAgentOgi = vueState.mounts[3].props.onExportAgentOgi as (queueIndex: number) => Promise<unknown>;
+
+  await onExportAgentOgi(0);
+
+  expect(clipToAgentOgiJson).toHaveBeenCalledWith(
+    ctx.playback?.controller?.getClipAtQueuePos(0),
+    ctx.vrm,
+  );
+  expect(downloadAgentOgiJson).toHaveBeenCalledWith(
+    { duration: 1, channels: { 'Bone Position': { times: [0], values: [0, 0, 0] } } },
+    'walk.agent_ogi.json',
+  );
+  expect(setStatus).toHaveBeenCalledWith('exporting Agent OGI JSON…');
+  expect(setStatus).toHaveBeenCalledWith('saved walk.agent_ogi.json');
+  expect(notify).toHaveBeenCalledWith({
+    severity: 'success',
+    summary: 'Agent OGI JSON saved',
+    detail: 'walk.agent_ogi.json',
   });
 });

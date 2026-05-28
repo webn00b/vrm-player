@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import { FBXLoader }  from 'three/examples/jsm/loaders/FBXLoader.js';
 import { BVHLoader }  from 'three/examples/jsm/loaders/BVHLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 
 // ── Output schema ────────────────────────────────────────────────────────────
 
@@ -61,6 +62,21 @@ export interface AnimJsonOutput {
   bones: string[];
 }
 
+export interface AgentOgiChannel {
+  times: number[];
+  values: number[];
+}
+
+export interface AgentOgiAnimationJson {
+  duration?: number;
+  channels: Record<string, AgentOgiChannel>;
+}
+
+export interface AgentOgiJsonOptions {
+  normalizeQuaternions?: boolean;
+  runtimeArmSpace?: [number, number, number];
+}
+
 // Backward-compat aliases — the old `fbxToJsonConverter` exported these names.
 export type FbxJsonTrack     = AnimJsonTrack;
 export type FbxJsonAnimation = AnimJson;
@@ -93,6 +109,78 @@ function splitTrackName(trackName: string): { bone: string; property: string } {
   const dot = trackName.lastIndexOf('.');
   if (dot < 0) return { bone: trackName, property: 'unknown' };
   return { bone: trackName.slice(0, dot), property: trackName.slice(dot + 1) };
+}
+
+function cleanNumber(value: number): number {
+  return Object.is(value, -0) ? 0 : value;
+}
+
+function normalizeQuaternionFrame(x: number, y: number, z: number, w: number): [number, number, number, number] {
+  const len = Math.hypot(x, y, z, w);
+  if (len <= 1e-8) return [0, 0, 0, 1];
+  return [
+    cleanNumber(round(x / len)),
+    cleanNumber(round(y / len)),
+    cleanNumber(round(z / len)),
+    cleanNumber(round(w / len)),
+  ];
+}
+
+function precompensateAgentArmFrame(
+  bone: string,
+  frame: [number, number, number, number],
+  armSpace: [number, number, number],
+): [number, number, number, number] {
+  const sign = bone.includes('right') ? -1 : 1;
+  return [
+    cleanNumber(round((frame[0] / armSpace[0]) * sign)),
+    cleanNumber(round((frame[1] / armSpace[1]) * sign)),
+    cleanNumber(round((frame[2] / armSpace[2]) * sign)),
+    cleanNumber(round(frame[3] * sign)),
+  ];
+}
+
+function buildVrmTrackTargetMap(vrm: VRM): Map<string, string> {
+  const map = new Map<string, string>();
+  const names = Object.keys(vrm.humanoid.humanBones);
+  for (const bone of names) {
+    map.set(bone, bone);
+    const normalized = vrm.humanoid.getNormalizedBoneNode(bone as VRMHumanBoneName);
+    if (normalized) {
+      map.set(normalized.name, bone);
+      map.set(normalized.uuid, bone);
+    }
+    const raw = vrm.humanoid.getRawBoneNode(bone as VRMHumanBoneName);
+    if (raw) {
+      map.set(raw.name, bone);
+      map.set(raw.uuid, bone);
+    }
+  }
+  return map;
+}
+
+function pushAgentBonePosition(
+  channels: Record<string, AgentOgiChannel>,
+  track: THREE.KeyframeTrack,
+): void {
+  const values = Array.from(track.values, round).map(cleanNumber);
+  channels['Bone Position'] = {
+    times: Array.from(track.times, round).map(cleanNumber),
+    values,
+  };
+}
+
+function ensureAgentBonePosition(channels: Record<string, AgentOgiChannel>): void {
+  if (channels['Bone Position']) return;
+  const first = Object.values(channels).find((channel) => channel.times.length > 0);
+  if (!first) {
+    channels['Bone Position'] = { times: [0], values: [0, 0, 0] };
+    return;
+  }
+  channels['Bone Position'] = {
+    times: [...first.times],
+    values: new Array(first.times.length * 3).fill(0),
+  };
 }
 
 function guessFps(tracks: AnimJsonTrack[]): number | null {
@@ -128,6 +216,112 @@ export function clipToJson(clip: THREE.AnimationClip): AnimJson {
     duration: round(clip.duration),
     fps: guessFps(tracks),
     tracks,
+  };
+}
+
+/**
+ * Convert an already-retargeted player clip into the legacy channel JSON shape
+ * consumed by agent_ogi_front's bani/vani animation runtime.
+ */
+export function clipToAgentOgiJson(
+  clip: THREE.AnimationClip,
+  vrm: VRM,
+  options: AgentOgiJsonOptions = {},
+): AgentOgiAnimationJson {
+  const targetMap = buildVrmTrackTargetMap(vrm);
+  const channels: Record<string, AgentOgiChannel> = {};
+  const normalizeQuaternions = options.normalizeQuaternions ?? true;
+  const armSpace = options.runtimeArmSpace ?? [1, 1, 1];
+
+  for (const track of clip.tracks) {
+    const { bone: trackTarget, property } = splitTrackName(track.name);
+    const bone = targetMap.get(trackTarget) ?? trackTarget;
+
+    if (property === 'position' && bone === 'hips') {
+      pushAgentBonePosition(channels, track);
+      continue;
+    }
+    if (property !== 'quaternion') continue;
+
+    const values: number[] = [];
+    for (let i = 0; i < track.values.length; i += 4) {
+      const frame = normalizeQuaternions
+        ? normalizeQuaternionFrame(
+          track.values[i],
+          track.values[i + 1],
+          track.values[i + 2],
+          track.values[i + 3],
+        )
+        : [
+          cleanNumber(round(track.values[i])),
+          cleanNumber(round(track.values[i + 1])),
+          cleanNumber(round(track.values[i + 2])),
+          cleanNumber(round(track.values[i + 3])),
+        ] as [number, number, number, number];
+      const agentFrame = bone.includes('Arm')
+        ? precompensateAgentArmFrame(bone, frame, armSpace)
+        : frame;
+      values.push(...agentFrame);
+    }
+
+    channels[bone] = {
+      times: Array.from(track.times, round).map(cleanNumber),
+      values,
+    };
+  }
+
+  ensureAgentBonePosition(channels);
+
+  return {
+    duration: round(clip.duration),
+    channels,
+  };
+}
+
+export function animationJsonToAgentOgiJson(
+  output: AnimJsonOutput,
+  animationIndex = 0,
+  options: AgentOgiJsonOptions = {},
+): AgentOgiAnimationJson {
+  const animation = output.animations[animationIndex];
+  if (!animation) throw new Error(`Animation index ${animationIndex} not found`);
+
+  const normalizeQuaternions = options.normalizeQuaternions ?? true;
+  const armSpace = options.runtimeArmSpace ?? [1, 1, 1];
+  const channels: Record<string, AgentOgiChannel> = {};
+
+  for (const track of animation.tracks) {
+    if (track.property === 'position' && (track.bone === 'hips' || track.bone === 'Bone Position' || track.bone === 'root')) {
+      channels['Bone Position'] = {
+        times: track.times.map(cleanNumber),
+        values: track.values.flat().map((value) => cleanNumber(round(value))),
+      };
+      continue;
+    }
+    if (track.property !== 'quaternion') continue;
+
+    const values: number[] = [];
+    for (const row of track.values) {
+      if (row.length !== 4) continue;
+      const frame = normalizeQuaternions
+        ? normalizeQuaternionFrame(row[0], row[1], row[2], row[3])
+        : row.map((value) => cleanNumber(round(value))) as [number, number, number, number];
+      const agentFrame = track.bone.includes('Arm')
+        ? precompensateAgentArmFrame(track.bone, frame, armSpace)
+        : frame;
+      values.push(...agentFrame);
+    }
+    channels[track.bone] = {
+      times: track.times.map(cleanNumber),
+      values,
+    };
+  }
+
+  ensureAgentBonePosition(channels);
+
+  return {
+    duration: animation.duration,
+    channels,
   };
 }
 
@@ -239,6 +433,19 @@ export function fbxBufferToJson(buffer: ArrayBuffer, sourceName = ''): AnimJsonO
 // ── Download helper ──────────────────────────────────────────────────────────
 
 export function downloadAnimationJson(output: AnimJsonOutput, filename = 'animation.json'): void {
+  const text = JSON.stringify(output, null, 2);
+  const blob = new Blob([text], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename.endsWith('.json') ? filename : `${filename}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+export function downloadAgentOgiJson(output: AgentOgiAnimationJson, filename = 'animation.agent_ogi.json'): void {
   const text = JSON.stringify(output, null, 2);
   const blob = new Blob([text], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
