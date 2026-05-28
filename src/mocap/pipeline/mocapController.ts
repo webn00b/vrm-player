@@ -11,6 +11,10 @@ import { getCachedHumanoidRestAxes } from '../../humanoidRestPose';
 import { captureSnapshot, type PoseSnapshot } from '../bvh/bvhRoundtripVerifier';
 
 export type MocapState = 'off' | 'live' | 'recording';
+export interface MocapBvhReadyOptions {
+  source: 'camera' | 'video';
+  exportAgentOgiJson?: boolean;
+}
 
 type AvatarJointPositionMap = {
   hips: THREE.Vector3;
@@ -82,7 +86,7 @@ export class MocapController {
 
   onStateChange:          ((state: MocapState) => void) | null = null;
   onError:                ((err: Error)         => void) | null = null;
-  onBvhReady:             ((bvh: string, name: string) => void) | null = null;
+  onBvhReady:             ((bvh: string, name: string, options: MocapBvhReadyOptions) => void) | null = null;
   onCalibrationChange:    ((s: CalibrationStatus) => void) | null = null;
 
   // ── Round-trip verification (expected-side capture) ─────────────────────────
@@ -93,6 +97,7 @@ export class MocapController {
   private _verifyLastFrameCount = 0;
 
   private _vrm: VRM;
+  exportAgentOgiJsonForVideo = false;
 
   constructor(vrm: VRM, videoEl: HTMLVideoElement) {
     this._vrm         = vrm;
@@ -672,7 +677,7 @@ export class MocapController {
     const bvhText = this.grabRecorder.stop();
     const name    = `mocap_${++this._recordingIndex}`;
     downloadBvh(bvhText, `${name}.bvh`);
-    this.onBvhReady?.(bvhText, name);
+    this.onBvhReady?.(bvhText, name, { source: 'camera' });
   }
 
   /**
@@ -795,7 +800,7 @@ export class MocapController {
       savedText: replayBvhText,
     });
     downloadBvh(replayBvhText, `${name}.bvh`);
-    this.onBvhReady?.(replayBvhText, name);
+    this.onBvhReady?.(replayBvhText, name, { source: 'camera' });
     this._setState('live');
   }
 
@@ -832,7 +837,10 @@ export class MocapController {
         savedText: replayBvhText,
       });
       downloadBvh(replayBvhText, `${name}.bvh`);
-      this.onBvhReady?.(replayBvhText, name);
+      this.onBvhReady?.(replayBvhText, name, {
+        source: 'video',
+        exportAgentOgiJson: this.exportAgentOgiJsonForVideo,
+      });
       this._teardownFileCapture();
       this._setState('off');
     };

@@ -18,6 +18,7 @@
 
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import Button from 'primevue/button';
+import Checkbox from 'primevue/checkbox';
 import type { VRM } from '@pixiv/three-vrm';
 import type { MocapController, MocapState } from '../mocap/pipeline/mocapController';
 import type { AnimationController } from '../animationController';
@@ -50,6 +51,7 @@ const sourceOptions: Array<{ label: string; value: CaptureSource }> = [
 ];
 
 const currentSource = ref<CaptureSource>(validSource(localStorage.getItem(SOURCE_KEY)));
+const videoAgentOgiEnabled = ref(false);
 const statusText    = ref('📷 Camera off');
 const framesText    = ref('');
 const sourceInfo    = ref('');
@@ -391,6 +393,7 @@ async function onVideoFileChange(e: Event): Promise<void> {
   if (!file) return;
   const m = props.getMocap();
   if (!m || m.state !== 'off') return;
+  m.exportAgentOgiJsonForVideo = videoAgentOgiEnabled.value;
   // Auto-start debug recorder for full file capture (no frame cap).
   props.dbgRecorder.start(Infinity);
   notify({ severity: 'info', summary: 'Processing video', detail: file.name, life: 2200 });
@@ -615,6 +618,16 @@ onUnmounted(() => {
     </div>
     <div class="capture-preset-caption">{{ presetCaption }}</div>
 
+    <label v-if="currentSource === 'video'" class="capture-agent-toggle">
+      <Checkbox
+        v-model="videoAgentOgiEnabled"
+        binary
+        input-id="capture-video-agent-ogi"
+        data-testid="capture-video-agent-ogi-toggle"
+      />
+      <span>agent_ogi_front JSON</span>
+    </label>
+
     <div v-if="currentSource === 'multiview'" class="multiview-box">
       <div class="multiview-file-row">
         <Button
@@ -765,6 +778,21 @@ onUnmounted(() => {
   font-size: 10px;
   line-height: 1.35;
   color: rgba(255, 255, 255, 0.42);
+}
+.capture-agent-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  margin: 0 0 8px;
+  padding: 5px 7px;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(30, 188, 196, 0.12);
+  border: 1px solid rgba(123, 225, 232, 0.18);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
 }
 :deep(.p-button.capture-primary) {
   width: 100%;

@@ -3,6 +3,7 @@
  * Keeps mocap diagnostics and recorded-BVH replay out of main.ts.
  */
 import { parseBVH } from '../../bvhLoader';
+import { clipToAgentOgiJson, downloadAgentOgiJson } from '../../animationToJsonConverter';
 import { MocapDebugRecorder } from '../../mocap/diagnostics/mocapDebugRecorder';
 import { MocapDebugViz } from '../../mocap/diagnostics/mocapDebugViz';
 import { MocapController } from '../../mocap/pipeline/mocapController';
@@ -39,10 +40,18 @@ export const mocapModule: PlayerModule = {
 
     const videoEl = document.getElementById('mocap-video') as HTMLVideoElement;
     const mocap = new MocapController(vrm, videoEl);
-    mocap.onBvhReady = async (bvhText, name) => {
+    mocap.onBvhReady = async (bvhText, name, options) => {
       try {
         const bvh = parseBVH(bvhText);
         const clip = await retargetBvhToVrm(vrm, bvh, name);
+        if (options?.source === 'video' && options.exportAgentOgiJson) {
+          const filename = `${name}.agent_ogi.json`;
+          downloadAgentOgiJson(
+            clipToAgentOgiJson(clip, vrm),
+            filename,
+          );
+          notify({ severity: 'success', summary: 'Agent OGI JSON saved', detail: filename });
+        }
         const queuePos = animation.registerAndEnqueue(
           name,
           bvh,

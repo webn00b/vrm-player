@@ -1,12 +1,13 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { AnimationBridge, PlayerContext } from './types';
+import { clipToAgentOgiJson, downloadAgentOgiJson } from '../animationToJsonConverter';
 import { mocapModule } from './modules/mocapModule';
 
 const mocapState = vi.hoisted(() => ({
   controllers: [] as Array<{
     vrm: unknown;
     videoEl: unknown;
-    onBvhReady?: (bvhText: string, name: string) => Promise<void>;
+    onBvhReady?: (bvhText: string, name: string, options?: { source?: 'camera' | 'video'; exportAgentOgiJson?: boolean }) => Promise<void>;
     dispose: ReturnType<typeof vi.fn>;
   }>,
   debugViz: [] as Array<{ scene: unknown; dispose: ReturnType<typeof vi.fn> }>,
@@ -21,7 +22,7 @@ const mocapState = vi.hoisted(() => ({
 
 vi.mock('../mocap/pipeline/mocapController', () => ({
   MocapController: class MocapController {
-    onBvhReady?: (bvhText: string, name: string) => Promise<void>;
+    onBvhReady?: (bvhText: string, name: string, options?: { source?: 'camera' | 'video'; exportAgentOgiJson?: boolean }) => Promise<void>;
     readonly dispose = vi.fn();
 
     constructor(readonly vrm: unknown, readonly videoEl: unknown) {
@@ -58,6 +59,11 @@ vi.mock('../bvhLoader', () => ({
 
 vi.mock('../retarget', () => ({
   retargetBvhToVrm: vi.fn(async (_vrm: unknown, _bvh: unknown, name: string) => ({ name, duration: 2 })),
+}));
+
+vi.mock('../animationToJsonConverter', () => ({
+  clipToAgentOgiJson: vi.fn(() => ({ duration: 2, channels: { 'Bone Position': { times: [0], values: [0, 0, 0] } } })),
+  downloadAgentOgiJson: vi.fn(),
 }));
 
 vi.mock('../ui', () => ({
@@ -108,6 +114,7 @@ function createContext(animation = createAnimationBridge()): PlayerContext {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   mocapState.controllers.length = 0;
   mocapState.debugViz.length = 0;
   mocapState.recorders.length = 0;
@@ -136,4 +143,23 @@ test('mocapModule stores mocap systems and replays recorded BVH through the anim
   );
   expect(ctx.playback?.controller?.jumpTo).toHaveBeenCalledWith(4, { immediate: true });
   expect(window.__mocapDbg).toBe(mocapState.recorders[0]);
+});
+
+test('mocapModule downloads agent_ogi_front JSON for video capture when requested', async () => {
+  const ctx = createContext();
+
+  mocapModule.setup(ctx);
+  await mocapState.controllers[0].onBvhReady?.('HIERARCHY', 'take-1', {
+    source: 'video',
+    exportAgentOgiJson: true,
+  });
+
+  expect(clipToAgentOgiJson).toHaveBeenCalledWith(
+    { name: 'take-1', duration: 2 },
+    ctx.vrm,
+  );
+  expect(downloadAgentOgiJson).toHaveBeenCalledWith(
+    { duration: 2, channels: { 'Bone Position': { times: [0], values: [0, 0, 0] } } },
+    'take-1.agent_ogi.json',
+  );
 });
