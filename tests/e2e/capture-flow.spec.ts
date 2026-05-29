@@ -19,6 +19,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Capture section UI', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    await page.getByRole('button', { name: 'Capture', exact: true }).click();
     await expect(page.getByTestId('capture-primary')).toBeVisible({ timeout: 10_000 });
     // Playwright gives each test a fresh BrowserContext, so localStorage
     // is already empty here — no per-test cleanup needed. We don't use
@@ -46,7 +47,7 @@ test.describe('Capture section UI', () => {
     await page.getByTestId('capture-src-animfile').click();
     await expect(page.getByTestId('capture-src-animfile')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('capture-primary')).toContainText(/Choose animation/);
-    await expect(page.getByTestId('mocap-status')).toContainText(/\.bvh.*\.vrma.*\.fbx/i);
+    await expect(page.getByTestId('mocap-status')).toContainText(/Pick animation \/ motion JSON/i);
   });
 
   test('source choice persists to localStorage across reload', async ({ page }) => {
@@ -72,14 +73,47 @@ test.describe('Capture section UI', () => {
     await expect(page.getByTestId('capture-stop-cam')).toBeHidden();
   });
 
-  test('"Advanced…" details fold toggles open/closed', async ({ page }) => {
-    // The advanced fold contains the "Export .bvh" pose button. Initially
-    // closed; clicking the summary opens it.
-    const advanced = page.locator('details.capture-advanced');
-    await expect(advanced).toHaveJSProperty('open', false);
-    await advanced.locator('summary').click();
-    await expect(advanced).toHaveJSProperty('open', true);
-    await advanced.locator('summary').click();
-    await expect(advanced).toHaveJSProperty('open', false);
+  test('single-pose export controls are visible without opening Advanced', async ({ page }) => {
+    await expect(page.locator('details.capture-advanced')).toHaveCount(0);
+    const block = page.getByTestId('single-pose-block');
+    await expect(block).toHaveCSS('border-top-color', 'rgb(211, 211, 211)');
+    await expect(block).toHaveCSS('border-top-width', '1px');
+    await expect(page.getByTestId('single-pose-label')).toHaveText('export single pose');
+    await expect(page.getByTestId('single-pose-label')).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(page.getByRole('button', { name: '.bvh', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '.bvh + JSON' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '.bvh', exact: true })).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(page.getByRole('button', { name: '.bvh', exact: true })).toHaveCSS('font-size', '10px');
+  });
+
+  test('single-pose export also saves agent_ogi JSON when video checkbox is enabled', async ({ page }) => {
+    await page.getByTestId('capture-src-video').click();
+    await page.getByTestId('capture-video-agent-ogi-toggle').check();
+
+    await expect(page.getByTestId('single-pose-label')).toHaveText('export single pose ( for agent_ogi)');
+
+    const downloads: string[] = [];
+    page.on('download', async (download) => {
+      downloads.push(download.suggestedFilename());
+    });
+
+    await page.getByRole('button', { name: '.bvh', exact: true }).click();
+    await expect.poll(() => downloads, { timeout: 10_000 }).toEqual([
+      'pose_1.bvh',
+      'pose_1.agent_ogi.json',
+    ]);
+  });
+
+  test('dedicated single-frame pose JSON button saves BVH and agent_ogi files', async ({ page }) => {
+    const downloads: string[] = [];
+    page.on('download', async (download) => {
+      downloads.push(download.suggestedFilename());
+    });
+
+    await page.getByRole('button', { name: '.bvh + JSON' }).click();
+    await expect.poll(() => downloads, { timeout: 10_000 }).toEqual([
+      'pose_1.bvh',
+      'pose_1.agent_ogi.json',
+    ]);
   });
 });

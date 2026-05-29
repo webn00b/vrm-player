@@ -16,7 +16,7 @@
  * pass the canvas to `mocap.setCanvas()` during recording / live preview.
  */
 
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted, type Ref } from 'vue';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
 import type { VRM } from '@pixiv/three-vrm';
@@ -24,6 +24,9 @@ import type { MocapController, MocapState } from '../mocap/pipeline/mocapControl
 import type { AnimationController } from '../animationController';
 import type { MocapDebugRecorder } from '../mocap/diagnostics/mocapDebugRecorder';
 import { exportClipAsBvh, type BvhExportHandle } from '../bvhExportRecorder';
+import { clipToAgentOgiJson, downloadAgentOgiJson } from '../animationToJsonConverter';
+import { parseBVH } from '../bvhLoader';
+import { retargetBvhToVrm } from '../retarget';
 import { notify } from '../ui';
 import { generateBrowserMultiviewMotion } from '../mocap/offline/multiviewMediapipe';
 
@@ -534,28 +537,64 @@ function onFlush(): void {
 }
 
 // ── Export pose (single-frame BVH) ─────────────────────────────────────────
-const exportPoseLabel    = ref('Export .bvh');
+const exportPoseLabel    = ref('.bvh');
 const exportPoseTitle    = ref('Download current avatar pose as a 1-frame BVH');
 const exportPoseDisabled = ref(false);
 
-function onExportPose(): void {
+const exportPoseJsonLabel    = ref('.bvh + JSON');
+const exportPoseJsonTitle    = ref('Download current avatar pose as BVH and agent_ogi JSON');
+const exportPoseJsonDisabled = ref(false);
+const singlePoseTitle = computed(() => (
+  videoAgentOgiEnabled.value ? 'export single pose ( for agent_ogi)' : 'export single pose'
+));
+
+async function runPoseExport(
+  includeAgentJson: boolean,
+  label: Ref<string>,
+  title: Ref<string>,
+  disabled: Ref<boolean>,
+): Promise<void> {
   const m = props.getMocap();
   if (!m) return;
-  const prev = exportPoseLabel.value;
-  exportPoseLabel.value = '…';
-  exportPoseDisabled.value = true;
+  const prev = label.value;
+  const idleTitle = title.value;
+  label.value = '…';
+  disabled.value = true;
   try {
-    const name = m.exportCurrentPoseBvh();
-    exportPoseLabel.value = 'Saved';
-    exportPoseTitle.value = `Downloaded ${name}.bvh`;
-    notify({ severity: 'success', summary: 'Pose exported', detail: `${name}.bvh` });
+    const { name, bvhText } = m.exportCurrentPoseBvh();
+    if (includeAgentJson) {
+      const bvh = parseBVH(bvhText);
+      const clip = await retargetBvhToVrm(props.mocapVrm, bvh, name);
+      downloadAgentOgiJson(clipToAgentOgiJson(clip, props.mocapVrm), `${name}.agent_ogi.json`);
+    }
+    label.value = 'Saved';
+    title.value = includeAgentJson
+      ? `Downloaded ${name}.bvh and ${name}.agent_ogi.json`
+      : `Downloaded ${name}.bvh`;
+    notify({
+      severity: 'success',
+      summary: 'Pose exported',
+      detail: includeAgentJson ? `${name}.bvh + ${name}.agent_ogi.json` : `${name}.bvh`,
+    });
+  } catch (e) {
+    const msg = (e instanceof Error ? e.message : String(e)) || 'unknown error';
+    label.value = 'Error';
+    notify({ severity: 'error', summary: 'Pose export failed', detail: msg, life: 4200 });
   } finally {
     trackTimeout(() => {
-      exportPoseLabel.value = prev;
-      exportPoseTitle.value = 'Download current avatar pose as a 1-frame BVH';
-      exportPoseDisabled.value = false;
+      label.value = prev;
+      title.value = idleTitle;
+      disabled.value = false;
     }, 900);
   }
+}
+
+async function onExportPose(): Promise<void> {
+  await runPoseExport(videoAgentOgiEnabled.value, exportPoseLabel, exportPoseTitle, exportPoseDisabled);
+}
+
+async function onExportPoseWithJson(): Promise<void> {
+  await runPoseExport(true, exportPoseJsonLabel, exportPoseJsonTitle, exportPoseJsonDisabled);
 }
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -722,21 +761,27 @@ onUnmounted(() => {
       <Button class="dbg-toggle off" icon="pi pi-download" text size="small" title="Download captured BVH" @click="onFlush" />
     </div>
 
-    <details class="capture-advanced">
-      <summary>Advanced…</summary>
-      <div class="dbg-row">
-        <span class="dbg-label">📤 Single pose</span>
-        <Button
-          class="dbg-toggle off"
-          :disabled="exportPoseDisabled"
-          :label="exportPoseLabel"
-          :title="exportPoseTitle"
-          text
-          size="small"
-          @click="onExportPose"
-        />
-      </div>
-    </details>
+    <div class="capture-single-pose-row" data-testid="single-pose-block">
+      <span class="capture-single-pose-title" data-testid="single-pose-label">{{ singlePoseTitle }}</span>
+      <Button
+        class="dbg-toggle off capture-pose-button"
+        :disabled="exportPoseDisabled"
+        :label="exportPoseLabel"
+        :title="exportPoseTitle"
+        text
+        size="small"
+        @click="onExportPose"
+      />
+      <Button
+        class="dbg-toggle off capture-pose-button"
+        :disabled="exportPoseJsonDisabled"
+        :label="exportPoseJsonLabel"
+        :title="exportPoseJsonTitle"
+        text
+        size="small"
+        @click="onExportPoseWithJson"
+      />
+    </div>
   </div>
 </template>
 
@@ -818,6 +863,34 @@ onUnmounted(() => {
   min-width: 34px;
   justify-content: center;
   padding: 2px 8px;
+}
+.capture-single-pose-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding: 7px;
+  border: 1px solid lightgray;
+  border-radius: 5px;
+}
+.capture-single-pose-title {
+  flex: 1 1 100%;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: lowercase;
+}
+:deep(.p-button.capture-pose-button) {
+  color: #fff;
+  font-size: 10px;
+  min-height: 24px;
+  padding: 1px 6px;
+}
+:deep(.p-button.capture-pose-button .p-button-label) {
+  color: #fff;
+  font-size: 10px;
 }
 .multiview-box {
   margin-bottom: 8px;

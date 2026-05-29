@@ -16,6 +16,11 @@ export interface MocapBvhReadyOptions {
   exportAgentOgiJson?: boolean;
 }
 
+export interface PoseBvhExport {
+  name: string;
+  bvhText: string;
+}
+
 type AvatarJointPositionMap = {
   hips: THREE.Vector3;
   leftUpperArm: THREE.Vector3;  leftLowerArm: THREE.Vector3;  leftHand: THREE.Vector3;
@@ -684,13 +689,13 @@ export class MocapController {
    * Export the avatar's current pose as a single-frame BVH without touching the
    * live recorder buffer. Safe to call during live preview or active recording.
    */
-  exportCurrentPoseBvh(): string {
+  exportCurrentPoseBvh(): PoseBvhExport {
     const poseRecorder = this._createRecorder();
     this._captureCurrentPoseFrame(poseRecorder);
     const bvhText = poseRecorder.stop();
     const name = `pose_${++this._poseExportIndex}`;
     downloadBvh(bvhText, `${name}.bvh`);
-    return name;
+    return { name, bvhText };
   }
 
   /**
