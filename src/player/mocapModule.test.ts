@@ -2,12 +2,13 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import type { AnimationBridge, PlayerContext } from './types';
 import { clipToAgentOgiJson, downloadAgentOgiJson } from '../animationToJsonConverter';
 import { mocapModule } from './modules/mocapModule';
+import { retargetBvhToVrm } from '../retarget';
 
 const mocapState = vi.hoisted(() => ({
   controllers: [] as Array<{
     vrm: unknown;
     videoEl: unknown;
-    onBvhReady?: (bvhText: string, name: string, options?: { source?: 'camera' | 'video'; exportAgentOgiJson?: boolean }) => Promise<void>;
+    onBvhReady?: (bvhText: string, name: string, options?: { source?: 'camera' | 'video'; exportAgentOgiJson?: boolean; clampAgentOgiOutOfRange?: boolean }) => Promise<void>;
     dispose: ReturnType<typeof vi.fn>;
   }>,
   debugViz: [] as Array<{ scene: unknown; dispose: ReturnType<typeof vi.fn> }>,
@@ -22,7 +23,7 @@ const mocapState = vi.hoisted(() => ({
 
 vi.mock('../mocap/pipeline/mocapController', () => ({
   MocapController: class MocapController {
-    onBvhReady?: (bvhText: string, name: string, options?: { source?: 'camera' | 'video'; exportAgentOgiJson?: boolean }) => Promise<void>;
+    onBvhReady?: (bvhText: string, name: string, options?: { source?: 'camera' | 'video'; exportAgentOgiJson?: boolean; clampAgentOgiOutOfRange?: boolean }) => Promise<void>;
     readonly dispose = vi.fn();
 
     constructor(readonly vrm: unknown, readonly videoEl: unknown) {
@@ -58,7 +59,11 @@ vi.mock('../bvhLoader', () => ({
 }));
 
 vi.mock('../retarget', () => ({
-  retargetBvhToVrm: vi.fn(async (_vrm: unknown, _bvh: unknown, name: string) => ({ name, duration: 2 })),
+  retargetBvhToVrm: vi.fn(async (_vrm: unknown, _bvh: unknown, name: string, opts?: { clampOutOfRange?: boolean }) => {
+    const clip: { name: string; duration: number; clampOutOfRange?: boolean } = { name, duration: 2 };
+    if (opts) clip.clampOutOfRange = opts.clampOutOfRange ?? false;
+    return clip;
+  }),
 }));
 
 vi.mock('../animationToJsonConverter', () => ({
@@ -161,5 +166,34 @@ test('mocapModule downloads agent_ogi_front JSON for video capture when requeste
   expect(downloadAgentOgiJson).toHaveBeenCalledWith(
     { duration: 2, channels: { 'Bone Position': { times: [0], values: [0, 0, 0] } } },
     'take-1.agent_ogi.json',
+  );
+});
+
+test('mocapModule clamps video agent_ogi_front JSON when validation is requested', async () => {
+  const ctx = createContext();
+
+  mocapModule.setup(ctx);
+  await mocapState.controllers[0].onBvhReady?.('HIERARCHY', 'take-1', {
+    source: 'video',
+    exportAgentOgiJson: true,
+    clampAgentOgiOutOfRange: true,
+  });
+
+  expect(retargetBvhToVrm).toHaveBeenNthCalledWith(
+    1,
+    ctx.vrm,
+    { text: 'HIERARCHY' },
+    'take-1',
+  );
+  expect(retargetBvhToVrm).toHaveBeenNthCalledWith(
+    2,
+    ctx.vrm,
+    { text: 'HIERARCHY' },
+    'take-1',
+    { clampOutOfRange: true },
+  );
+  expect(clipToAgentOgiJson).toHaveBeenCalledWith(
+    { name: 'take-1', duration: 2, clampOutOfRange: true },
+    ctx.vrm,
   );
 });

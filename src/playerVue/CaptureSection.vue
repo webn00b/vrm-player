@@ -55,6 +55,7 @@ const sourceOptions: Array<{ label: string; value: CaptureSource }> = [
 
 const currentSource = ref<CaptureSource>(validSource(localStorage.getItem(SOURCE_KEY)));
 const videoAgentOgiEnabled = ref(false);
+const videoAgentOgiValidationEnabled = ref(false);
 const statusText    = ref('📷 Camera off');
 const framesText    = ref('');
 const sourceInfo    = ref('');
@@ -397,6 +398,7 @@ async function onVideoFileChange(e: Event): Promise<void> {
   const m = props.getMocap();
   if (!m || m.state !== 'off') return;
   m.exportAgentOgiJsonForVideo = videoAgentOgiEnabled.value;
+  m.clampAgentOgiOutOfRangeForVideo = videoAgentOgiValidationEnabled.value;
   // Auto-start debug recorder for full file capture (no frame cap).
   props.dbgRecorder.start(Infinity);
   notify({ severity: 'info', summary: 'Processing video', detail: file.name, life: 2200 });
@@ -564,7 +566,9 @@ async function runPoseExport(
     const { name, bvhText } = m.exportCurrentPoseBvh();
     if (includeAgentJson) {
       const bvh = parseBVH(bvhText);
-      const clip = await retargetBvhToVrm(props.mocapVrm, bvh, name);
+      const clip = videoAgentOgiValidationEnabled.value
+        ? await retargetBvhToVrm(props.mocapVrm, bvh, name, { clampOutOfRange: true })
+        : await retargetBvhToVrm(props.mocapVrm, bvh, name);
       downloadAgentOgiJson(clipToAgentOgiJson(clip, props.mocapVrm), `${name}.agent_ogi.json`);
     }
     label.value = 'Saved';
@@ -657,15 +661,26 @@ onUnmounted(() => {
     </div>
     <div class="capture-preset-caption">{{ presetCaption }}</div>
 
-    <label v-if="currentSource === 'video'" class="capture-agent-toggle">
-      <Checkbox
-        v-model="videoAgentOgiEnabled"
-        binary
-        input-id="capture-video-agent-ogi"
-        data-testid="capture-video-agent-ogi-toggle"
-      />
-      <span>agent_ogi_front JSON</span>
-    </label>
+    <div v-if="currentSource === 'video'" class="capture-agent-options">
+      <label class="capture-agent-toggle">
+        <Checkbox
+          v-model="videoAgentOgiEnabled"
+          binary
+          input-id="capture-video-agent-ogi"
+          data-testid="capture-video-agent-ogi-toggle"
+        />
+        <span>agent_ogi_front JSON</span>
+      </label>
+      <label class="capture-agent-toggle capture-agent-validation-toggle">
+        <Checkbox
+          v-model="videoAgentOgiValidationEnabled"
+          binary
+          input-id="capture-video-agent-ogi-validation"
+          data-testid="capture-video-agent-ogi-validation-toggle"
+        />
+        <span>validation</span>
+      </label>
+    </div>
 
     <div v-if="currentSource === 'multiview'" class="multiview-box">
       <div class="multiview-file-row">
@@ -824,12 +839,18 @@ onUnmounted(() => {
   line-height: 1.35;
   color: rgba(255, 255, 255, 0.42);
 }
+.capture-agent-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
 .capture-agent-toggle {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   min-height: 28px;
-  margin: 0 0 8px;
+  margin: 0;
   padding: 5px 7px;
   color: rgba(255, 255, 255, 0.86);
   background: rgba(30, 188, 196, 0.12);
@@ -838,6 +859,10 @@ onUnmounted(() => {
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
+}
+.capture-agent-validation-toggle {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 :deep(.p-button.capture-primary) {
   width: 100%;

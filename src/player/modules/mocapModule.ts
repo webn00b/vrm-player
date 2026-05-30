@@ -45,9 +45,12 @@ export const mocapModule: PlayerModule = {
         const bvh = parseBVH(bvhText);
         const clip = await retargetBvhToVrm(vrm, bvh, name);
         if (options?.source === 'video' && options.exportAgentOgiJson) {
+          const agentClip = options.clampAgentOgiOutOfRange
+            ? await retargetBvhToVrm(vrm, bvh, name, { clampOutOfRange: true })
+            : clip;
           const filename = `${name}.agent_ogi.json`;
           downloadAgentOgiJson(
-            clipToAgentOgiJson(clip, vrm),
+            clipToAgentOgiJson(agentClip, vrm),
             filename,
           );
           notify({ severity: 'success', summary: 'Agent OGI JSON saved', detail: filename });
