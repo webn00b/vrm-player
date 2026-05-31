@@ -1,38 +1,14 @@
 # VRM Player
 
-Это небольшой локальный инструмент для работы с VRM-аватаром.
+Локальное веб-приложение для просмотра, ретаргета, записи и диагностики анимаций на VRM-аватарах.
 
-Простыми словами:
+Проект полезен, когда нужно:
 
-- вы кладете в проект `.vrm` модель и `.bvh` анимации;
-- запускаете приложение;
-- смотрите, как аватар проигрывает анимации;
-- при желании включаете мокап с камеры или из видео;
-- можете записать результат обратно в `.bvh` или скачать текущую позу как `1-frame BVH`.
-
-Проект полезен в двух сценариях:
-
-1. Вы хотите быстро смотреть и отлаживать BVH-анимации на VRM-модели.
-2. Вы хотите ретаргетить мокап из MediaPipe на VRM и разбираться, где именно ломается поза.
-
-## Навигация по документации
-
-- [docs/user-guide.md](/Users/fedor/projects/personal/vrm-player/docs/user-guide.md) - пользовательское руководство: запуск, интерфейс, BVH, мокап, экспорт позы
-- [docs/troubleshooting.md](/Users/fedor/projects/personal/vrm-player/docs/troubleshooting.md) - практическая диагностика: что смотреть в `Skeleton Info` и как разбирать типовые баги
-- [docs/mocap-pipeline.md](/Users/fedor/projects/personal/vrm-player/docs/mocap-pipeline.md) - техническая документация по пайплайну, solver-у и порядку слоев
-- [docs/architecture.md](/Users/fedor/projects/personal/vrm-player/docs/architecture.md) - карта модулей проекта, зависимостей и потока данных
-- [docs/roadmap.md](/Users/fedor/projects/personal/vrm-player/docs/roadmap.md) - backlog улучшений, спринты и текущий статус выполнения
-
-## Что умеет проект
-
-- Загружает первый `.vrm` из папки `models/`.
-- Автоматически подхватывает все `.bvh` из папки `animations/`.
-- Проигрывает BVH-клипы в очереди с кроссфейдами.
-- Поверх анимации накладывает live mocap с камеры или видеофайла.
-- Ретаргетит руки и пальцы через отдельный пайплайн с калибровкой и IK.
-- Показывает debug-панель с диагностикой торса, рук, ног и калибровки.
-- Записывает мокап в `.bvh`.
-- Экспортирует текущую позу как отдельный `1-frame BVH`.
+- быстро проверить `.bvh`, `.vrma`, `.fbx` или motion `.json` на конкретной VRM-модели;
+- наложить MediaPipe-мокап с камеры или видео на аватара;
+- записать текущую позу или готовый клип обратно в `.bvh`;
+- отладить solver, rest-pose correction, кости, IK, пальцы и порядок pose-слоев;
+- подготовить JSON/agent_ogi-экспорт или проверить locale-specific host VRM.
 
 ## Быстрый старт
 
@@ -48,307 +24,212 @@ npm install
 npm run dev
 ```
 
-Приложение откроется на [http://127.0.0.1:5333](http://127.0.0.1:5333).
+Vite поднимает приложение на [http://127.0.0.1:5333](http://127.0.0.1:5333).
 
-### Самый короткий путь
+### Первый запуск
 
-1. Положите `.vrm` в `models/`.
-2. Положите `.bvh` в `animations/`.
-3. Запустите `npm run dev`.
-4. Откройте вкладку `Main` и включите `Show model`.
-5. Перетащите клипы из `Library` в `Queue`.
+1. Запустите `npm run dev`.
+2. Откройте вкладку `Player`.
+3. Нажмите `Show avatar`, чтобы показать модель.
+4. Нажмите `Add animation` или перетащите файл анимации в очередь.
+5. Используйте `Play`, `Capture` и `Inspect` режимы верхней панели под текущую задачу.
 
-Если в `animations/` ничего нет, проект все равно запустится. В этом режиме можно использовать idle и мокап без BVH-библиотеки.
+По умолчанию приложение берет первый VRM из `public/models/index.json`. Если нужно загрузить модель вручную, нажмите `Load VRM`.
 
-## Структура ассетов
+## Ассеты
 
-### VRM
+### VRM-модель по умолчанию
 
-- Папка: `models/`
-- Формат: `.vrm`
-- Берется первый файл по алфавиту
+Файлы лежат в `public/models/` и раздаются Vite как `/models/...`.
 
-Пример:
+`public/models/index.json` должен быть JSON-массивом имен `.vrm` файлов:
 
-```text
-models/
-  avatar.vrm
+```json
+["en_0.vrm", "sample.vrm"]
 ```
 
-Источники тестовых моделей:
+При старте берется первый файл после алфавитной сортировки. Для локальной разовой проверки можно не менять индекс и загрузить `.vrm` через кнопку `Load VRM`.
 
-- [VRoid sample avatars](https://vroid.pixiv.help/hc/en-us/articles/4402394424089)
-- [VRM specification samples](https://github.com/vrm-c/vrm-specification/tree/master/samples)
+### Анимации
 
-### BVH
+Анимации добавляются во время работы приложения:
 
-- Папка: `animations/`
-- Формат: `.bvh`
-- Подхватываются автоматически при старте
-- Порядок по умолчанию: алфавитный
+- кнопкой `Add animation`;
+- drag-and-drop в очередь;
+- через `Capture -> Anim export`;
+- из `Retarget Lab`;
+- автоматически после некоторых capture/export сценариев.
 
-Пример:
+Поддерживаемые входы основного плеера:
 
-```text
-animations/
-  01-idle.bvh
-  02-walk.bvh
-  03-wave.bvh
-```
+- `.bvh`
+- `.vrma`
+- `.fbx`
+- `.json` в формате channel animation или canonical/offline motion
 
-## Как пользоваться
+Папка `animations/` может использоваться как локальное хранилище примеров, но текущий UI не сканирует ее автоматически при старте.
 
-Подробное руководство вынесено в [docs/user-guide.md](/Users/fedor/projects/personal/vrm-player/docs/user-guide.md).
+## Основные страницы
 
-Ниже — короткая версия.
+### Player
 
-### 1. Проигрывание BVH
+Главная сцена с VRM, очередью клипов и рабочими режимами:
 
-1. Добавьте анимации в `animations/`.
-2. Запустите проект.
-3. В правой панели перетащите нужные анимации в очередь.
-4. Используйте transport для проигрывания, прыжка по очереди и проверки кроссфейдов.
+- `Play` - воспроизведение очереди и быстрые действия;
+- `Capture` - live/video/multi-view/animation export сценарии;
+- `Inspect` - debug-панели, skeleton overlay, bone drag и диагностика.
 
-### 2. Мокап с камеры
+Очередь умеет добавлять, удалять, переупорядочивать, дублировать и переименовывать клипы. В export-режиме можно выгружать загруженные клипы как `.bvh`, `.glb`, `.vrma` или agent JSON, если для формата есть достаточно исходных данных.
 
-Вкладка `Video`:
+### Retarget
 
-1. Нажмите `Start`.
-2. Разрешите доступ к камере.
-3. При необходимости включите `Show model`, чтобы видеть аватара.
-4. Для записи нажмите `Rec`.
+`Retarget Lab` анализирует `.bvh`, `.fbx` и `.vrma`, показывает соответствие source/target костей, позволяет сравнивать preview, добавлять quaternion corrections и сохранять presets. Готовый результат можно добавить в очередь.
 
-Полезные переключатели:
+### Export
 
-- `Mirror mode` - селфи-режим
-- `Face tracking` - blendshapes лица
-- `Hip position` - перенос таза по позиции
-- `1€ smoothing` - сглаживание landmark'ов
-- `Wrist + fingers priority` - кисти и пальцы остаются верхним слоем
+Страница инструментов:
 
-### 3. Мокап из видеофайла
+- `Animation -> JSON` конвертирует `.fbx`, `.bvh`, `.glb`, `.gltf`, `.vrma` в переносимый JSON;
+- `Re-export` повторяет export-действия для текущей очереди.
 
-Вкладка `Video`:
+У проекта также есть отдельная Vite-страница `exports.html` для легкого standalone-конвертера.
 
-1. Нажмите `Load`.
-2. Выберите видеофайл.
-3. Проект прогонит ролик, построит мокап и автоматически скачает записанный `.bvh`.
-4. После этого новый BVH автоматически появится в очереди и может быть тут же проигран на той же модели.
+### Hosts
 
-Это удобно для сравнения:
+Превью locale-specific VRM-хостов. Профили описаны в `src/languageHosts.ts`, модели лежат в `public/models/hosts/<locale>/host.vrm`.
 
-- что показывал live-мокап;
-- что получилось после записи в BVH;
-- что вернулось после ретаргета BVH обратно на VRM.
+Документация: [docs/language-hosts.md](docs/language-hosts.md).
 
-### 4. Пошаговый просмотр видео
+## Capture-сценарии
 
-Если загружен видеофайл, можно:
+### Live
 
-- ставить на паузу;
-- шагать по кадрам вперед и назад;
-- брать текущую позу;
-- скачивать собранный вручную BVH.
+`Capture -> Live` запускает камеру, показывает performer skeleton и может записывать результат в BVH.
 
-Кнопки в playback-строке:
+Полезные настройки находятся в панели `Capture` и debug-панелях:
 
-- `⏸` / `▶` - пауза
-- `⏮` - шаг назад
-- `⏭` - шаг вперед
-- `💾` - добавить текущий кадр в буфер ручной записи
-- `⬇` - скачать буфер ручной записи как `.bvh`
+- mirror/selfie режим;
+- face tracking;
+- hip position;
+- smoothing;
+- wrist/finger priority;
+- validation/clamp и диагностические overlays.
 
-### 5. Экспорт текущей позы
+### Video BVH
 
-Во вкладке `Video` есть отдельная кнопка:
+`Capture -> Video BVH` обрабатывает видеофайл через MediaPipe, записывает BVH и добавляет результат в очередь. В этом режиме удобно сравнивать исходное видео, debug skeleton, записанный BVH и повторный playback.
 
-- `Current pose -> Export .bvh`
+Для покадровой проверки доступны pause/step/grab/flush действия, а текущую позу можно выгрузить как `1-frame BVH` или как `BVH + agent_ogi JSON`.
 
-Она скачивает текущую позу аватара как отдельный `1-frame BVH`.
+### Multi-view
 
-Это полезно, когда нужно:
+`Capture -> Multi-view` принимает фронтальное и боковое видео, генерирует browser `.motion.json`, скачивает отчет fusion и сразу импортирует motion JSON в очередь.
 
-- сохранить проблемный кадр;
-- быстро отдать позу в другой инструмент;
-- сравнить "как выглядит сейчас" без полной записи ролика.
+Подробнее: [docs/offline-mocap-import.md](docs/offline-mocap-import.md).
 
-Важно:
+### Anim Export
 
-- экспорт берется из текущего состояния аватара;
-- он не трогает основной recorder;
-- его можно использовать отдельно от обычной записи мокапа.
+`Capture -> Anim export` берет текущую очередь или выбранный animation/motion файл и записывает результат в BVH через production-позу аватара. Это полезно для проверки round-trip: импорт, ретаргет, запись, повторный импорт.
 
-## Как дальше читать проект
+## Как собирается итоговая поза
 
-Если нужна практическая диагностика, откройте [docs/troubleshooting.md](/Users/fedor/projects/personal/vrm-player/docs/troubleshooting.md).
+Порядок слоев живет в `src/renderLoop.ts`. На момент актуализации README кадр собирается примерно так:
 
-Если нужен внутренний разбор solver-а и порядка слоев, откройте [docs/mocap-pipeline.md](/Users/fedor/projects/personal/vrm-player/docs/mocap-pipeline.md).
+1. `AnimationController.update(delta)` для BVH/VRMA/FBX/motion клипа.
+2. Optional extra mixer из `renderLoopHooks`.
+3. Idle/procedural слой, если основной animation controller muted или пуст.
+4. Live mocap overlay, если активный клип не играет.
+5. Ручные bone offsets и in-scene bone drag.
+6. Финальный wrist/finger overlay из hand tracking.
+7. Validator clamp для live/captured/playback позы.
+8. Skeleton logger, BVH recorder capture и debug recorder.
+9. Performer debug skeleton.
+10. Micro-animations и hip balance corrector.
+11. `vrm.update(delta)`.
+12. Export/verifier/motion-trace hooks.
+13. Hip force diagnostics, skeleton overlay, controls update и render.
 
-## Откуда берется итоговая поза
-
-Каждый кадр в проекте собирается слоями:
-
-1. BVH-анимация через `AnimationMixer`
-2. idle / procedural анимации
-3. live mocap
-4. ручные оффсеты костей
-5. финальный overlay кистей и пальцев
-6. validator ROM
-7. micro-animations и `vrm.update()`
-
-Это важно понимать при отладке:
-
-- если live mocap "не побеждает" BVH, значит ошибка в порядке слоев;
-- если проблема видна уже на debug skeleton, то баг раньше, чем ретаргет;
-- если debug skeleton выглядит правильно, а аватар нет, то проблема уже в solver/retarget.
-
-## Диагностика и debug
-
-В проекте много встроенной диагностики.
-
-Полный symptom-oriented разбор вынесен в [docs/troubleshooting.md](/Users/fedor/projects/personal/vrm-player/docs/troubleshooting.md).
-
-### Основные инструменты
-
-- `Performer skeleton` - зеленый debug-скелет перформера
-- `Skeleton Info` - текстовый дамп по торсу, рукам, ногам и solver-метрикам
-- `Debug record` - запись внутренних данных в JSON
-- `Validation (ROM)` - контроль анатомических ограничений
-
-### Что смотреть в первую очередь
-
-Если ломается торс:
-
-- `Green sh mid`
-- `Norm sh mid`
-- `Err sh axis`
-- `Err hip axis`
-- `Torso fwd raw`
-- `Torso fwd applied`
-- `Torso lat raw`
-- `Torso lat applied`
-- `Torso lat gain`
-
-Если ломаются руки:
-
-- `Reach`
-- `Blue target`
-- `Elbow target`
-- `Arm scale raw/eff`
-- `Hands-together`
-- `Prayer blend`
-- `Face-near blend`
-- `Front-pose blend`
-
-Если ломаются ноги:
-
-- `Legs ready`
-- `Ankle targets`
-- `Leg reach`
-- foot lock (`locked/free`)
-
-## Ограничения
-
-Сейчас проект хорошо подходит для отладки, но у него есть понятные границы.
-
-### Что уже работает неплохо
-
-- обычные BVH на бипедах;
-- live mocap для торса и рук;
-- upper-body видео;
-- prayer / folded hands / hand-near-face кейсы лучше, чем в базовом angle-only ретаргете;
-- экспорт текущей позы и запись мокапа в BVH.
-
-### Что может ломаться
-
-- A-pose vs T-pose на модели и источнике;
-- очень шумный Z из MediaPipe;
-- частичная окклюзия рук и пальцев;
-- сильные стилизованные пропорции аватара;
-- видео, где ноги почти не видны, но включен full-body режим;
-- экстремальные позы, где landmark'и сами ошибаются.
-
-### Что важно помнить
-
-- hand tracking не гарантирует идеальное совпадение пальцев с видео на каждом кадре;
-- `bodyScale`, `armScale`, `legScale` зависят от качества калибровки;
-- если модель экспортирована с нестандартным rest pose, иногда нужен дополнительный rest correction.
-
-## Как устроен проект
-
-### Основные файлы
-
-- [src/main.ts](/Users/fedor/projects/personal/vrm-player/src/main.ts) - сборка приложения и порядок слоев в render loop
-- [src/debugPanel.ts](/Users/fedor/projects/personal/vrm-player/src/debugPanel.ts) - вся debug UI и `Skeleton Info`
-- [src/mocap/mocapController.ts](/Users/fedor/projects/personal/vrm-player/src/mocap/mocapController.ts) - orchestration камеры, видео, записи и экспорта
-- [src/mocap/directPoseApplier.ts](/Users/fedor/projects/personal/vrm-player/src/mocap/directPoseApplier.ts) - основной solver мокапа
-- [src/mocap/mocapCalibration.ts](/Users/fedor/projects/personal/vrm-player/src/mocap/mocapCalibration.ts) - калибровка пропорций
-- [src/mocap/twoBoneIK.ts](/Users/fedor/projects/personal/vrm-player/src/mocap/twoBoneIK.ts) - IK для рук и ног
-- [src/mocap/bvhRecorder.ts](/Users/fedor/projects/personal/vrm-player/src/mocap/bvhRecorder.ts) - запись BVH
-- [src/retarget.ts](/Users/fedor/projects/personal/vrm-player/src/retarget.ts) - BVH -> VRM retarget
-- [src/skeletonMap.ts](/Users/fedor/projects/personal/vrm-player/src/skeletonMap.ts) - структурный маппинг костей BVH
-- [src/validation/](/Users/fedor/projects/personal/vrm-player/src/validation) - validator вращений костей
-
-### Внешние зависимости
-
-- `three`
-- `@pixiv/three-vrm`
-- `@pixiv/three-vrm-animation`
-- `@mediapipe/tasks-vision`
-- `kalidokit`
+Практический смысл: если поза выглядит неправильно, сначала нужно понять, на каком слое ошибка появляется. Debug skeleton показывает performer/target сторону, а final VRM поза уже включает retarget, offsets, validator и VRM update.
 
 ## Документация
 
-- [docs/user-guide.md](/Users/fedor/projects/personal/vrm-player/docs/user-guide.md) - пользовательский сценарий работы с проектом
-- [docs/troubleshooting.md](/Users/fedor/projects/personal/vrm-player/docs/troubleshooting.md) - symptom-oriented отладка и чтение `Skeleton Info`
-- [docs/mocap-pipeline.md](/Users/fedor/projects/personal/vrm-player/docs/mocap-pipeline.md) - технический разбор мокап-пайплайна и solver-а
-- [docs/architecture.md](/Users/fedor/projects/personal/vrm-player/docs/architecture.md) - верхнеуровневая архитектура приложения
-- [docs/roadmap.md](/Users/fedor/projects/personal/vrm-player/docs/roadmap.md) - план следующих улучшений и статус их выполнения
+- [docs/user-guide.md](docs/user-guide.md) - пользовательский сценарий работы.
+- [docs/troubleshooting.md](docs/troubleshooting.md) - диагностика по симптомам и чтение debug-панелей.
+- [docs/mocap-pipeline.md](docs/mocap-pipeline.md) - технический разбор MediaPipe/mocap pipeline.
+- [docs/architecture.md](docs/architecture.md) - карта модулей и потоков данных.
+- [docs/animation-validation.md](docs/animation-validation.md) - validation и проверки анимаций.
+- [docs/offline-mocap-import.md](docs/offline-mocap-import.md) - offline/GVHMR/WHAM/multi-view импорт.
+- [docs/language-hosts.md](docs/language-hosts.md) - locale-specific host avatars.
+- [docs/roadmap.md](docs/roadmap.md) - backlog и следующие направления.
 
-## Разработка
+Часть документов может быть более детальной, чем README, но при расхождениях стоит сверяться с текущим кодом в `src/player/modules/` и `src/renderLoop.ts`.
 
-### Команды
+## Карта проекта
+
+Основной стек:
+
+- Vite
+- TypeScript
+- Vue 3
+- Three.js
+- `@pixiv/three-vrm`
+- `@pixiv/three-vrm-animation`
+- MediaPipe Tasks Vision
+- PrimeVue
+- Vitest, Playwright, Madge
+
+Ключевые области:
+
+- `src/main.ts` - входная точка и запуск player modules.
+- `src/player/modules/` - bootstrap-модули сцены, VRM, playback, UI, mocap, debug и render loop.
+- `src/renderLoop.ts` - production порядок pose/render слоев.
+- `src/vrmLoader.ts` - загрузка VRM.
+- `src/animationImport.ts` и `src/animationLoaders/` - импорт BVH/VRMA/FBX/JSON.
+- `src/retarget.ts`, `src/skeletonMap.ts`, `src/humanoidRestPose.ts` - BVH/VRMA retarget и rest corrections.
+- `src/mocap/pipeline/` - MediaPipe controller/detector.
+- `src/mocap/solvers/` - torso/arm/leg/IK solver math.
+- `src/mocap/retargeters/` - применение позы к VRM.
+- `src/mocap/bvh/` и `src/bvhExportRecorder.ts` - запись и round-trip BVH.
+- `src/playerVue/` - Vue UI: shell, queue, capture, retarget lab, hosts, panels.
+- `src/exports/` - standalone animation-to-JSON converter.
+- `public/mediapipe/` - локальные MediaPipe wasm/task ассеты.
+- `public/models/` - дефолтные VRM и language host models.
+- `tests/e2e/` - Playwright-тесты UI/capture сценариев.
+
+## Команды разработки
 
 ```bash
 npm run dev
 npm run build
 npm run preview
+npm test
+npm run test:circular
+npm run test:regression
+npm run test:e2e
 ```
 
-### Перед изменениями
+Для первого запуска Playwright:
 
-Если вы меняете solver или ретаргет, обычно полезно проверить:
+```bash
+npx playwright install chromium
+```
 
-1. Как выглядит зеленый performer skeleton.
-2. Что показывает `Skeleton Info`.
-3. Как выглядит записанный `.bvh` после auto-replay.
-4. Не начал ли validator постоянно clamp'ить одну и ту же кость.
+Для e2e с реальным видео мокапа можно передать `FAKE_VIDEO_PATH`; детали есть в [tests/e2e/README.md](tests/e2e/README.md).
 
-### Типичный цикл отладки
+## Типичный цикл отладки
 
-1. Воспроизвести проблему на видео.
-2. Скопировать `Skeleton Info`.
-3. Проверить, где именно ломается:
-   - landmarks;
-   - target;
-   - final normalized bones;
-   - replay из записанного BVH.
-4. Править только один слой за раз.
+1. Воспроизвести проблему на минимальном клипе, видео или single-frame pose.
+2. Сравнить performer skeleton, target/debug данные и итоговую VRM-позу.
+3. Проверить, активен ли BVH playback, mocap overlay, manual offset, validator или hand overlay.
+4. Если ошибка в источнике, смотреть MediaPipe/solver diagnostics.
+5. Если source выглядит правильно, смотреть retarget/rest correction/validator.
+6. После правки прогнать узкий Vitest файл, затем `npm run build` или `npm run test:regression` при широком изменении.
 
-## Как получить BVH из Mixamo
+## Ограничения
 
-1. Откройте [Mixamo](https://www.mixamo.com).
-2. Возьмите `Y Bot` или другой стандартный biped.
-3. Скачайте анимацию как `FBX Binary`, `Without Skin`, `30 fps`.
-4. Импортируйте в Blender.
-5. Экспортируйте как `.bvh`.
-6. Положите файл в `animations/`.
-
-## Что еще можно улучшить
-
-Если захотите продолжить проект, самые очевидные направления такие:
-
-- вынести документацию в отдельный user guide и troubleshooting guide;
-- добавить импорт/экспорт поз не только в `BVH`, но и в `JSON`/`VRMA`;
-- сделать явные preset'ы для upper-body и full-body видео;
-- сохранить пользовательские настройки debug/mocap между сессиями.
+- MediaPipe может шуметь по глубине и терять кисти при окклюзии.
+- Upper-body видео плохо подходят для честного leg IK.
+- Сильно стилизованные пропорции аватара требуют осторожной калибровки.
+- Нестандартный rest pose модели иногда требует дополнительных corrections.
+- `.vrma` export доступен только там, где есть исходный BVH или поддерживаемый путь экспорта.
+- Multi-view режим сейчас является практичным MVP, а не полноценной calibrated-triangulation системой.
