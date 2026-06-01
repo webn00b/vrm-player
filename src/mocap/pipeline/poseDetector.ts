@@ -3,7 +3,9 @@ import {
   HolisticLandmarker,
   type HolisticLandmarkerResult,
 } from '@mediapipe/tasks-vision';
+import { LandmarkStabilizer } from '../trackers/landmarkStabilizer';
 import { LandmarkFilter } from '../trackers/oneEuroFilter';
+import { fixedVideoFrameTimes } from './videoFrameTimes';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,6 +34,13 @@ const HOLISTIC_MODEL_URL = '/mediapipe/holistic_landmarker.task';
 
 // Quality alias kept for API compatibility — affects internal pose model choice.
 export type PoseModelQuality = 'lite' | 'full' | 'heavy';
+
+export interface FixedVideoFileOptions {
+  fps?: number;
+  afterFrame?: () => Promise<void> | void;
+}
+
+export const DEFAULT_FILE_CAPTURE_FPS = 30;
 
 // ── Skeleton connections (for canvas preview) ─────────────────────────────────
 
@@ -84,6 +93,7 @@ export class PoseDetector {
   // sysAnimOnline uses beta=1 for body pose — the 1€ filter becomes responsive
   // at speed and still smooths jitter at rest. Our previous beta=0.01 made it
   // basically a fixed low-pass at 1.5 Hz (no speed adaptation → visible lag).
+  private _bodyWorldStabilizer = new LandmarkStabilizer(33);
   private _fBodyNorm  = new LandmarkFilter(33, 1.5, 0.1);
   private _fBodyWorld = new LandmarkFilter(33, 1.0, 0.8);
   // Face landmarks: slow-moving micro-expressions, keep heavily smoothed.
@@ -162,16 +172,7 @@ export class PoseDetector {
     if (this._running) return;
     await this.init();
 
-    this._fileUrl       = URL.createObjectURL(file);
-    this.video.src      = this._fileUrl;
-    this.video.muted    = true;
-    this.video.loop     = false;
-    this.video.playsInline = true;
-
-    await new Promise<void>((res, rej) => {
-      this.video.onloadedmetadata = () => res();
-      this.video.onerror = () => rej(new Error('Failed to load video file'));
-    });
+    await this._openFile(file);
 
     this.video.onended = () => {
       this.stop();
@@ -181,6 +182,39 @@ export class PoseDetector {
     this.video.play();
     this._running = true;
     this._tick();
+  }
+
+  async processFileAtFixedFps(file: File, options: FixedVideoFileOptions = {}): Promise<boolean> {
+    if (this._running) return false;
+    await this.init();
+    await this._openFile(file);
+
+    const fps = options.fps ?? DEFAULT_FILE_CAPTURE_FPS;
+    const times = fixedVideoFrameTimes(this.video.duration || 0, fps);
+    let completed = true;
+    this._running = true;
+
+    try {
+      for (const time of times) {
+        if (!this._running) {
+          completed = false;
+          break;
+        }
+        await this._seekFileVideo(time);
+        if (!this._running) {
+          completed = false;
+          break;
+        }
+        this._detectOnce(Math.round(time * 1000));
+        await options.afterFrame?.();
+      }
+    } finally {
+      const wasRunning = this._running;
+      this.stop();
+      completed = completed && wasRunning;
+    }
+
+    return completed;
   }
 
   pause(): void {
@@ -206,7 +240,7 @@ export class PoseDetector {
       this.video.addEventListener('seeked', onSeeked);
       this.video.currentTime = next;
     });
-    this._detectOnce();
+    this._detectOnce(Math.round(next * 1000));
   }
 
   stop(): void {
@@ -223,6 +257,7 @@ export class PoseDetector {
       URL.revokeObjectURL(this._fileUrl);
       this._fileUrl = null;
     }
+    this._bodyWorldStabilizer.reset();
     this._fBodyNorm.reset();  this._fBodyWorld.reset();
     this._fFace.reset();
     this._fHandNorm.Left.reset();  this._fHandNorm.Right.reset();
@@ -251,16 +286,42 @@ export class PoseDetector {
     this._detectOnce();
   };
 
-  private _detectOnce(): void {
+  private async _openFile(file: File): Promise<void> {
+    this._fileUrl       = URL.createObjectURL(file);
+    this.video.src      = this._fileUrl;
+    this.video.muted    = true;
+    this.video.loop     = false;
+    this.video.playsInline = true;
+
+    await new Promise<void>((res, rej) => {
+      this.video.onloadedmetadata = () => res();
+      this.video.onerror = () => rej(new Error('Failed to load video file'));
+    });
+  }
+
+  private async _seekFileVideo(timeSec: number): Promise<void> {
+    const duration = this.video.duration || 0;
+    const target = Math.max(0, Math.min(duration, timeSec));
+    if (Math.abs(this.video.currentTime - target) < 0.002 && this.video.readyState >= 2) return;
+    await new Promise<void>((res) => {
+      const onSeeked = (): void => {
+        this.video.removeEventListener('seeked', onSeeked);
+        res();
+      };
+      this.video.addEventListener('seeked', onSeeked);
+      this.video.currentTime = target;
+    });
+  }
+
+  private _detectOnce(timestampMs = performance.now()): void {
     if (this.video.readyState < 2) return;
-    const now = performance.now();
     try {
       const result: HolisticLandmarkerResult =
-        this.holistic!.detectForVideo(this.video, now);
+        this.holistic!.detectForVideo(this.video, timestampMs);
 
       if (!result.poseLandmarks.length || !this.onFrame) return;
 
-      const tSec = now / 1000;
+      const tSec = timestampMs / 1000;
 
       const rawBodyNorm  = result.poseLandmarks[0]      as Landmark3D[];
       const rawBodyWorld = result.poseWorldLandmarks[0] as Landmark3D[];
@@ -274,7 +335,10 @@ export class PoseDetector {
       }
 
       const bodyNorm  = this._filterEnabled ? this._fBodyNorm.filter (rawBodyNorm,  tSec) : rawBodyNorm;
-      const bodyWorld = this._filterEnabled ? this._fBodyWorld.filter(rawBodyWorld, tSec) : rawBodyWorld;
+      const stableBodyWorld = this._filterEnabled
+        ? this._bodyWorldStabilizer.stabilize(rawBodyWorld, tSec)
+        : rawBodyWorld;
+      const bodyWorld = this._filterEnabled ? this._fBodyWorld.filter(stableBodyWorld, tSec) : stableBodyWorld;
 
       const rawFace = (result.faceLandmarks[0] ?? []) as Landmark3D[];
       const faceLandmarks = (rawFace.length && this._filterEnabled)

@@ -81,6 +81,8 @@ export class MocapController {
   private _recordingIndex = 0;
   private _poseExportIndex = 0;
   private _fileCaptureActive = false;
+  private _fixedFileCaptureActive = false;
+  private _fixedFileFramePending = false;
 
   // Latest detected frame — applied each render tick via applyLatestFrame()
   // so mocap overlays on top of the BVH mixer output rather than fighting it.
@@ -222,6 +224,41 @@ export class MocapController {
     );
   }
 
+  private _captureFixedFileFrame(): boolean {
+    const before = this.liveRecorder.frameCount;
+    this._captureCurrentPoseFrame(this.liveRecorder);
+    if (this.liveReplayRecorder) {
+      this._captureCurrentPoseFrame(this.liveReplayRecorder);
+    }
+    this._frameRecorded = this.liveRecorder.frameCount > before;
+
+    if (this._verifySnapshots !== null && this._frameRecorded) {
+      const fc = this.liveRecorder.frameCount;
+      if (fc > this._verifyLastFrameCount) {
+        this._verifySnapshots.push(captureSnapshot(this._vrm, fc - 1));
+        this._verifyLastFrameCount = fc;
+      }
+    }
+
+    return this._frameRecorded;
+  }
+
+  private _nextAnimationFrame(): Promise<void> {
+    if (typeof requestAnimationFrame !== 'function') {
+      return new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  }
+
+  private async _awaitRenderedFixedFileCapture(): Promise<void> {
+    this._fixedFileFramePending = true;
+    await this._nextAnimationFrame();
+    await this._nextAnimationFrame();
+    if (this._fixedFileFramePending && this._state === 'recording') {
+      this.captureRecordedFrame();
+    }
+  }
+
   // ── Debug knobs ────────────────────────────────────────────────────────────
 
   setPoseQuality(q: PoseModelQuality): Promise<void> { return this.detector.setPoseQuality(q); }
@@ -305,6 +342,13 @@ export class MocapController {
   captureRecordedFrame(): void {
     if (this._state !== 'recording') return;
     if (!this._latestFrame) return;
+
+    if (this._fixedFileCaptureActive) {
+      if (!this._fixedFileFramePending) return;
+      this._captureFixedFileFrame();
+      this._fixedFileFramePending = false;
+      return;
+    }
 
     const accepted = this._addCurrentPoseFrame(this.liveRecorder);
     if (!accepted) return;
@@ -753,6 +797,8 @@ export class MocapController {
   }
 
   private _teardownFileCapture(): void {
+    this._fixedFileCaptureActive = false;
+    this._fixedFileFramePending = false;
     if (this._fileCaptureActive) {
       this.applier.setHighQualityMode(false);
       this._fileCaptureActive = false;
@@ -825,9 +871,19 @@ export class MocapController {
     // so the output BVH matches the source video instead of the smoothed preview.
     this.applier.setHighQualityMode(true);
     this._fileCaptureActive = true;
+    this._fixedFileCaptureActive = true;
     this.liveReplayRecorder = this._createRecorder('internal-roundtrip');
 
-    this.detector.onEnd = () => {
+    try {
+      this.liveRecorder.start();
+      this.liveReplayRecorder?.start();
+      this._setState('recording');
+      const completed = await this.detector.processFileAtFixedFps(file, {
+        fps: BVH_FRAME_RATE,
+        afterFrame: () => this._awaitRenderedFixedFileCapture(),
+      });
+      if (!completed || this.state !== 'recording') return;
+
       const externalFrames = this.liveRecorder.frameCount;
       const internalFrames = this.liveReplayRecorder?.frameCount ?? externalFrames;
       const bvhText = this.liveRecorder.stop();
@@ -849,20 +905,15 @@ export class MocapController {
         exportAgentOgiJson: this.exportAgentOgiJsonForVideo,
         clampAgentOgiOutOfRange: this.clampAgentOgiOutOfRangeForVideo,
       });
-      this._teardownFileCapture();
       this._setState('off');
-    };
-
-    try {
-      await this.detector.startFromFile(file);
-      this.liveRecorder.start();
-      this.liveReplayRecorder.start();
-      this._setState('recording');
     } catch (err) {
       this.detector.stop();
-      this._teardownFileCapture();
+      if (this.liveRecorder.recording) this.liveRecorder.stop();
+      if (this.liveReplayRecorder?.recording) this.liveReplayRecorder.stop();
       this.liveReplayRecorder = null;
       throw err;
+    } finally {
+      this._teardownFileCapture();
     }
   }
 
@@ -871,6 +922,7 @@ export class MocapController {
     if (this._state === 'recording' && this.liveRecorder.recording) this.liveRecorder.stop(); // discard
     if (this.liveReplayRecorder?.recording) this.liveReplayRecorder.stop(); // discard
     this.liveReplayRecorder = null;
+    this._fixedFileFramePending = false;
     this.detector.stop();
     this._teardownFileCapture();
     this.applier.resetHipBaseline();
