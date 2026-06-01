@@ -74,4 +74,24 @@ describe('LandmarkStabilizer', () => {
 
     expect(out).toEqual({ x: 10, y: 10, z: 10, visibility: 1 });
   });
+
+  test('setOptions updates clamping without clearing existing landmark state', () => {
+    const stabilizer = new LandmarkStabilizer(1, {
+      maxStep: 0.5,
+      maxZStep: 0.2,
+    });
+
+    stabilizer.stabilize([lm(0, 0, 0)], 0);
+    stabilizer.setOptions({ maxStep: 0.1, maxZStep: 0.05, maxGapFrames: 5 });
+    const [out] = stabilizer.stabilize([lm(1, 0, 1)], 1 / 30);
+
+    expect(stabilizer.getOptions()).toMatchObject({
+      maxStep: 0.1,
+      maxZStep: 0.05,
+      maxGapFrames: 5,
+    });
+    expect(out.x).toBeCloseTo(0.1);
+    expect(out.y).toBeCloseTo(0);
+    expect(out.z).toBeCloseTo(0.05);
+  });
 });

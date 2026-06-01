@@ -1,12 +1,18 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
-import { PoseDetector, type PoseModelQuality, type PoseFrame } from './poseDetector';
+import {
+  PoseDetector,
+  type PoseModelQuality,
+  type PoseFrame,
+  type PoseStabilizerSettings,
+} from './poseDetector';
 import { DirectPoseApplier } from '../retargeters/directPoseApplier';
 import { FaceApplier } from '../retargeters/faceApplier';
 import { BvhRecorder, BVH_FRAME_RATE, downloadBvh } from '../bvh/bvhRecorder';
 import { getJointOffset, type BvhRecorderCompatibility } from '../bvh/bvhRecorderFactory';
 import { MocapCalibration, type CalibrationStatus } from '../trackers/mocapCalibration';
+import type { LandmarkStabilizerOptions } from '../trackers/landmarkStabilizer';
 import { getCachedHumanoidRestAxes } from '../../humanoidRestPose';
 import { captureSnapshot, type PoseSnapshot } from '../bvh/bvhRoundtripVerifier';
 import { shouldRecordAfterPreroll } from './videoFrameTimes';
@@ -31,7 +37,7 @@ type AvatarJointPositionMap = {
   rightUpperLeg: THREE.Vector3; rightLowerLeg: THREE.Vector3; rightFoot: THREE.Vector3;
 };
 
-const FILE_CAPTURE_CALIBRATION_PREROLL_SEC = 1.5;
+const DEFAULT_FILE_CAPTURE_CALIBRATION_PREROLL_SEC = 1.5;
 
 function textHash(text: string): string {
   let h = 2166136261;
@@ -86,6 +92,7 @@ export class MocapController {
   private _fileCaptureActive = false;
   private _fixedFileCaptureActive = false;
   private _fixedFileFramePending = false;
+  private _fileCaptureCalibrationPrerollSec = DEFAULT_FILE_CAPTURE_CALIBRATION_PREROLL_SEC;
 
   // Latest detected frame — applied each render tick via applyLatestFrame()
   // so mocap overlays on top of the BVH mixer output rather than fighting it.
@@ -256,7 +263,7 @@ export class MocapController {
   private async _awaitRenderedFixedFileCapture(timeSec: number): Promise<void> {
     this._fixedFileFramePending = shouldRecordAfterPreroll(
       timeSec,
-      FILE_CAPTURE_CALIBRATION_PREROLL_SEC,
+      this._fileCaptureCalibrationPrerollSec,
     );
     await this._nextAnimationFrame();
     await this._nextAnimationFrame();
@@ -272,6 +279,22 @@ export class MocapController {
 
   setFilterEnabled(v: boolean): void { this.detector.setFilterEnabled(v); }
   get filterEnabled(): boolean { return this.detector.filterEnabled; }
+
+  setFileCaptureCalibrationPrerollSec(sec: number): void {
+    this._fileCaptureCalibrationPrerollSec = Number.isFinite(sec)
+      ? Math.max(0, Math.min(5, sec))
+      : DEFAULT_FILE_CAPTURE_CALIBRATION_PREROLL_SEC;
+  }
+  get fileCaptureCalibrationPrerollSec(): number { return this._fileCaptureCalibrationPrerollSec; }
+
+  setBodyStabilizerSettings(options: LandmarkStabilizerOptions): void {
+    this.detector.setBodyStabilizerSettings(options);
+  }
+  get stabilizerSettings(): PoseStabilizerSettings { return this.detector.stabilizerSettings; }
+
+  setHandStabilizerSettings(options: LandmarkStabilizerOptions): void {
+    this.detector.setHandStabilizerSettings(options);
+  }
 
   setDepthScale(v: number): void { this.applier.setDepthScale(v); }
   get depthScale(): number { return this.applier.depthScale; }

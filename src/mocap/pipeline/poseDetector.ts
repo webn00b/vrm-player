@@ -3,7 +3,11 @@ import {
   HolisticLandmarker,
   type HolisticLandmarkerResult,
 } from '@mediapipe/tasks-vision';
-import { LandmarkStabilizer } from '../trackers/landmarkStabilizer';
+import {
+  LandmarkStabilizer,
+  type LandmarkStabilizerOptions,
+  type ResolvedLandmarkStabilizerOptions,
+} from '../trackers/landmarkStabilizer';
 import { LandmarkFilter } from '../trackers/oneEuroFilter';
 import { fixedVideoFrameTimes } from './videoFrameTimes';
 
@@ -41,6 +45,30 @@ export interface FixedVideoFileOptions {
 }
 
 export const DEFAULT_FILE_CAPTURE_FPS = 30;
+
+export interface PoseStabilizerSettings {
+  body: ResolvedLandmarkStabilizerOptions;
+  hand: ResolvedLandmarkStabilizerOptions;
+}
+
+const BODY_WORLD_STABILIZER_OPTIONS: LandmarkStabilizerOptions = {
+  maxGapFrames: 3,
+  maxStep: 0.45,
+  maxZStep: 0.18,
+};
+
+const HAND_NORM_STABILIZER_OPTIONS: LandmarkStabilizerOptions = {
+  maxGapFrames: 2,
+  maxStep: 0.12,
+  maxZStep: 0.12,
+};
+
+const HAND_WORLD_STABILIZER_OPTIONS: LandmarkStabilizerOptions = {
+  maxGapFrames: 2,
+  maxStep: 0.08,
+  maxZStep: 0.08,
+};
+const HAND_WORLD_TO_NORM_STEP_SCALE = 2 / 3;
 
 // ── Skeleton connections (for canvas preview) ─────────────────────────────────
 
@@ -93,7 +121,7 @@ export class PoseDetector {
   // sysAnimOnline uses beta=1 for body pose — the 1€ filter becomes responsive
   // at speed and still smooths jitter at rest. Our previous beta=0.01 made it
   // basically a fixed low-pass at 1.5 Hz (no speed adaptation → visible lag).
-  private _bodyWorldStabilizer = new LandmarkStabilizer(33);
+  private _bodyWorldStabilizer = new LandmarkStabilizer(33, BODY_WORLD_STABILIZER_OPTIONS);
   private _fBodyNorm  = new LandmarkFilter(33, 1.5, 0.1);
   private _fBodyWorld = new LandmarkFilter(33, 1.0, 0.8);
   // Face landmarks: slow-moving micro-expressions, keep heavily smoothed.
@@ -109,28 +137,12 @@ export class PoseDetector {
     Right: new LandmarkFilter(21, 1.5, 0.003),
   };
   private _handNormStabilizer: Record<'Left' | 'Right', LandmarkStabilizer> = {
-    Left: new LandmarkStabilizer(21, {
-      maxGapFrames: 2,
-      maxStep: 0.12,
-      maxZStep: 0.12,
-    }),
-    Right: new LandmarkStabilizer(21, {
-      maxGapFrames: 2,
-      maxStep: 0.12,
-      maxZStep: 0.12,
-    }),
+    Left: new LandmarkStabilizer(21, HAND_NORM_STABILIZER_OPTIONS),
+    Right: new LandmarkStabilizer(21, HAND_NORM_STABILIZER_OPTIONS),
   };
   private _handWorldStabilizer: Record<'Left' | 'Right', LandmarkStabilizer> = {
-    Left: new LandmarkStabilizer(21, {
-      maxGapFrames: 2,
-      maxStep: 0.08,
-      maxZStep: 0.08,
-    }),
-    Right: new LandmarkStabilizer(21, {
-      maxGapFrames: 2,
-      maxStep: 0.08,
-      maxZStep: 0.08,
-    }),
+    Left: new LandmarkStabilizer(21, HAND_WORLD_STABILIZER_OPTIONS),
+    Right: new LandmarkStabilizer(21, HAND_WORLD_STABILIZER_OPTIONS),
   };
 
   onFrame: ((frame: PoseFrame) => void) | null = null;
@@ -162,6 +174,35 @@ export class PoseDetector {
   setFilterEnabled(v: boolean): void { this._filterEnabled = v; }
   get filterEnabled(): boolean { return this._filterEnabled; }
   get poseQuality(): PoseModelQuality { return this._poseQuality; }
+
+  get bodyStabilizerSettings(): ResolvedLandmarkStabilizerOptions {
+    return this._bodyWorldStabilizer.getOptions();
+  }
+
+  setBodyStabilizerSettings(options: LandmarkStabilizerOptions): void {
+    this._bodyWorldStabilizer.setOptions(options);
+  }
+
+  get handStabilizerSettings(): ResolvedLandmarkStabilizerOptions {
+    return this._handNormStabilizer.Left.getOptions();
+  }
+
+  setHandStabilizerSettings(options: LandmarkStabilizerOptions): void {
+    const worldOptions = { ...options };
+    if (options.maxStep !== undefined) worldOptions.maxStep = options.maxStep * HAND_WORLD_TO_NORM_STEP_SCALE;
+    if (options.maxZStep !== undefined) worldOptions.maxZStep = options.maxZStep * HAND_WORLD_TO_NORM_STEP_SCALE;
+    for (const side of ['Left', 'Right'] as const) {
+      this._handNormStabilizer[side].setOptions(options);
+      this._handWorldStabilizer[side].setOptions(worldOptions);
+    }
+  }
+
+  get stabilizerSettings(): PoseStabilizerSettings {
+    return {
+      body: this.bodyStabilizerSettings,
+      hand: this.handStabilizerSettings,
+    };
+  }
 
   async init(): Promise<void> {
     if (this.holistic) return;

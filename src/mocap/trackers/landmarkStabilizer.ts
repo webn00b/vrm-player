@@ -12,13 +12,15 @@ export interface LandmarkStabilizerOptions {
   maxZStep?: number;
 }
 
+export type ResolvedLandmarkStabilizerOptions = Required<LandmarkStabilizerOptions>;
+
 interface LandmarkState {
   point: StabilizedLandmark;
   gapFrames: number;
   stale: boolean;
 }
 
-const DEFAULT_OPTIONS: Required<LandmarkStabilizerOptions> = {
+export const DEFAULT_LANDMARK_STABILIZER_OPTIONS: ResolvedLandmarkStabilizerOptions = {
   minVisibility: 0.3,
   maxGapFrames: 3,
   maxStep: 0.45,
@@ -26,11 +28,11 @@ const DEFAULT_OPTIONS: Required<LandmarkStabilizerOptions> = {
 };
 
 export class LandmarkStabilizer {
-  private readonly options: Required<LandmarkStabilizerOptions>;
+  private options: ResolvedLandmarkStabilizerOptions;
   private readonly states: Array<LandmarkState | null>;
 
   constructor(count: number, options: LandmarkStabilizerOptions = {}) {
-    this.options = { ...DEFAULT_OPTIONS, ...options };
+    this.options = { ...DEFAULT_LANDMARK_STABILIZER_OPTIONS, ...options };
     this.states = Array.from({ length: count }, () => null);
   }
 
@@ -40,6 +42,14 @@ export class LandmarkStabilizer {
 
   reset(): void {
     this.states.fill(null);
+  }
+
+  getOptions(): ResolvedLandmarkStabilizerOptions {
+    return { ...this.options };
+  }
+
+  setOptions(options: LandmarkStabilizerOptions): void {
+    this.options = { ...this.options, ...options };
   }
 
   markMissing(): void {

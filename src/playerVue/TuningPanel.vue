@@ -25,6 +25,7 @@ import type { MocapDebugRecorder } from '../mocap/diagnostics/mocapDebugRecorder
 import CalibrationBlock from './CalibrationBlock.vue';
 import BvhVerifyFold from './BvhVerifyFold.vue';
 import CaptureSection from './CaptureSection.vue';
+import MocapStabilizerControls from './MocapStabilizerControls.vue';
 
 const props = defineProps<{
   getMocap: () => MocapController | null;
@@ -143,6 +144,16 @@ onMounted(() => {
           <Slider class="dbg-slider" v-model="poleSm" :min="0.01" :max="1" :step="0.01" @update:modelValue="onPoleSm" />
         </div>
       </div>
+    </details>
+
+    <details
+      class="dbg-fold"
+      id="fold-mocap-stabilizer"
+      :open="foldOpen['fold-mocap-stabilizer']"
+      @toggle="onFoldToggle('fold-mocap-stabilizer', $event)"
+    >
+      <summary>Video capture stabilizer</summary>
+      <MocapStabilizerControls :getMocap="getMocap" />
     </details>
 
     <details
