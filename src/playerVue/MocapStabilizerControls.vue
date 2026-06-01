@@ -2,6 +2,11 @@
 import { onMounted, shallowRef } from 'vue';
 import Slider from 'primevue/slider';
 import type { MocapController } from '../mocap/pipeline/mocapController';
+import {
+  loadMocapStabilizerSettings,
+  saveMocapStabilizerSettings,
+  type MocapStabilizerControlState,
+} from './mocapStabilizerSettings';
 
 const props = defineProps<{
   getMocap: () => MocapController | null;
@@ -14,6 +19,18 @@ const bodyMaxGapFrames = shallowRef(3);
 const handMaxStep = shallowRef(0.12);
 const handMaxZStep = shallowRef(0.12);
 const handMaxGapFrames = shallowRef(2);
+
+function currentState(): MocapStabilizerControlState {
+  return {
+    prerollSec: prerollSec.value,
+    bodyMaxStep: bodyMaxStep.value,
+    bodyMaxZStep: bodyMaxZStep.value,
+    bodyMaxGapFrames: Math.round(bodyMaxGapFrames.value),
+    handMaxStep: handMaxStep.value,
+    handMaxZStep: handMaxZStep.value,
+    handMaxGapFrames: Math.round(handMaxGapFrames.value),
+  };
+}
 
 function syncFromMocap(): void {
   const mocap = props.getMocap();
@@ -28,35 +45,75 @@ function syncFromMocap(): void {
   handMaxGapFrames.value = hand.maxGapFrames;
 }
 
+function applySettings(settings: Partial<MocapStabilizerControlState>): void {
+  if (settings.prerollSec !== undefined) prerollSec.value = settings.prerollSec;
+  if (settings.bodyMaxStep !== undefined) bodyMaxStep.value = settings.bodyMaxStep;
+  if (settings.bodyMaxZStep !== undefined) bodyMaxZStep.value = settings.bodyMaxZStep;
+  if (settings.bodyMaxGapFrames !== undefined) bodyMaxGapFrames.value = settings.bodyMaxGapFrames;
+  if (settings.handMaxStep !== undefined) handMaxStep.value = settings.handMaxStep;
+  if (settings.handMaxZStep !== undefined) handMaxZStep.value = settings.handMaxZStep;
+  if (settings.handMaxGapFrames !== undefined) handMaxGapFrames.value = settings.handMaxGapFrames;
+
+  const mocap = props.getMocap();
+  if (!mocap) return;
+  const state = currentState();
+  mocap.setFileCaptureCalibrationPrerollSec(state.prerollSec);
+  mocap.setBodyStabilizerSettings({
+    maxStep: state.bodyMaxStep,
+    maxZStep: state.bodyMaxZStep,
+    maxGapFrames: state.bodyMaxGapFrames,
+  });
+  mocap.setHandStabilizerSettings({
+    maxStep: state.handMaxStep,
+    maxZStep: state.handMaxZStep,
+    maxGapFrames: state.handMaxGapFrames,
+  });
+}
+
+function persistCurrentSettings(): void {
+  saveMocapStabilizerSettings(currentState());
+}
+
 function onPreroll(): void {
   props.getMocap()?.setFileCaptureCalibrationPrerollSec(prerollSec.value);
+  persistCurrentSettings();
 }
 
 function onBodyMaxStep(): void {
   props.getMocap()?.setBodyStabilizerSettings({ maxStep: bodyMaxStep.value });
+  persistCurrentSettings();
 }
 
 function onBodyMaxZStep(): void {
   props.getMocap()?.setBodyStabilizerSettings({ maxZStep: bodyMaxZStep.value });
+  persistCurrentSettings();
 }
 
 function onBodyMaxGapFrames(): void {
   props.getMocap()?.setBodyStabilizerSettings({ maxGapFrames: Math.round(bodyMaxGapFrames.value) });
+  persistCurrentSettings();
 }
 
 function onHandMaxStep(): void {
   props.getMocap()?.setHandStabilizerSettings({ maxStep: handMaxStep.value });
+  persistCurrentSettings();
 }
 
 function onHandMaxZStep(): void {
   props.getMocap()?.setHandStabilizerSettings({ maxZStep: handMaxZStep.value });
+  persistCurrentSettings();
 }
 
 function onHandMaxGapFrames(): void {
   props.getMocap()?.setHandStabilizerSettings({ maxGapFrames: Math.round(handMaxGapFrames.value) });
+  persistCurrentSettings();
 }
 
-onMounted(syncFromMocap);
+onMounted(() => {
+  syncFromMocap();
+  const stored = loadMocapStabilizerSettings();
+  if (stored) applySettings(stored);
+});
 </script>
 
 <template>
