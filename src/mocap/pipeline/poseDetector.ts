@@ -37,7 +37,7 @@ export type PoseModelQuality = 'lite' | 'full' | 'heavy';
 
 export interface FixedVideoFileOptions {
   fps?: number;
-  afterFrame?: () => Promise<void> | void;
+  afterFrame?: (timeSec: number, frameIndex: number) => Promise<void> | void;
 }
 
 export const DEFAULT_FILE_CAPTURE_FPS = 30;
@@ -107,6 +107,30 @@ export class PoseDetector {
   private _fHandWorld: Record<'Left' | 'Right', LandmarkFilter> = {
     Left:  new LandmarkFilter(21, 1.5, 0.003),
     Right: new LandmarkFilter(21, 1.5, 0.003),
+  };
+  private _handNormStabilizer: Record<'Left' | 'Right', LandmarkStabilizer> = {
+    Left: new LandmarkStabilizer(21, {
+      maxGapFrames: 2,
+      maxStep: 0.12,
+      maxZStep: 0.12,
+    }),
+    Right: new LandmarkStabilizer(21, {
+      maxGapFrames: 2,
+      maxStep: 0.12,
+      maxZStep: 0.12,
+    }),
+  };
+  private _handWorldStabilizer: Record<'Left' | 'Right', LandmarkStabilizer> = {
+    Left: new LandmarkStabilizer(21, {
+      maxGapFrames: 2,
+      maxStep: 0.08,
+      maxZStep: 0.08,
+    }),
+    Right: new LandmarkStabilizer(21, {
+      maxGapFrames: 2,
+      maxStep: 0.08,
+      maxZStep: 0.08,
+    }),
   };
 
   onFrame: ((frame: PoseFrame) => void) | null = null;
@@ -195,7 +219,8 @@ export class PoseDetector {
     this._running = true;
 
     try {
-      for (const time of times) {
+      for (let frameIndex = 0; frameIndex < times.length; frameIndex++) {
+        const time = times[frameIndex];
         if (!this._running) {
           completed = false;
           break;
@@ -206,7 +231,7 @@ export class PoseDetector {
           break;
         }
         this._detectOnce(Math.round(time * 1000));
-        await options.afterFrame?.();
+        await options.afterFrame?.(time, frameIndex);
       }
     } finally {
       const wasRunning = this._running;
@@ -262,6 +287,8 @@ export class PoseDetector {
     this._fFace.reset();
     this._fHandNorm.Left.reset();  this._fHandNorm.Right.reset();
     this._fHandWorld.Left.reset(); this._fHandWorld.Right.reset();
+    this._handNormStabilizer.Left.reset();  this._handNormStabilizer.Right.reset();
+    this._handWorldStabilizer.Left.reset(); this._handWorldStabilizer.Right.reset();
   }
 
   dispose(): void {
@@ -354,11 +381,22 @@ export class PoseDetector {
         world: Landmark3D[],
         side: 'Left' | 'Right',
       ): void => {
-        if (!norm.length) return;
+        if (!norm.length) {
+          this._handNormStabilizer[side].markMissing();
+          this._handWorldStabilizer[side].markMissing();
+          return;
+        }
+        const stableNorm = this._filterEnabled
+          ? this._handNormStabilizer[side].stabilize(norm, tSec)
+          : norm;
+        const stableWorld = this._filterEnabled && world.length
+          ? this._handWorldStabilizer[side].stabilize(world, tSec)
+          : world;
+        if (!world.length) this._handWorldStabilizer[side].markMissing();
         hands.push({
           side,
-          landmarks:      this._filterEnabled ? this._fHandNorm [side].filter(norm,  tSec) : norm,
-          worldLandmarks: this._filterEnabled ? this._fHandWorld[side].filter(world, tSec) : world,
+          landmarks:      this._filterEnabled ? this._fHandNorm [side].filter(stableNorm,  tSec) : stableNorm,
+          worldLandmarks: this._filterEnabled ? this._fHandWorld[side].filter(stableWorld, tSec) : stableWorld,
         });
       };
 

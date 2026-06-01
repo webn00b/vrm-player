@@ -42,6 +42,19 @@ export class LandmarkStabilizer {
     this.states.fill(null);
   }
 
+  markMissing(): void {
+    for (let i = 0; i < this.states.length; i++) {
+      const state = this.states[i];
+      if (!state) continue;
+      const gapFrames = state.gapFrames + 1;
+      this.states[i] = {
+        ...state,
+        gapFrames,
+        stale: state.stale || gapFrames > this.options.maxGapFrames,
+      };
+    }
+  }
+
   private stabilizeOne<T extends StabilizedLandmark>(landmark: T, index: number): StabilizedLandmark {
     const current = { ...landmark };
     const visibility = current.visibility ?? 1;

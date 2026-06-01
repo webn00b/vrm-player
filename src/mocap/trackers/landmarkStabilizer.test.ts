@@ -59,4 +59,19 @@ describe('LandmarkStabilizer', () => {
 
     expect(out).toEqual({ x: 10, y: 10, z: 10, visibility: 1 });
   });
+
+  test('markMissing makes a returning landmark fresh after a long absence', () => {
+    const stabilizer = new LandmarkStabilizer(1, {
+      maxGapFrames: 1,
+      maxStep: 0.5,
+      maxZStep: 0.2,
+    });
+
+    stabilizer.stabilize([lm(0, 0, 0)], 0);
+    stabilizer.markMissing();
+    stabilizer.markMissing();
+    const [out] = stabilizer.stabilize([lm(10, 10, 10)], 1);
+
+    expect(out).toEqual({ x: 10, y: 10, z: 10, visibility: 1 });
+  });
 });

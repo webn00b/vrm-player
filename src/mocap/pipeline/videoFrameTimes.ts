@@ -12,3 +12,8 @@ export function fixedVideoFrameTimes(durationSec: number, fps: number): number[]
   }
   return times;
 }
+
+export function shouldRecordAfterPreroll(timeSec: number, prerollSec: number): boolean {
+  if (!Number.isFinite(prerollSec) || prerollSec <= 0) return true;
+  return timeSec >= prerollSec;
+}

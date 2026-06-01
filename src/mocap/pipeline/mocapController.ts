@@ -9,6 +9,7 @@ import { getJointOffset, type BvhRecorderCompatibility } from '../bvh/bvhRecorde
 import { MocapCalibration, type CalibrationStatus } from '../trackers/mocapCalibration';
 import { getCachedHumanoidRestAxes } from '../../humanoidRestPose';
 import { captureSnapshot, type PoseSnapshot } from '../bvh/bvhRoundtripVerifier';
+import { shouldRecordAfterPreroll } from './videoFrameTimes';
 
 export type MocapState = 'off' | 'live' | 'recording';
 export interface MocapBvhReadyOptions {
@@ -29,6 +30,8 @@ type AvatarJointPositionMap = {
   leftUpperLeg: THREE.Vector3;  leftLowerLeg: THREE.Vector3;  leftFoot: THREE.Vector3;
   rightUpperLeg: THREE.Vector3; rightLowerLeg: THREE.Vector3; rightFoot: THREE.Vector3;
 };
+
+const FILE_CAPTURE_CALIBRATION_PREROLL_SEC = 1.5;
 
 function textHash(text: string): string {
   let h = 2166136261;
@@ -250,8 +253,11 @@ export class MocapController {
     return new Promise((resolve) => requestAnimationFrame(() => resolve()));
   }
 
-  private async _awaitRenderedFixedFileCapture(): Promise<void> {
-    this._fixedFileFramePending = true;
+  private async _awaitRenderedFixedFileCapture(timeSec: number): Promise<void> {
+    this._fixedFileFramePending = shouldRecordAfterPreroll(
+      timeSec,
+      FILE_CAPTURE_CALIBRATION_PREROLL_SEC,
+    );
     await this._nextAnimationFrame();
     await this._nextAnimationFrame();
     if (this._fixedFileFramePending && this._state === 'recording') {
@@ -880,7 +886,7 @@ export class MocapController {
       this._setState('recording');
       const completed = await this.detector.processFileAtFixedFps(file, {
         fps: BVH_FRAME_RATE,
-        afterFrame: () => this._awaitRenderedFixedFileCapture(),
+        afterFrame: (timeSec) => this._awaitRenderedFixedFileCapture(timeSec),
       });
       if (!completed || this.state !== 'recording') return;
 
