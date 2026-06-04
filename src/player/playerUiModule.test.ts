@@ -1,5 +1,6 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import { clipToAgentOgiJson, downloadAgentOgiJson } from '../animationToJsonConverter';
+import { trimAnimationClip } from '../animationTrim';
 import { exportClipAsBvh } from '../bvhExportRecorder';
 import { notify, setStatus } from '../ui';
 import { playerUiModule } from './modules/playerUiModule';
@@ -60,6 +61,9 @@ vi.mock('../bvhExportRecorder', () => ({
 vi.mock('../animationToJsonConverter', () => ({
   clipToAgentOgiJson: vi.fn(() => ({ duration: 1, channels: { 'Bone Position': { times: [0], values: [0, 0, 0] } } })),
   downloadAgentOgiJson: vi.fn(),
+}));
+vi.mock('../animationTrim', () => ({
+  trimAnimationClip: vi.fn(() => ({ name: 'walk_trim', duration: 0.75 })),
 }));
 vi.mock('../gltfExportRecorder', () => ({
   exportClipAsGlb: vi.fn(async () => 'take.glb'),
@@ -126,8 +130,10 @@ function createContext(animation = createAnimationBridge()): PlayerContext {
         getItemIndexAtQueuePos: vi.fn(() => 0),
         getItemName: vi.fn(() => 'walk'),
         getClipAtItemIndex: vi.fn(() => ({ duration: 1.5 })),
-        getClipAtQueuePos: vi.fn(() => ({ duration: 1.5 })),
+        getClipAtQueuePos: vi.fn(() => ({ name: 'walk', duration: 1.5 })),
         seek: vi.fn(),
+        setPlaybackRange: vi.fn(),
+        clearPlaybackRange: vi.fn(),
         stopPreview: vi.fn(),
         onChange: vi.fn((listener) => {
           onChange = listener;
@@ -212,6 +218,30 @@ test('playerUiModule syncs active queue state and resets hip helpers when playba
   expect(animation.reexportQueue?.setActive).toHaveBeenCalledWith(2);
   expect(ctx.tooling?.hipForce.reset).toHaveBeenCalled();
   expect(ctx.tooling?.hipBalance.reset).toHaveBeenCalled();
+});
+
+test('playerUiModule saves a trimmed segment as a new queued clip', () => {
+  const animation = createAnimationBridge();
+  vi.mocked(animation.registerAndEnqueue).mockReturnValueOnce(4);
+  const ctx = createContext(animation);
+
+  playerUiModule.setup(ctx);
+  const bottomProps = vueState.mounts[0].props;
+  const onSaveTrim = bottomProps.onSaveTrim as (start: number, end: number) => void;
+
+  onSaveTrim(0.25, 1);
+
+  expect(trimAnimationClip).toHaveBeenCalledWith(
+    ctx.playback?.controller?.getClipAtQueuePos(0),
+    { start: 0.25, end: 1, name: 'walk_trim_0.25_1.00' },
+  );
+  expect(animation.registerAndEnqueue).toHaveBeenCalledWith(
+    'walk_trim_0.25_1.00',
+    null,
+    { name: 'walk_trim', duration: 0.75 },
+  );
+  expect(ctx.playback?.controller?.jumpTo).toHaveBeenCalledWith(4, { immediate: true });
+  expect(setStatus).toHaveBeenCalledWith('trim saved: walk_trim_0.25_1.00');
 });
 
 test('playerUiModule unregisters playback listener during cleanup', () => {
