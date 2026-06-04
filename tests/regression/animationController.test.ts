@@ -39,6 +39,22 @@ test('AnimationController can loop only the active queue item', () => {
   assert.equal(controller.currentTime, 0);
 });
 
+test('AnimationController loops inside an active playback range', () => {
+  const controller = new AnimationController(buildMockVRM());
+  controller.register('gesture', makeClip('gesture', 3));
+  controller.register('next', makeClip('next', 1));
+  controller.addToQueue(0);
+  controller.addToQueue(1);
+
+  controller.seek(1);
+  controller.setPlaybackRange(1, 2);
+  controller.update(1.2);
+
+  assert.equal(controller.currentQueuePos, 0);
+  assert.equal(controller.currentTime, 1);
+  assert.deepEqual(controller.playbackRange, { start: 1, end: 2 });
+});
+
 test('AnimationController onChange unsubscribe only clears the same listener', () => {
   const controller = makeController();
   let firstCalls = 0;

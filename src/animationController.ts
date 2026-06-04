@@ -20,6 +20,11 @@ interface CrossfadeState {
   duration: number;
 }
 
+export interface PlaybackRange {
+  start: number;
+  end: number;
+}
+
 function smoothstep(t: number): number {
   return t * t * (3 - 2 * t);
 }
@@ -49,6 +54,7 @@ export class AnimationController {
   private previewName = '';
   private previewDuration = 0;
   private previewTime = 0;
+  private activePlaybackRange: PlaybackRange | null = null;
 
   constructor(vrm: VRM) {
     this.mixer = new THREE.AnimationMixer(vrm.scene);
@@ -107,6 +113,7 @@ export class AnimationController {
     this.queue = [];
     this.queuePos = -1;
     this.prevItemIndex = -1;
+    this.clearPlaybackRange();
     this.stopAll();
   }
 
@@ -227,6 +234,10 @@ export class AnimationController {
     return this.items[this.queue[this.queuePos]]?.name ?? '';
   }
 
+  get playbackRange(): PlaybackRange | null {
+    return this.activePlaybackRange ? { ...this.activePlaybackRange } : null;
+  }
+
   /** Seek the active clip to an absolute time in seconds (clamped to duration). */
   seek(seconds: number): void {
     if (this.previewAction) {
@@ -241,6 +252,19 @@ export class AnimationController {
     const t = Math.max(0, Math.min(seconds, Math.max(item.duration - 1e-3, 0)));
     item.action.time = t;
     this.timeInCurrent = t;
+  }
+
+  setPlaybackRange(start: number, end: number): void {
+    const duration = this.currentDuration;
+    if (duration <= 0) throw new Error('No active clip to range-loop');
+    const rangeStart = Math.max(0, Math.min(duration, start));
+    const rangeEnd = Math.max(0, Math.min(duration, end));
+    if (rangeEnd <= rangeStart) throw new Error('Playback range end must be after start');
+    this.activePlaybackRange = { start: rangeStart, end: rangeEnd };
+  }
+
+  clearPlaybackRange(): void {
+    this.activePlaybackRange = null;
   }
 
   next(): void {
@@ -294,6 +318,10 @@ export class AnimationController {
     if (this.previewAction) {
       if (!this.paused) {
         this.previewTime += delta;
+        if (this.activePlaybackRange && this.previewTime >= this.activePlaybackRange.end) {
+          this.seek(this.activePlaybackRange.start);
+          return;
+        }
         if (this.previewDuration > 0 && this.previewTime >= this.previewDuration) this.previewTime = 0;
       }
       return;
@@ -307,6 +335,11 @@ export class AnimationController {
 
     // Auto-advance when current clip is about to end
     this.timeInCurrent += delta;
+    if (this.activePlaybackRange && this.timeInCurrent >= this.activePlaybackRange.end) {
+      this.seek(this.activePlaybackRange.start);
+      return;
+    }
+
     const currentItem = this.items[this.queue[this.queuePos]];
     const triggerAt = Math.max(currentItem.duration - CROSSFADE_DURATION, 0);
 
@@ -322,6 +355,7 @@ export class AnimationController {
   private activateQueuePos(pos: number, options: { immediate?: boolean } = {}): void {
     if (pos < 0 || pos >= this.queue.length) return;
     this.stopPreview();
+    this.clearPlaybackRange();
     const itemIndex = this.queue[pos];
     const next = this.items[itemIndex];
     if (!next) return;

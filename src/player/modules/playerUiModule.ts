@@ -4,6 +4,7 @@
 import { createApp } from 'vue';
 import type { AnimationController, QueueLoopMode } from '../../animationController';
 import { clipToAgentOgiJson, downloadAgentOgiJson } from '../../animationToJsonConverter';
+import { trimAnimationClip } from '../../animationTrim';
 import { exportClipAsBvh } from '../../bvhExportRecorder';
 import type { ParsedBVH } from '../../bvhLoader';
 import { exportClipAsGlb } from '../../gltfExportRecorder';
@@ -160,7 +161,35 @@ export const playerUiModule: PlayerModule = {
       for (const fn of fns) if (fn) cleanupFns.push(fn);
     };
 
-    const bottomBarApp = createApp(BottomBar, { controller });
+    const saveTrimSegment = (start: number, end: number): void => {
+      const queuePos = controller.currentQueuePos;
+      const sourceClip = controller.getClipAtQueuePos(queuePos);
+      if (!sourceClip) {
+        const msg = 'No active queue clip to trim.';
+        setStatus('trim unavailable: no active clip');
+        notify({ severity: 'warn', summary: 'Trim unavailable', detail: msg, life: 3600 });
+        return;
+      }
+
+      const sourceName = sourceClip.name || controller.currentName || 'clip';
+      const segmentName = `${sourceName}_trim_${start.toFixed(2)}_${end.toFixed(2)}`;
+      try {
+        const trimmed = trimAnimationClip(sourceClip, { start, end, name: segmentName });
+        const newQueuePos = animation.registerAndEnqueue(segmentName, null, trimmed);
+        controller.jumpTo(newQueuePos, { immediate: true });
+        setStatus(`trim saved: ${segmentName}`);
+        notify({ severity: 'success', summary: 'Trim saved', detail: segmentName });
+      } catch (error) {
+        const msg = (error as Error).message;
+        setStatus(`trim failed: ${msg}`);
+        notify({ severity: 'error', summary: 'Trim failed', detail: msg, life: 4200 });
+      }
+    };
+
+    const bottomBarApp = createApp(BottomBar, {
+      controller,
+      onSaveTrim: saveTrimSegment,
+    });
     installPrimeVueOn(bottomBarApp);
     bottomBarApp.mount('#bottom-bar');
     registerCleanup(() => bottomBarApp.unmount());
