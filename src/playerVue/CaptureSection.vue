@@ -60,7 +60,6 @@ const currentSource = ref<CaptureSource>(
   validCaptureSource(localStorage.getItem(CAPTURE_SOURCE_STORAGE_KEY)),
 );
 const videoAgentOgiEnabled = ref(false);
-const videoAgentOgiValidationEnabled = ref(false);
 const statusText    = ref('📷 Camera off');
 const framesText    = ref('');
 const sourceInfo    = ref('');
@@ -96,7 +95,6 @@ const { onVideoFileChange } = useCaptureVideoFile({
   getMocap: props.getMocap,
   dbgRecorder: props.dbgRecorder,
   agentOgiEnabled: videoAgentOgiEnabled,
-  validationEnabled: videoAgentOgiValidationEnabled,
   statusText,
 });
 
@@ -350,7 +348,6 @@ const {
   getMocap: props.getMocap,
   mocapVrm: props.mocapVrm,
   agentOgiEnabled: videoAgentOgiEnabled,
-  validationEnabled: videoAgentOgiValidationEnabled,
   trackTimeout,
 });
 
@@ -399,7 +396,6 @@ onUnmounted(() => {
     <CaptureAgentOptions
       v-if="currentSource === 'video'"
       v-model:agent-ogi-enabled="videoAgentOgiEnabled"
-      v-model:validation-enabled="videoAgentOgiValidationEnabled"
     />
 
     <CaptureMultiviewPanel

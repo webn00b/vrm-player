@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import type { VRMHumanBoneName } from '@pixiv/three-vrm';
-import type { BoneConstraintProfileId } from './validation/boneConstraints';
 import type { createScene } from './scene';
 import type { loadVRM } from './vrmLoader';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
@@ -10,6 +9,10 @@ import {
   CLIP_VALIDATION_EXCLUDED_BONES,
 } from './mocap/diagnostics/mocapValidationBones';
 import { renderLoopHooks } from './renderLoopHooks';
+import {
+  validationSettings,
+  type ValidationSettings,
+} from './validation/validationSettings';
 
 type CleanupFn = () => void;
 type DebugVizCache = {
@@ -27,16 +30,40 @@ type DebugVizCache = {
   };
 };
 
-export function selectValidationExcludedBones(params: {
+export interface ValidationClampPlan {
+  shouldClamp: boolean;
+  excludedBones?: ReadonlySet<VRMHumanBoneName>;
+}
+
+export function selectValidationClampPlan(params: {
   hasBvhActive: boolean;
   mocapState: MocapState;
-  validatorProfileId: BoneConstraintProfileId;
-}): ReadonlySet<VRMHumanBoneName> | undefined {
-  if (params.hasBvhActive) return CLIP_VALIDATION_EXCLUDED_BONES;
-  if (params.mocapState !== 'off' && params.validatorProfileId !== 'mixamoLive') {
-    return MOCAP_VALIDATION_EXCLUDED_BONES;
+  validatorEnabled: boolean;
+  settings: ValidationSettings;
+}): ValidationClampPlan {
+  if (!params.validatorEnabled) return { shouldClamp: false };
+
+  if (params.hasBvhActive) {
+    if (params.settings.playbackClampMode === 'off') return { shouldClamp: false };
+    return {
+      shouldClamp: true,
+      excludedBones: params.settings.playbackClampMode === 'safe'
+        ? CLIP_VALIDATION_EXCLUDED_BONES
+        : undefined,
+    };
   }
-  return undefined;
+
+  if (params.mocapState !== 'off') {
+    if (params.settings.recordingClampMode === 'off') return { shouldClamp: false };
+    return {
+      shouldClamp: true,
+      excludedBones: params.settings.recordingClampMode === 'safe'
+        ? MOCAP_VALIDATION_EXCLUDED_BONES
+        : undefined,
+    };
+  }
+
+  return { shouldClamp: true };
 }
 
 export function startRenderLoop(
@@ -107,12 +134,13 @@ export function startRenderLoop(
     // on arms/legs/hands/fingers, so a self-recorded clip plays back to the
     // same on-screen pose it was captured from.
     if (!renderLoopHooks.suspendValidatorClamp) {
-      const excluded = selectValidationExcludedBones({
+      const clampPlan = selectValidationClampPlan({
         hasBvhActive,
         mocapState: mocap.state,
-        validatorProfileId: validator.profileId,
+        validatorEnabled: validator.enabled,
+        settings: validationSettings,
       });
-      validator.clampAll(excluded);
+      if (clampPlan.shouldClamp) validator.clampAll(clampPlan.excludedBones);
     }
 
     // 3c1. Skeleton logger — streaming bone diagnostics (≤1 ms when active,

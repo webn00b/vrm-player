@@ -42,6 +42,7 @@ vi.mock('vue', () => ({
 
 vi.mock('../playerVue/BottomBar.vue', () => ({ default: 'BottomBar' }));
 vi.mock('../playerVue/SceneToolbar.vue', () => ({ default: 'SceneToolbar' }));
+vi.mock('../playerVue/ValidationControlsPanel.vue', () => ({ default: 'ValidationControlsPanel' }));
 vi.mock('../playerVue/PlayerStartPanel.vue', () => ({ default: 'PlayerStartPanel' }));
 vi.mock('../playerVue/QueuePanel.vue', () => ({ default: 'QueuePanel' }));
 vi.mock('../playerVue/RetargetLab.vue', () => ({ default: 'RetargetLab' }));
@@ -196,19 +197,20 @@ test('playerUiModule mounts player Vue islands, owns queue handles, and cleans t
   expect(vueState.mounts.map((mount) => mount.component)).toEqual([
     'BottomBar',
     'SceneToolbar',
+    'ValidationControlsPanel',
     'PlayerStartPanel',
     'QueuePanel',
     'QueuePanel',
     'RetargetLab',
   ]);
   expect(ctx.vrm?.scene.visible).toBe(false);
-  expect(animation.queue).toBe(vueState.mounts[3].handle);
-  expect(animation.reexportQueue).toBe(vueState.mounts[4].handle);
+  expect(animation.queue).toBe(vueState.mounts[4].handle);
+  expect(animation.reexportQueue).toBe(vueState.mounts[5].handle);
 
   cleanup?.();
 
   const unmountOrders = vueState.mounts.map((mount) => mount.unmount.mock.invocationCallOrder[0]);
-  expect(vueState.mounts.map((mount) => mount.unmount.mock.calls.length)).toEqual([1, 1, 1, 1, 1, 1]);
+  expect(vueState.mounts.map((mount) => mount.unmount.mock.calls.length)).toEqual([1, 1, 1, 1, 1, 1, 1]);
   expect(unmountOrders).toEqual([...unmountOrders].sort((a, b) => b - a));
   expect(animation.queue).toBeNull();
   expect(animation.reexportQueue).toBeNull();
@@ -292,7 +294,7 @@ test('playerUiModule keeps BVH export failure status and toast behavior', async 
   const ctx = createContext();
 
   playerUiModule.setup(ctx);
-  const onExportBvh = vueState.mounts[3].props.onExportBvh as (queueIndex: number) => Promise<unknown>;
+  const onExportBvh = vueState.mounts[4].props.onExportBvh as (queueIndex: number) => Promise<unknown>;
 
   await expect(onExportBvh(0)).rejects.toThrow(error);
 
@@ -310,7 +312,7 @@ test('playerUiModule exports queued clips as agent_ogi_front JSON', async () => 
   const ctx = createContext();
 
   playerUiModule.setup(ctx);
-  const onExportAgentOgi = vueState.mounts[3].props.onExportAgentOgi as (queueIndex: number) => Promise<unknown>;
+  const onExportAgentOgi = vueState.mounts[4].props.onExportAgentOgi as (queueIndex: number) => Promise<unknown>;
 
   await onExportAgentOgi(0);
 

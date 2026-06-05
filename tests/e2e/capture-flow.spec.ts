@@ -89,8 +89,9 @@ test.describe('Capture section UI', () => {
   test('single-pose export also saves agent_ogi JSON when video checkbox is enabled', async ({ page }) => {
     await page.getByTestId('capture-src-video').click();
     await page.getByTestId('capture-video-agent-ogi-toggle').check();
-    await expect(page.getByTestId('capture-video-agent-ogi-validation-toggle')).toBeVisible();
-    await expect(page.getByText('validation', { exact: true })).toBeVisible();
+    const validationControls = page.getByRole('region', { name: 'Validation controls' });
+    await expect(validationControls).toBeVisible();
+    await expect(validationControls.getByText('Import')).toBeVisible();
 
     await expect(page.getByTestId('single-pose-label')).toHaveText('export single pose ( for agent_ogi)');
 

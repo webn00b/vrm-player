@@ -9,7 +9,6 @@
 
 import { ref, onMounted, onUnmounted } from 'vue';
 import type { BoneValidator } from '../validation/boneValidator';
-import type { BoneConstraintProfileId } from '../validation/boneConstraints';
 import type { SkeletonLogger } from '../diagnostics/skeletonLogger';
 import type { MotionTraceRecorder } from '../diagnostics/motionTraceRecorder';
 import type { MocapController } from '../mocap/pipeline/mocapController';
@@ -23,8 +22,6 @@ const props = defineProps<{
   getController: () => AnimationController | null;
 }>();
 
-const enabled  = ref(props.validator.enabled);
-const profileId = ref<BoneConstraintProfileId>(props.validator.profileId);
 const valStat  = ref('clamped/frame: 0');
 const valWorst = ref('worst: —');
 
@@ -36,7 +33,6 @@ const traceStat   = ref('');
 let pollTimer = 0;
 
 onMounted(() => {
-  enabled.value = props.validator.enabled;
   pollTimer = window.setInterval(() => {
     // Validator stats — always polled, cheap.
     const s = props.validator.getStats();
@@ -60,17 +56,8 @@ onMounted(() => {
 });
 onUnmounted(() => clearInterval(pollTimer));
 
-function toggleValidator(): void {
-  enabled.value = !enabled.value;
-  props.validator.setEnabled(enabled.value);
-}
 function dumpConstraints(): void {
   console.log('[validator] default bone constraints:', props.validator.getConstraints());
-}
-function onProfileChange(event: Event): void {
-  const next = (event.target as HTMLSelectElement).value as BoneConstraintProfileId;
-  profileId.value = next;
-  props.validator.setProfile(next);
 }
 
 // ── Skel-log ───────────────────────────────────────────────────────────────
@@ -129,22 +116,8 @@ function downloadTrace(): void {
 </script>
 
 <template>
-  <div class="dbg-row">
-    <span class="dbg-label">🦴 Clamp bone rotations</span>
-    <button class="dbg-toggle" :class="{ off: !enabled }" @click="toggleValidator">
-      {{ enabled ? 'ON' : 'OFF' }}
-    </button>
-  </div>
   <div class="dbg-stat">{{ valStat }}</div>
   <div class="dbg-stat">{{ valWorst }}</div>
-
-  <div class="dbg-row">
-    <span class="dbg-label">ROM profile</span>
-    <select class="dbg-select" :value="profileId" @change="onProfileChange">
-      <option value="default">Default</option>
-      <option value="mixamoLive">Mixamo Live</option>
-    </select>
-  </div>
 
   <div class="dbg-row">
     <span class="dbg-label" style="opacity:.6;font-size:11px">dump active profile to console</span>

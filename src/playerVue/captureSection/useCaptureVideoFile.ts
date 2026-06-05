@@ -7,7 +7,6 @@ interface CaptureVideoFileOptions {
   getMocap: () => MocapController | null;
   dbgRecorder: MocapDebugRecorder;
   agentOgiEnabled: Ref<boolean>;
-  validationEnabled: Ref<boolean>;
   statusText: Ref<string>;
 }
 
@@ -20,7 +19,7 @@ export function useCaptureVideoFile(options: CaptureVideoFileOptions) {
     const mocap = options.getMocap();
     if (!mocap || mocap.state !== 'off') return;
     mocap.exportAgentOgiJsonForVideo = options.agentOgiEnabled.value;
-    mocap.clampAgentOgiOutOfRangeForVideo = options.validationEnabled.value;
+    mocap.clampAgentOgiOutOfRangeForVideo = false;
     options.dbgRecorder.start(Infinity);
     notify({ severity: 'info', summary: 'Processing video', detail: file.name, life: 2200 });
     try {

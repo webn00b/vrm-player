@@ -143,7 +143,7 @@ test('mocapModule stores mocap systems and replays recorded BVH through the anim
   expect(registerAndEnqueue).toHaveBeenCalledWith(
     'take-1',
     { text: 'HIERARCHY' },
-    { name: 'take-1', duration: 2 },
+    { name: 'take-1', duration: 2, clampOutOfRange: false },
     expect.any(File),
   );
   expect(ctx.playback?.controller?.jumpTo).toHaveBeenCalledWith(4, { immediate: true });
@@ -160,7 +160,7 @@ test('mocapModule downloads agent_ogi_front JSON for video capture when requeste
   });
 
   expect(clipToAgentOgiJson).toHaveBeenCalledWith(
-    { name: 'take-1', duration: 2 },
+    { name: 'take-1', duration: 2, clampOutOfRange: false },
     ctx.vrm,
   );
   expect(downloadAgentOgiJson).toHaveBeenCalledWith(
@@ -184,6 +184,7 @@ test('mocapModule clamps video agent_ogi_front JSON when validation is requested
     ctx.vrm,
     { text: 'HIERARCHY' },
     'take-1',
+    { clampOutOfRange: false },
   );
   expect(retargetBvhToVrm).toHaveBeenNthCalledWith(
     2,
