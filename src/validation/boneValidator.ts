@@ -14,6 +14,7 @@ import type { VRM } from '@pixiv/three-vrm';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import {
   DEFAULT_BONE_CONSTRAINTS,
+  type BoneConstraintProfileId,
   mergeConstraints,
   type RotationConstraint,
 } from './boneConstraints';
@@ -35,14 +36,17 @@ const _quat = new THREE.Quaternion();
 export class BoneValidator {
   private vrm: VRM;
   private constraints: Partial<Record<VRMHumanBoneName, RotationConstraint>>;
+  private overrides?: Partial<Record<VRMHumanBoneName, RotationConstraint>>;
   private nodeCache = new Map<VRMHumanBoneName, THREE.Object3D>();
   private stats: ValidationStats = { clampedThisFrame: 0, worstBone: null, worstDelta: 0 };
 
   enabled = true;
+  profileId: BoneConstraintProfileId = 'default';
 
   constructor(vrm: VRM, overrides?: Partial<Record<VRMHumanBoneName, RotationConstraint>>) {
     this.vrm = vrm;
-    this.constraints = mergeConstraints(overrides);
+    this.overrides = overrides;
+    this.constraints = mergeConstraints(overrides, this.profileId);
     this.rebuildCache();
   }
 
@@ -125,6 +129,16 @@ export class BoneValidator {
 
   setEnabled(on: boolean): void {
     this.enabled = on;
+  }
+
+  setProfile(profileId: BoneConstraintProfileId): void {
+    if (this.profileId === profileId) return;
+    this.profileId = profileId;
+    this.constraints = mergeConstraints(this.overrides, this.profileId);
+    this.rebuildCache();
+    this.stats.clampedThisFrame = 0;
+    this.stats.worstBone = null;
+    this.stats.worstDelta = 0;
   }
 
   getStats(): ValidationStats {

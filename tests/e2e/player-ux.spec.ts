@@ -17,6 +17,16 @@ test.describe('Player UX shell', () => {
     await expect(startPanel.getByRole('button', { name: /^Play$/i })).toBeDisabled();
   });
 
+  test('bottom timeline exposes trim handles without In and Out buttons', async ({ page }) => {
+    const transport = page.locator('#transport');
+
+    await expect(page.locator('#tp-timeline')).toBeVisible();
+    await expect(page.locator('.timeline-trim-handle')).toHaveCount(2);
+    await expect(page.locator('.timeline-trim-selection')).toHaveCount(1);
+    await expect(transport.getByRole('button', { name: 'In', exact: true })).toHaveCount(0);
+    await expect(transport.getByRole('button', { name: 'Out', exact: true })).toHaveCount(0);
+  });
+
   test('scene toolbar buttons and shortcuts share state', async ({ page }) => {
     const model = page.getByLabel('Show model');
     const skeleton = page.getByLabel('Show skeleton');

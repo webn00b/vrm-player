@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import type { VRMHumanBoneName } from '@pixiv/three-vrm';
+import type { BoneConstraintProfileId } from './validation/boneConstraints';
 import type { createScene } from './scene';
 import type { loadVRM } from './vrmLoader';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
+import type { MocapState } from './mocap/pipeline/mocapController';
 import {
   MOCAP_VALIDATION_EXCLUDED_BONES,
   CLIP_VALIDATION_EXCLUDED_BONES,
@@ -24,6 +26,18 @@ type DebugVizCache = {
     rightFoot: THREE.Vector3;
   };
 };
+
+export function selectValidationExcludedBones(params: {
+  hasBvhActive: boolean;
+  mocapState: MocapState;
+  validatorProfileId: BoneConstraintProfileId;
+}): ReadonlySet<VRMHumanBoneName> | undefined {
+  if (params.hasBvhActive) return CLIP_VALIDATION_EXCLUDED_BONES;
+  if (params.mocapState !== 'off' && params.validatorProfileId !== 'mixamoLive') {
+    return MOCAP_VALIDATION_EXCLUDED_BONES;
+  }
+  return undefined;
+}
 
 export function startRenderLoop(
   ctx: ReturnType<typeof createScene>,
@@ -93,13 +107,11 @@ export function startRenderLoop(
     // on arms/legs/hands/fingers, so a self-recorded clip plays back to the
     // same on-screen pose it was captured from.
     if (!renderLoopHooks.suspendValidatorClamp) {
-      // Clip playback uses a wider exclusion (adds hips) — see comment on
-      // CLIP_VALIDATION_EXCLUDED_BONES. Live mocap keeps the original set.
-      const excluded = hasBvhActive
-        ? CLIP_VALIDATION_EXCLUDED_BONES
-        : mocap.state !== 'off'
-          ? MOCAP_VALIDATION_EXCLUDED_BONES
-          : undefined;
+      const excluded = selectValidationExcludedBones({
+        hasBvhActive,
+        mocapState: mocap.state,
+        validatorProfileId: validator.profileId,
+      });
       validator.clampAll(excluded);
     }
 

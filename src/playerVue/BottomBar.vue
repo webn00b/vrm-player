@@ -5,14 +5,22 @@
  */
 
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import type { CSSProperties } from 'vue';
 import Button from 'primevue/button';
-import Slider from 'primevue/slider';
 import type { AnimationController } from '../animationController';
 import { formatLibraryName, statusText } from '../ui';
+import {
+  clampTrimHandleDrag,
+  pointerPercentToSeconds,
+  type TrimEdge,
+} from './bottomBarTrimRange';
+
+const MIN_TRIM_DURATION = 0.05;
+const TIMELINE_KEY_STEP = 0.1;
 
 const props = defineProps<{
   controller: AnimationController;
-  onSaveTrim?: (start: number, end: number) => void;
+  onSaveTrim?: (start: number, end: number) => void | Promise<void>;
 }>();
 
 const hasActive = ref(false);
@@ -25,9 +33,13 @@ const durationSeconds = ref(0);
 const trimStart = ref(0);
 const trimEnd = ref(0);
 const loopSegment = ref(false);
+const savingTrim = ref(false);
+const timelineRef = ref<HTMLElement | null>(null);
+const activeDrag = ref<'seek' | TrimEdge | null>(null);
 
 let timer = 0;
 let lastClipSignature = '';
+let activePointerId: number | null = null;
 
 function formatTime(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) sec = 0;
@@ -76,13 +88,23 @@ function togglePaused(): void {
   refresh();
 }
 
-function seekToProgress(value: number | number[]): void {
+function seekToSeconds(seconds: number): void {
   const dur = props.controller.currentDuration;
   if (dur <= 0) return;
-  const pct = Array.isArray(value) ? value[0] : value;
-  const frac = Math.max(0, Math.min(1, pct / 100));
-  props.controller.seek(frac * dur);
+  props.controller.seek(Math.max(0, Math.min(seconds, dur)));
   refresh();
+}
+
+function pointerPercent(event: PointerEvent): number {
+  const el = timelineRef.value;
+  if (!el) return 0;
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0) return 0;
+  return ((event.clientX - rect.left) / rect.width) * 100;
+}
+
+function pointerSeconds(event: PointerEvent): number {
+  return pointerPercentToSeconds(pointerPercent(event), durationSeconds.value);
 }
 
 const trimValid = computed(() =>
@@ -94,6 +116,35 @@ const trimValid = computed(() =>
 const trimLabel = computed(() =>
   `${formatTime(trimStart.value)}-${formatTime(trimEnd.value)}`,
 );
+
+const trimStartPct = computed(() =>
+  durationSeconds.value > 0 ? Math.min(trimStart.value / durationSeconds.value, 1) * 100 : 0,
+);
+
+const trimEndPct = computed(() =>
+  durationSeconds.value > 0 ? Math.min(trimEnd.value / durationSeconds.value, 1) * 100 : 0,
+);
+
+const timelineProgressStyle = computed<CSSProperties>(() => ({
+  width: `${progressPct.value}%`,
+}));
+
+const trimSelectionStyle = computed<CSSProperties>(() => ({
+  left: `${trimStartPct.value}%`,
+  width: `${Math.max(0, trimEndPct.value - trimStartPct.value)}%`,
+}));
+
+const trimStartHandleStyle = computed<CSSProperties>(() => ({
+  left: `${trimStartPct.value}%`,
+}));
+
+const trimEndHandleStyle = computed<CSSProperties>(() => ({
+  left: `${trimEndPct.value}%`,
+}));
+
+const playheadStyle = computed<CSSProperties>(() => ({
+  left: `${progressPct.value}%`,
+}));
 
 function syncLoopRange(): void {
   if (!loopSegment.value) {
@@ -108,18 +159,89 @@ function syncLoopRange(): void {
   props.controller.setPlaybackRange(trimStart.value, trimEnd.value);
 }
 
-function markTrimIn(): void {
-  if (!hasActive.value) return;
-  trimStart.value = Math.max(0, Math.min(currentSeconds.value, durationSeconds.value));
-  if (trimEnd.value <= trimStart.value) trimEnd.value = durationSeconds.value;
+function setTrimEdge(edge: TrimEdge, seconds: number): void {
+  if (!hasActive.value || durationSeconds.value <= 0) return;
+  const range = clampTrimHandleDrag({
+    edge,
+    seconds,
+    start: trimStart.value,
+    end: trimEnd.value,
+    duration: durationSeconds.value,
+    minDuration: MIN_TRIM_DURATION,
+  });
+  trimStart.value = range.start;
+  trimEnd.value = range.end;
   syncLoopRange();
 }
 
-function markTrimOut(): void {
+function beginSeekDrag(event: PointerEvent): void {
   if (!hasActive.value) return;
-  trimEnd.value = Math.max(0, Math.min(currentSeconds.value, durationSeconds.value));
-  if (trimStart.value >= trimEnd.value) trimStart.value = 0;
-  syncLoopRange();
+  event.preventDefault();
+  activeDrag.value = 'seek';
+  activePointerId = event.pointerId;
+  seekToSeconds(pointerSeconds(event));
+}
+
+function beginTrimDrag(edge: TrimEdge, event: PointerEvent): void {
+  if (!hasActive.value) return;
+  event.preventDefault();
+  activeDrag.value = edge;
+  activePointerId = event.pointerId;
+  setTrimEdge(edge, pointerSeconds(event));
+}
+
+function onPointerMove(event: PointerEvent): void {
+  if (!activeDrag.value) return;
+  if (activePointerId !== null && event.pointerId !== activePointerId) return;
+  event.preventDefault();
+  if (activeDrag.value === 'seek') {
+    seekToSeconds(pointerSeconds(event));
+    return;
+  }
+  setTrimEdge(activeDrag.value, pointerSeconds(event));
+}
+
+function endPointerDrag(event?: PointerEvent): void {
+  if (event && activePointerId !== null && event.pointerId !== activePointerId) return;
+  activeDrag.value = null;
+  activePointerId = null;
+}
+
+function onTimelineKeydown(event: KeyboardEvent): void {
+  if (!hasActive.value) return;
+  const step = event.shiftKey ? 1 : TIMELINE_KEY_STEP;
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    seekToSeconds(currentSeconds.value - step);
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    seekToSeconds(currentSeconds.value + step);
+  } else if (event.key === 'Home') {
+    event.preventDefault();
+    seekToSeconds(0);
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    seekToSeconds(durationSeconds.value);
+  }
+}
+
+function onTrimHandleKeydown(edge: TrimEdge, event: KeyboardEvent): void {
+  if (!hasActive.value) return;
+  const step = event.shiftKey ? 1 : TIMELINE_KEY_STEP;
+  const current = edge === 'start' ? trimStart.value : trimEnd.value;
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    setTrimEdge(edge, current - step);
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    setTrimEdge(edge, current + step);
+  } else if (event.key === 'Home') {
+    event.preventDefault();
+    setTrimEdge(edge, 0);
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    setTrimEdge(edge, durationSeconds.value);
+  }
 }
 
 function toggleLoopSegment(): void {
@@ -127,20 +249,33 @@ function toggleLoopSegment(): void {
   syncLoopRange();
 }
 
-function saveTrim(): void {
-  if (!trimValid.value) return;
-  props.onSaveTrim?.(trimStart.value, trimEnd.value);
-  loopSegment.value = false;
-  props.controller.clearPlaybackRange();
-  refresh();
+async function saveTrim(): Promise<void> {
+  if (!trimValid.value || savingTrim.value) return;
+  savingTrim.value = true;
+  try {
+    await props.onSaveTrim?.(trimStart.value, trimEnd.value);
+    loopSegment.value = false;
+    props.controller.clearPlaybackRange();
+    refresh();
+  } finally {
+    savingTrim.value = false;
+  }
 }
 
 onMounted(() => {
   refresh();
   timer = window.setInterval(refresh, 100);
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', endPointerDrag);
+  window.addEventListener('pointercancel', endPointerDrag);
 });
 
-onUnmounted(() => clearInterval(timer));
+onUnmounted(() => {
+  clearInterval(timer);
+  window.removeEventListener('pointermove', onPointerMove);
+  window.removeEventListener('pointerup', endPointerDrag);
+  window.removeEventListener('pointercancel', endPointerDrag);
+});
 </script>
 
 <template>
@@ -177,38 +312,52 @@ onUnmounted(() => clearInterval(timer));
       aria-label="Next"
       @click="controller.next()"
     />
-    <Slider
+    <div
       id="tp-timeline"
-      v-model="progressPct"
-      :min="0"
-      :max="100"
-      :step="0.1"
+      ref="timelineRef"
+      role="group"
+      tabindex="0"
       aria-label="Timeline"
-      @update:modelValue="seekToProgress"
-    />
+      @pointerdown="beginSeekDrag"
+      @keydown="onTimelineKeydown"
+    >
+      <div class="timeline-track">
+        <div class="timeline-progress" :style="timelineProgressStyle" />
+        <div class="timeline-trim-selection" :style="trimSelectionStyle" />
+      </div>
+      <span class="timeline-playhead" :style="playheadStyle" aria-hidden="true" />
+      <button
+        class="timeline-trim-handle timeline-trim-start"
+        type="button"
+        role="slider"
+        title="Trim start"
+        aria-label="Trim start"
+        :aria-valuemin="0"
+        :aria-valuemax="Number(durationSeconds.toFixed(2))"
+        :aria-valuenow="Number(trimStart.toFixed(2))"
+        :style="trimStartHandleStyle"
+        :disabled="!hasActive"
+        @pointerdown.stop="beginTrimDrag('start', $event)"
+        @keydown.stop="onTrimHandleKeydown('start', $event)"
+      />
+      <button
+        class="timeline-trim-handle timeline-trim-end"
+        type="button"
+        role="slider"
+        title="Trim end"
+        aria-label="Trim end"
+        :aria-valuemin="0"
+        :aria-valuemax="Number(durationSeconds.toFixed(2))"
+        :aria-valuenow="Number(trimEnd.toFixed(2))"
+        :style="trimEndHandleStyle"
+        :disabled="!hasActive"
+        @pointerdown.stop="beginTrimDrag('end', $event)"
+        @keydown.stop="onTrimHandleKeydown('end', $event)"
+      />
+    </div>
     <span id="tp-time">{{ currentTime }}</span>
     <div class="trim-tools" aria-label="Trim segment">
       <span class="trim-range">{{ trimLabel }}</span>
-      <Button
-        class="tp-btn trim-btn"
-        icon="pi pi-sign-in"
-        label="In"
-        text
-        size="small"
-        title="Set trim start to current time"
-        :disabled="!hasActive"
-        @click="markTrimIn"
-      />
-      <Button
-        class="tp-btn trim-btn"
-        icon="pi pi-sign-out"
-        label="Out"
-        text
-        size="small"
-        title="Set trim end to current time"
-        :disabled="!hasActive"
-        @click="markTrimOut"
-      />
       <Button
         class="tp-btn trim-btn"
         :class="{ active: loopSegment }"
@@ -224,8 +373,8 @@ onUnmounted(() => clearInterval(timer));
         icon="pi pi-save"
         text
         size="small"
-        title="Save selected trim segment to queue"
-        :disabled="!trimValid || !props.onSaveTrim"
+        title="Save selected trim segment"
+        :disabled="!trimValid || !props.onSaveTrim || savingTrim"
         @click="saveTrim"
       />
     </div>
@@ -258,6 +407,95 @@ onUnmounted(() => clearInterval(timer));
   gap: 4px;
   min-width: 0;
   padding-left: 2px;
+}
+
+#tp-timeline {
+  isolation: isolate;
+  touch-action: none;
+  overflow: visible;
+}
+
+.timeline-track {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.timeline-progress,
+.timeline-trim-selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.timeline-progress {
+  background: linear-gradient(90deg, #3b5bdb, #6186ff);
+  box-shadow: 0 0 5px rgba(59, 91, 219, 0.35);
+}
+
+.timeline-trim-selection {
+  background: rgba(30, 188, 196, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(185, 251, 255, 0.32);
+  z-index: 1;
+}
+
+.timeline-playhead,
+.timeline-trim-handle {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+}
+
+.timeline-playhead {
+  width: 2px;
+  height: 16px;
+  border-radius: 999px;
+  background: #f8fbff;
+  box-shadow: 0 0 8px rgba(248, 251, 255, 0.45);
+  pointer-events: none;
+}
+
+.timeline-trim-handle {
+  width: 11px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(185, 251, 255, 0.78);
+  border-radius: 4px;
+  background: #102a30;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.38);
+  cursor: ew-resize;
+}
+
+.timeline-trim-handle::before {
+  content: "";
+  position: absolute;
+  inset: 4px 4px;
+  border-left: 1px solid rgba(185, 251, 255, 0.55);
+  border-right: 1px solid rgba(185, 251, 255, 0.55);
+}
+
+.timeline-trim-handle:hover,
+.timeline-trim-handle:focus-visible {
+  border-color: #b9fbff;
+  background: #12363d;
+  outline: none;
+}
+
+.timeline-trim-start {
+  z-index: 4;
+}
+
+.timeline-trim-end {
+  z-index: 5;
+}
+
+.timeline-trim-handle:disabled {
+  cursor: default;
+  opacity: 0;
 }
 
 .trim-range {

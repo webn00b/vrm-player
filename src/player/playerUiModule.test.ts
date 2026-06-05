@@ -1,7 +1,9 @@
 import { beforeEach, expect, test, vi } from 'vitest';
+import { animationClipToBvhText } from '../animationClipBvhExport';
 import { clipToAgentOgiJson, downloadAgentOgiJson } from '../animationToJsonConverter';
 import { trimAnimationClip } from '../animationTrim';
 import { exportClipAsBvh } from '../bvhExportRecorder';
+import { saveBlobWithPicker } from '../fileSave';
 import { notify, setStatus } from '../ui';
 import { playerUiModule } from './modules/playerUiModule';
 import type { AnimationBridge, PlayerContext, QueueHandle } from './types';
@@ -64,6 +66,15 @@ vi.mock('../animationToJsonConverter', () => ({
 }));
 vi.mock('../animationTrim', () => ({
   trimAnimationClip: vi.fn(() => ({ name: 'walk_trim', duration: 0.75 })),
+}));
+vi.mock('../animationClipBvhExport', () => ({
+  animationClipToBvhText: vi.fn(() => 'HIERARCHY\nMOTION\nFrames: 1'),
+}));
+vi.mock('../fileSave', () => ({
+  saveBlobWithPicker: vi.fn(async ({ createBlob }) => {
+    await createBlob();
+    return { filename: 'walk_trim_0.25_1.00.bvh', method: 'picker' };
+  }),
 }));
 vi.mock('../gltfExportRecorder', () => ({
   exportClipAsGlb: vi.fn(async () => 'take.glb'),
@@ -220,20 +231,31 @@ test('playerUiModule syncs active queue state and resets hip helpers when playba
   expect(ctx.tooling?.hipBalance.reset).toHaveBeenCalled();
 });
 
-test('playerUiModule saves a trimmed segment as a new queued clip', () => {
+test('playerUiModule saves a trimmed segment as a BVH file and new queued clip', async () => {
   const animation = createAnimationBridge();
   vi.mocked(animation.registerAndEnqueue).mockReturnValueOnce(4);
   const ctx = createContext(animation);
 
   playerUiModule.setup(ctx);
   const bottomProps = vueState.mounts[0].props;
-  const onSaveTrim = bottomProps.onSaveTrim as (start: number, end: number) => void;
+  const onSaveTrim = bottomProps.onSaveTrim as (start: number, end: number) => Promise<void>;
 
-  onSaveTrim(0.25, 1);
+  await onSaveTrim(0.25, 1);
 
   expect(trimAnimationClip).toHaveBeenCalledWith(
     ctx.playback?.controller?.getClipAtQueuePos(0),
     { start: 0.25, end: 1, name: 'walk_trim_0.25_1.00' },
+  );
+  expect(saveBlobWithPicker).toHaveBeenCalledWith({
+    suggestedName: 'walk_trim_0.25_1.00.bvh',
+    mimeType: 'text/plain',
+    extension: '.bvh',
+    description: 'BVH animation',
+    createBlob: expect.any(Function),
+  });
+  expect(animationClipToBvhText).toHaveBeenCalledWith(
+    ctx.vrm,
+    { name: 'walk_trim', duration: 0.75 },
   );
   expect(animation.registerAndEnqueue).toHaveBeenCalledWith(
     'walk_trim_0.25_1.00',
@@ -241,7 +263,7 @@ test('playerUiModule saves a trimmed segment as a new queued clip', () => {
     { name: 'walk_trim', duration: 0.75 },
   );
   expect(ctx.playback?.controller?.jumpTo).toHaveBeenCalledWith(4, { immediate: true });
-  expect(setStatus).toHaveBeenCalledWith('trim saved: walk_trim_0.25_1.00');
+  expect(setStatus).toHaveBeenCalledWith('trim saved: walk_trim_0.25_1.00.bvh');
 });
 
 test('playerUiModule unregisters playback listener during cleanup', () => {

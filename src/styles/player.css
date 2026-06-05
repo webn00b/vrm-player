@@ -288,6 +288,17 @@ input[type="range"]::-moz-range-thumb {
 #dbg-bar-2 { background: #3b5bdb; }
 #dbg-bar-5 { background: #e76f51; }
 .dbg-stat  { font-size: 9px; opacity: 0.3; margin-top: 4px; font-family: var(--font-mono); }
+.dbg-select {
+  min-width: 112px;
+  height: 24px;
+  border: 1px solid #2a2a2a;
+  border-radius: 5px;
+  background: #111;
+  color: #eee;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  padding: 2px 5px;
+}
 
 .dbg-tabs {
   display: flex; gap: 2px; margin-bottom: 8px;

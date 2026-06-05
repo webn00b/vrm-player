@@ -3,10 +3,12 @@
  */
 import { createApp } from 'vue';
 import type { AnimationController, QueueLoopMode } from '../../animationController';
+import { animationClipToBvhText } from '../../animationClipBvhExport';
 import { clipToAgentOgiJson, downloadAgentOgiJson } from '../../animationToJsonConverter';
 import { trimAnimationClip } from '../../animationTrim';
 import { exportClipAsBvh } from '../../bvhExportRecorder';
 import type { ParsedBVH } from '../../bvhLoader';
+import { saveBlobWithPicker } from '../../fileSave';
 import { exportClipAsGlb } from '../../gltfExportRecorder';
 import BottomBar from '../../playerVue/BottomBar.vue';
 import PlayerStartPanel from '../../playerVue/PlayerStartPanel.vue';
@@ -161,7 +163,7 @@ export const playerUiModule: PlayerModule = {
       for (const fn of fns) if (fn) cleanupFns.push(fn);
     };
 
-    const saveTrimSegment = (start: number, end: number): void => {
+    const saveTrimSegment = async (start: number, end: number): Promise<void> => {
       const queuePos = controller.currentQueuePos;
       const sourceClip = controller.getClipAtQueuePos(queuePos);
       if (!sourceClip) {
@@ -175,10 +177,22 @@ export const playerUiModule: PlayerModule = {
       const segmentName = `${sourceName}_trim_${start.toFixed(2)}_${end.toFixed(2)}`;
       try {
         const trimmed = trimAnimationClip(sourceClip, { start, end, name: segmentName });
+        const saveResult = await saveBlobWithPicker({
+          suggestedName: `${segmentName}.bvh`,
+          mimeType: 'text/plain',
+          extension: '.bvh',
+          description: 'BVH animation',
+          createBlob: () => new Blob([animationClipToBvhText(vrm, trimmed)], { type: 'text/plain' }),
+        });
+        if (saveResult.method === 'cancelled') {
+          setStatus('trim save canceled');
+          return;
+        }
         const newQueuePos = animation.registerAndEnqueue(segmentName, null, trimmed);
         controller.jumpTo(newQueuePos, { immediate: true });
-        setStatus(`trim saved: ${segmentName}`);
-        notify({ severity: 'success', summary: 'Trim saved', detail: segmentName });
+        const fallback = saveResult.method === 'download' ? 'downloaded' : 'saved';
+        setStatus(`trim ${fallback}: ${saveResult.filename}`);
+        notify({ severity: 'success', summary: 'Trim saved', detail: saveResult.filename });
       } catch (error) {
         const msg = (error as Error).message;
         setStatus(`trim failed: ${msg}`);

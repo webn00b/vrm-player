@@ -194,6 +194,59 @@ const thumbDistal: RotationConstraint = {
   max: [d(+90), d(+5), d(+5)],
 };
 
+// ── Mixamo Live profile ─────────────────────────────────────────────────────
+// Runtime guardrail for live mocap. This is intentionally closer to a standard
+// humanoid animation rig than to permissive anatomical ROM: hinge joints stay
+// hinge-like, while shoulders, hips, and pelvis remain broad enough for lively
+// captured motion.
+const mixamoLiveHips: RotationConstraint = {
+  order: 'YXZ',
+  min: [d(-40), d(-120), d(-35)],
+  max: [d(+45), d(+120), d(+35)],
+};
+
+const mixamoLiveSpineSegment: RotationConstraint = {
+  order: 'YXZ',
+  min: [d(-30), d(-30), d(-25)],
+  max: [d(+45), d(+30), d(+25)],
+};
+
+const mixamoLiveUpperArm: RotationConstraint = {
+  order: 'YXZ',
+  min: [d(-80), d(-95), d(-70)],
+  max: [d(+130), d(+95), d(+170)],
+};
+
+const mixamoLiveLowerArm: RotationConstraint = {
+  order: 'XYZ',
+  min: [d(0), d(-75), d(-6)],
+  max: [d(+150), d(+75), d(+6)],
+};
+
+const mixamoLiveHand: RotationConstraint = {
+  order: 'XYZ',
+  min: [d(-70), d(-25), d(-60)],
+  max: [d(+65), d(+25), d(+60)],
+};
+
+const mixamoLiveUpperLeg: RotationConstraint = {
+  order: 'YXZ',
+  min: [d(-35), d(-45), d(-35)],
+  max: [d(+125), d(+45), d(+55)],
+};
+
+const mixamoLiveLowerLeg: RotationConstraint = {
+  order: 'XYZ',
+  min: [d(0), d(-6), d(-6)],
+  max: [d(+140), d(+6), d(+6)],
+};
+
+const mixamoLiveFoot: RotationConstraint = {
+  order: 'XYZ',
+  min: [d(-45), d(-20), d(-25)],
+  max: [d(+30), d(+20), d(+20)],
+};
+
 // ── Assembled config ─────────────────────────────────────────────────────────
 
 export const DEFAULT_BONE_CONSTRAINTS: Partial<Record<VRMHumanBoneName, RotationConstraint>> = {
@@ -262,14 +315,48 @@ export const DEFAULT_BONE_CONSTRAINTS: Partial<Record<VRMHumanBoneName, Rotation
   [VRMHumanBoneName.RightLittleDistal]:       sym(fingerDistal),
 };
 
-/** Merge an optional per-avatar override on top of defaults. */
+export const MIXAMO_LIVE_BONE_CONSTRAINTS: Partial<Record<VRMHumanBoneName, RotationConstraint>> = {
+  ...DEFAULT_BONE_CONSTRAINTS,
+  [VRMHumanBoneName.Hips]:       sym(mixamoLiveHips),
+  [VRMHumanBoneName.Spine]:      sym(mixamoLiveSpineSegment),
+  [VRMHumanBoneName.Chest]:      sym(mixamoLiveSpineSegment),
+  [VRMHumanBoneName.UpperChest]: sym(mixamoLiveSpineSegment),
+
+  [VRMHumanBoneName.LeftUpperArm]:  sym(mixamoLiveUpperArm),
+  [VRMHumanBoneName.LeftLowerArm]:  sym(mixamoLiveLowerArm),
+  [VRMHumanBoneName.LeftHand]:      sym(mixamoLiveHand),
+  [VRMHumanBoneName.RightUpperArm]: sym(mixamoLiveUpperArm),
+  [VRMHumanBoneName.RightLowerArm]: sym(mixamoLiveLowerArm),
+  [VRMHumanBoneName.RightHand]:     sym(mixamoLiveHand),
+
+  [VRMHumanBoneName.LeftUpperLeg]:  sym(mixamoLiveUpperLeg),
+  [VRMHumanBoneName.LeftLowerLeg]:  sym(mixamoLiveLowerLeg),
+  [VRMHumanBoneName.LeftFoot]:      sym(mixamoLiveFoot),
+  [VRMHumanBoneName.RightUpperLeg]: sym(mixamoLiveUpperLeg),
+  [VRMHumanBoneName.RightLowerLeg]: sym(mixamoLiveLowerLeg),
+  [VRMHumanBoneName.RightFoot]:     sym(mixamoLiveFoot),
+};
+
+export type BoneConstraintProfileId = 'default' | 'mixamoLive';
+
+export const BONE_CONSTRAINT_PROFILES: Record<
+  BoneConstraintProfileId,
+  Partial<Record<VRMHumanBoneName, RotationConstraint>>
+> = {
+  default: DEFAULT_BONE_CONSTRAINTS,
+  mixamoLive: MIXAMO_LIVE_BONE_CONSTRAINTS,
+};
+
+/** Merge an optional per-avatar override on top of a named profile. */
 export function mergeConstraints(
   overrides?: Partial<Record<VRMHumanBoneName, RotationConstraint>>,
+  profileId: BoneConstraintProfileId = 'default',
 ): Partial<Record<VRMHumanBoneName, RotationConstraint>> {
-  if (!overrides) return DEFAULT_BONE_CONSTRAINTS;
+  const base = BONE_CONSTRAINT_PROFILES[profileId];
+  if (!overrides) return base;
   const out: Partial<Record<VRMHumanBoneName, RotationConstraint>> = {};
-  for (const k of Object.keys(DEFAULT_BONE_CONSTRAINTS) as VRMHumanBoneName[]) {
-    out[k] = DEFAULT_BONE_CONSTRAINTS[k];
+  for (const k of Object.keys(base) as VRMHumanBoneName[]) {
+    out[k] = base[k];
   }
   for (const k of Object.keys(overrides) as VRMHumanBoneName[]) {
     const o = overrides[k];
