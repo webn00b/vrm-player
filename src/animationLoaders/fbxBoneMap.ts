@@ -1,4 +1,5 @@
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
+import { mixamoBoneToHumanoid } from '../retargeting/mixamoReference';
 
 /**
  * Maps common FBX bone names (Mixamo, Maya HumanIK, Blender Rigify, plain
@@ -116,7 +117,7 @@ for (const [vrm, aliases] of ALIASES) {
  * by the caller (and logged once).
  */
 export function mapFbxBoneToVrm(fbxName: string): VRMHumanBoneName | null {
-  return MAP.get(normalizeKey(fbxName)) ?? null;
+  return mixamoBoneToHumanoid(fbxName) ?? MAP.get(normalizeKey(fbxName)) ?? null;
 }
 
 /** For diagnostics — counts how many distinct VRM bones a clip will drive. */
