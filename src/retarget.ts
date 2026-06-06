@@ -107,6 +107,25 @@ export async function retargetBvhToVrm(
     );
   }
 
+  const clipTargets = uniqueTrackTargets(clip);
+  clip.userData = {
+    ...clip.userData,
+    retargetInfo: {
+      source: 'bvh-vrma',
+      name,
+      sourceBones: bvh.skeleton.bones.length,
+      sourceTracks: bvh.clip.tracks.length,
+      clipTracks: clip.tracks.length,
+      clipTargets,
+      restCorrectionTracks: correctedTracks,
+      signFlips,
+      signFlipTracks,
+      validationViolations: report.violationCount,
+      validationWorstBone: report.worstBone ?? null,
+      profileId: opts.profileId ?? 'default',
+    },
+  };
+
   console.info('[animation:retarget]', {
     name,
     source: 'bvh',
@@ -114,7 +133,7 @@ export async function retargetBvhToVrm(
     sourceTracks: bvh.clip.tracks.length,
     clipDurationSec: Number(clip.duration.toFixed(3)),
     clipTracks: clip.tracks.length,
-    clipTargets: uniqueTrackTargets(clip),
+    clipTargets,
     restCorrectionTracks: correctedTracks,
     signFlips,
     signFlipTracks,

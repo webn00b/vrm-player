@@ -43,6 +43,11 @@ test('retargeted BVH clip drives normalized humanoid bones through AnimationMixe
     clampOutOfRange: false,
     skipRestCorrection: true,
   });
+  const retargetInfo = clip.userData?.retargetInfo;
+  assert.equal(retargetInfo?.source, 'bvh-vrma');
+  assert.ok(Number.isFinite(retargetInfo?.restCorrectionTracks));
+  assert.ok(Number.isFinite(retargetInfo?.signFlips));
+  assert.ok(Number.isFinite(retargetInfo?.validationViolations));
 
   const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
   assert.ok(leftUpperArm);
