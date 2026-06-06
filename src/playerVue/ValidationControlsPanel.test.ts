@@ -54,6 +54,8 @@ test('dumps active validation state from the top controls', async () => {
     arms: { left: { poseClass: 'behindBack' }, right: { poseClass: 'behindBack' } },
   };
   const poseValidator = {
+    profileId: 'mixamoLive',
+    setProfile: vi.fn(),
     getStats: vi.fn(() => poseStats),
   };
   validationSettings.profileId = 'mixamoLive';
@@ -73,6 +75,7 @@ test('dumps active validation state from the top controls', async () => {
     settings: validationSettings,
     stats,
     poseStats,
+    poseProfileId: 'mixamoLive',
     constraints: { [VRMHumanBoneName.LeftUpperArm]: { order: 'YXZ' } },
   });
 

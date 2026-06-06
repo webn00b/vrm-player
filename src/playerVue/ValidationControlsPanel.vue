@@ -15,6 +15,7 @@ const props = defineProps<{
 }>();
 
 props.validator.setProfile(validationSettings.profileId);
+props.poseValidator?.setProfile(validationSettings.profileId);
 const runtimeEnabled = shallowRef(props.validator.enabled);
 const profileId = shallowRef<BoneConstraintProfileId>(validationSettings.profileId);
 
@@ -28,6 +29,7 @@ function setProfile(event: Event): void {
   profileId.value = next;
   validationSettings.profileId = next;
   props.validator.setProfile(next);
+  props.poseValidator?.setProfile(next);
 }
 
 function setPlaybackMode(event: Event): void {
@@ -49,6 +51,7 @@ function dumpValidationState(): void {
     settings: validationSettings,
     stats: props.validator.getStats(),
     poseStats: props.poseValidator?.getStats() ?? null,
+    poseProfileId: props.poseValidator?.profileId ?? null,
     constraints: props.validator.getConstraints(),
   });
 }

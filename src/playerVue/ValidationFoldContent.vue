@@ -58,8 +58,9 @@ onMounted(() => {
       `arms: L upper ${fmtDeg(left.upperArmForwardDeg)}${armFlag(left.upperArmForwardDeg)} / fore ${fmtDeg(left.forearmForwardDeg)}${armFlag(left.forearmForwardDeg)}` +
       ` · R upper ${fmtDeg(right.upperArmForwardDeg)}${armFlag(right.upperArmForwardDeg)} / fore ${fmtDeg(right.forearmForwardDeg)}${armFlag(right.forearmForwardDeg)}`;
     const pose = props.poseValidator?.getStats();
+    const poseProfile = props.poseValidator?.profileId ?? '—';
     poseStat.value = pose
-      ? `pose: clamped ${pose.clampedThisFrame} · ${pose.violations.length ? pose.violations.join(', ') : 'ok'}`
+      ? `pose: ${poseProfile} · L ${pose.arms.left.poseClass} / R ${pose.arms.right.poseClass} · clamped ${pose.clampedThisFrame} · ${pose.violations.length ? pose.violations.join(', ') : 'ok'}`
       : 'pose: —';
     // Skel-log live frame count while recording.
     if (props.skeletonLogger.active) {
@@ -81,6 +82,8 @@ function dumpConstraints(): void {
   console.log('[validator] active profile:', {
     enabled: props.validator.enabled,
     profileId: props.validator.profileId,
+    poseProfileId: props.poseValidator?.profileId ?? null,
+    poseStats: props.poseValidator?.getStats() ?? null,
     stats: props.validator.getStats(),
     constraints: props.validator.getConstraints(),
   });

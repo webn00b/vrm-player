@@ -99,12 +99,14 @@ function makeInitialStats(): PoseValidationStats {
 
 export class PoseValidator {
   enabled = true;
+  profileId: PoseConstraintProfileId;
 
   private stats: PoseValidationStats = makeInitialStats();
   private constraints: PoseConstraints;
 
   constructor(private readonly vrm: VRM, opts: PoseValidatorOptions = {}) {
-    this.constraints = getPoseConstraints(opts.profileId ?? 'mixamoLive');
+    this.profileId = opts.profileId ?? 'mixamoLive';
+    this.constraints = getPoseConstraints(this.profileId);
   }
 
   validateAndClamp(): PoseValidationStats {
@@ -160,6 +162,12 @@ export class PoseValidator {
 
   setEnabled(on: boolean): void {
     this.enabled = on;
+  }
+
+  setProfile(profileId: PoseConstraintProfileId): void {
+    this.profileId = profileId;
+    this.constraints = getPoseConstraints(profileId);
+    this.stats = makeInitialStats();
   }
 
   private computeTorsoBasis(): TorsoBasis | null {
