@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, test } from 'vitest';
 import { buildMockVRM } from '../../tests/fixtures/mockVrm';
 import { PoseValidator } from './poseValidator';
+import { MIXAMO_LIVE_POSE_CONSTRAINTS, getPoseConstraints } from './poseConstraints';
 
 function setEuler(
   node: THREE.Object3D | undefined,
@@ -19,6 +20,17 @@ function setEuler(
 }
 
 describe('PoseValidator arm guardrails', () => {
+  test('Mixamo Live pose profile exposes arm chain thresholds', () => {
+    const constraints = getPoseConstraints('mixamoLive');
+
+    expect(constraints).toBe(MIXAMO_LIVE_POSE_CONSTRAINTS);
+    expect(constraints.arms.backward.upperArmMaxDeg).toBe(120);
+    expect(constraints.arms.backward.forearmMaxDeg).toBe(120);
+    expect(constraints.arms.allowedPoseClasses).toContain('overhead');
+    expect(constraints.arms.allowedPoseClasses).toContain('crossBody');
+    expect(constraints.arms.ik.maxReachFraction).toBeCloseTo(0.98);
+  });
+
   test('leaves a normal side-reach arm pose unchanged', () => {
     const vrm = buildMockVRM();
     const validator = new PoseValidator(vrm);
