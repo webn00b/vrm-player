@@ -50,6 +50,7 @@ interface TorsoBasis {
 }
 
 const BACKWARD_ARM_DEG = 120;
+const UPPER_ONLY_IK_MARGIN_DEG = 20;
 const OVERHEAD_Y = 0.7;
 const FRONT_DEG = 65;
 const CROSS_BODY_X = 0.35;
@@ -273,7 +274,7 @@ export class PoseValidator {
   }
 
   private applyArmIkGuardrail(side: 'left' | 'right', stats: PoseArmStats, torso: TorsoBasis): boolean {
-    if (!stats.available || !stats.violations.some((v) => v.endsWith('.backwardChain'))) return false;
+    if (!this.shouldApplyArmIkGuardrail(side, stats)) return false;
 
     const nodes = this.getArmNodes(side);
     if (!nodes) return false;
@@ -315,5 +316,16 @@ export class PoseValidator {
       lerp: this.constraints.arms.ik.correctionLerp,
     });
     return true;
+  }
+
+  private shouldApplyArmIkGuardrail(side: 'left' | 'right', stats: PoseArmStats): boolean {
+    if (!stats.available || !stats.violations.some((v) => v.endsWith('.backwardChain'))) return false;
+
+    const upperViolation = stats.violations.includes(`${side}UpperArm.backwardChain`);
+    const forearmViolation = stats.violations.includes(`${side}LowerArm.backwardChain`);
+    if (forearmViolation || stats.poseClass === 'behindBack') return true;
+
+    const upperLimit = this.constraints.arms.backward.upperArmMaxDeg + UPPER_ONLY_IK_MARGIN_DEG;
+    return upperViolation && (stats.upperArmForwardDeg ?? 0) > upperLimit;
   }
 }

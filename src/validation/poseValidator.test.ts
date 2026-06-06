@@ -19,6 +19,22 @@ function setEuler(
   ));
 }
 
+function setEulerOrder(
+  node: THREE.Object3D | undefined,
+  order: THREE.EulerOrder,
+  xDeg: number,
+  yDeg: number,
+  zDeg: number,
+): void {
+  if (!node) throw new Error('missing mock bone');
+  node.quaternion.setFromEuler(new THREE.Euler(
+    THREE.MathUtils.degToRad(xDeg),
+    THREE.MathUtils.degToRad(yDeg),
+    THREE.MathUtils.degToRad(zDeg),
+    order,
+  ));
+}
+
 describe('PoseValidator arm guardrails', () => {
   test('Mixamo Live pose profile exposes arm chain thresholds', () => {
     const constraints = getPoseConstraints('mixamoLive');
@@ -119,5 +135,24 @@ describe('PoseValidator arm guardrails', () => {
     expect(after.upperLength).toBeCloseTo(before.upperLength, 5);
     expect(after.lowerLength).toBeCloseTo(before.lowerLength, 5);
     expect(after.upperArmForwardDeg).toBeLessThanOrEqual(120);
+  });
+
+  test('reports mild upper-arm overshoot without replacing the whole arm chain', () => {
+    const vrm = buildMockVRM();
+    const validator = new PoseValidator(vrm, { profileId: 'mixamoLive' });
+    setEulerOrder(vrm.bones.get('leftUpperArm'), 'YXZ', -90, -55, 90);
+    setEulerOrder(vrm.bones.get('leftLowerArm'), 'XYZ', 0, -40, -10);
+    vrm.scene.updateMatrixWorld(true);
+
+    const before = validator.getArmWorldSnapshot('left');
+    const stats = validator.validateAndClamp();
+    const after = validator.getArmWorldSnapshot('left');
+
+    expect(before.upperArmForwardDeg).toBeGreaterThan(120);
+    expect(before.forearmForwardDeg).toBeLessThanOrEqual(120);
+    expect(stats.violations).toContain('leftUpperArm.backwardChain');
+    expect(stats.clampedThisFrame).toBe(0);
+    expect(after.upperArmForwardDeg).toBeCloseTo(before.upperArmForwardDeg!, 5);
+    expect(after.forearmForwardDeg).toBeCloseTo(before.forearmForwardDeg!, 5);
   });
 });
