@@ -102,4 +102,22 @@ describe('PoseValidator arm guardrails', () => {
     expect(stats.arms.left.upperArmForwardDeg).toBeLessThanOrEqual(120);
     expect(stats.arms.right.forearmForwardDeg).toBeLessThanOrEqual(120);
   });
+
+  test('IK guardrail preserves upper and lower arm segment lengths while correcting backward pose', () => {
+    const vrm = buildMockVRM();
+    const validator = new PoseValidator(vrm, { profileId: 'mixamoLive' });
+    setEuler(vrm.bones.get('leftUpperArm'), 22.873734256102377, 23.999999077874545, -29.999999999999996);
+    setEuler(vrm.bones.get('leftLowerArm'), 38.87501093621991, 74.99999999999984, -6.000000000000001);
+    vrm.scene.updateMatrixWorld(true);
+
+    const before = validator.getArmWorldSnapshot('left');
+    const stats = validator.validateAndClamp();
+    const after = validator.getArmWorldSnapshot('left');
+
+    expect(stats.violations).toContain('leftUpperArm.backwardChain');
+    expect(stats.clampedThisFrame).toBeGreaterThan(0);
+    expect(after.upperLength).toBeCloseTo(before.upperLength, 5);
+    expect(after.lowerLength).toBeCloseTo(before.lowerLength, 5);
+    expect(after.upperArmForwardDeg).toBeLessThanOrEqual(120);
+  });
 });

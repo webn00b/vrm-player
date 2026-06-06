@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
+import { applyTwoBoneChain } from '../mocap/solvers/twoBoneChainApplication';
+import { getPoseConstraints, type PoseConstraintProfileId, type PoseConstraints } from './poseConstraints';
 
 export type ArmPoseClass = 'sideReach' | 'frontReach' | 'overhead' | 'crossBody' | 'behindBack' | 'unknown';
 
@@ -24,6 +26,17 @@ export interface PoseValidationStats {
   };
 }
 
+export interface PoseValidatorOptions {
+  profileId?: PoseConstraintProfileId;
+}
+
+export interface ArmWorldSnapshot {
+  upperLength: number;
+  lowerLength: number;
+  upperArmForwardDeg: number | null;
+  forearmForwardDeg: number | null;
+}
+
 interface ArmNodes {
   upper: THREE.Object3D;
   lower: THREE.Object3D;
@@ -41,27 +54,6 @@ const OVERHEAD_Y = 0.7;
 const FRONT_DEG = 65;
 const CROSS_BODY_X = 0.35;
 
-const SIDE_GUARDRAILS = {
-  left: {
-    min: new THREE.Vector3(THREE.MathUtils.degToRad(-80), THREE.MathUtils.degToRad(-65), THREE.MathUtils.degToRad(-30)),
-    max: new THREE.Vector3(THREE.MathUtils.degToRad(+130), THREE.MathUtils.degToRad(+24), THREE.MathUtils.degToRad(+170)),
-  },
-  right: {
-    min: new THREE.Vector3(THREE.MathUtils.degToRad(-80), THREE.MathUtils.degToRad(0), THREE.MathUtils.degToRad(-70)),
-    max: new THREE.Vector3(THREE.MathUtils.degToRad(+130), THREE.MathUtils.degToRad(+65), THREE.MathUtils.degToRad(+50)),
-  },
-} as const;
-
-const UPPER_BACKWARD_TARGET = {
-  left: { y: THREE.MathUtils.degToRad(15), z: THREE.MathUtils.degToRad(-15) },
-  right: { y: THREE.MathUtils.degToRad(0), z: THREE.MathUtils.degToRad(40) },
-} as const;
-
-const LOWER_BACKWARD_TARGET = {
-  left: { y: THREE.MathUtils.degToRad(35) },
-  right: { y: THREE.MathUtils.degToRad(0) },
-} as const;
-
 const _hips = new THREE.Vector3();
 const _neck = new THREE.Vector3();
 const _leftShoulder = new THREE.Vector3();
@@ -72,9 +64,14 @@ const _torsoForward = new THREE.Vector3();
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 const _c = new THREE.Vector3();
+const _target = new THREE.Vector3();
+const _pole = new THREE.Vector3();
 const _upperDir = new THREE.Vector3();
 const _forearmDir = new THREE.Vector3();
-const _euler = new THREE.Euler();
+const _restAxis = {
+  left: new THREE.Vector3(1, 0, 0),
+  right: new THREE.Vector3(-1, 0, 0),
+} as const;
 
 function emptyArmStats(): PoseArmStats {
   return {
@@ -104,8 +101,11 @@ export class PoseValidator {
   enabled = true;
 
   private stats: PoseValidationStats = makeInitialStats();
+  private constraints: PoseConstraints;
 
-  constructor(private readonly vrm: VRM) {}
+  constructor(private readonly vrm: VRM, opts: PoseValidatorOptions = {}) {
+    this.constraints = getPoseConstraints(opts.profileId ?? 'mixamoLive');
+  }
 
   validateAndClamp(): PoseValidationStats {
     this.stats = makeInitialStats();
@@ -117,10 +117,8 @@ export class PoseValidator {
 
     const leftBefore = this.computeArmStats('left', torso);
     const rightBefore = this.computeArmStats('right', torso);
-    const leftClampCount = this.clampBackwardArmIfNeeded('left', leftBefore);
-    const rightClampCount = this.clampBackwardArmIfNeeded('right', rightBefore);
-    const leftClamped = leftClampCount > 0;
-    const rightClamped = rightClampCount > 0;
+    const leftClamped = this.applyArmIkGuardrail('left', leftBefore, torso);
+    const rightClamped = this.applyArmIkGuardrail('right', rightBefore, torso);
 
     if (leftClamped || rightClamped) this.vrm.scene?.updateMatrixWorld(true);
 
@@ -128,7 +126,7 @@ export class PoseValidator {
     this.stats.arms.right = this.computeArmStats('right', torso, rightClamped);
     this.stats.arms.left.violations = leftBefore.violations;
     this.stats.arms.right.violations = rightBefore.violations;
-    this.stats.clampedThisFrame = leftClampCount + rightClampCount;
+    this.stats.clampedThisFrame = Number(leftClamped) + Number(rightClamped);
     this.stats.violations = [
       ...this.stats.arms.left.violations,
       ...this.stats.arms.right.violations,
@@ -138,6 +136,26 @@ export class PoseValidator {
 
   getStats(): PoseValidationStats {
     return this.stats;
+  }
+
+  getArmWorldSnapshot(side: 'left' | 'right'): ArmWorldSnapshot {
+    this.vrm.scene?.updateMatrixWorld(true);
+    const torso = this.computeTorsoBasis();
+    const nodes = this.getArmNodes(side);
+    if (!torso || !nodes) {
+      return { upperLength: 0, lowerLength: 0, upperArmForwardDeg: null, forearmForwardDeg: null };
+    }
+
+    const stats = this.computeArmStats(side, torso);
+    nodes.upper.getWorldPosition(_a);
+    nodes.lower.getWorldPosition(_b);
+    nodes.hand.getWorldPosition(_c);
+    return {
+      upperLength: _a.distanceTo(_b),
+      lowerLength: _b.distanceTo(_c),
+      upperArmForwardDeg: stats.upperArmForwardDeg,
+      forearmForwardDeg: stats.forearmForwardDeg,
+    };
   }
 
   setEnabled(on: boolean): void {
@@ -210,8 +228,12 @@ export class PoseValidator {
     const poseClass = this.classifyArm(side, torso, _upperDir, _forearmDir, upperArmForwardDeg, forearmForwardDeg);
     const violation: string[] = [];
     if (poseClass !== 'overhead' && poseClass !== 'crossBody') {
-      if (upperArmForwardDeg > BACKWARD_ARM_DEG) violation.push(`${side}UpperArm.backwardChain`);
-      if (forearmForwardDeg > BACKWARD_ARM_DEG) violation.push(`${side}LowerArm.backwardChain`);
+      if (upperArmForwardDeg > this.constraints.arms.backward.upperArmMaxDeg) {
+        violation.push(`${side}UpperArm.backwardChain`);
+      }
+      if (forearmForwardDeg > this.constraints.arms.backward.forearmMaxDeg) {
+        violation.push(`${side}LowerArm.backwardChain`);
+      }
     }
 
     return {
@@ -242,54 +264,48 @@ export class PoseValidator {
     return 'sideReach';
   }
 
-  private clampBackwardArmIfNeeded(side: 'left' | 'right', stats: PoseArmStats): number {
-    if (!stats.available) return 0;
+  private applyArmIkGuardrail(side: 'left' | 'right', stats: PoseArmStats, torso: TorsoBasis): boolean {
+    if (!stats.available || !stats.violations.some((v) => v.endsWith('.backwardChain'))) return false;
 
     const nodes = this.getArmNodes(side);
-    if (!nodes) return 0;
-    let count = 0;
-    if (stats.violations.includes(`${side}UpperArm.backwardChain`)) {
-      if (this.clampUpperArmBackward(side, nodes.upper)) count++;
-    }
-    if (stats.violations.includes(`${side}LowerArm.backwardChain`)) {
-      if (this.clampLowerArmBackward(side, nodes.lower)) count++;
-    }
-    return count;
-  }
+    if (!nodes) return false;
 
-  private clampUpperArmBackward(side: 'left' | 'right', upper: THREE.Object3D): boolean {
-    const limits = SIDE_GUARDRAILS[side];
-    const target = UPPER_BACKWARD_TARGET[side];
-    _euler.setFromQuaternion(upper.quaternion, 'YXZ');
-    const nextX = THREE.MathUtils.clamp(_euler.x, limits.min.x, limits.max.x);
-    const nextY = side === 'left'
-      ? Math.min(THREE.MathUtils.clamp(_euler.y, limits.min.y, limits.max.y), target.y)
-      : Math.max(THREE.MathUtils.clamp(_euler.y, limits.min.y, limits.max.y), target.y);
-    const nextZ = side === 'left'
-      ? Math.max(THREE.MathUtils.clamp(_euler.z, limits.min.z, limits.max.z), target.z)
-      : Math.min(THREE.MathUtils.clamp(_euler.z, limits.min.z, limits.max.z), target.z);
-    if (
-      Math.abs(nextX - _euler.x) < 1e-8
-      && Math.abs(nextY - _euler.y) < 1e-8
-      && Math.abs(nextZ - _euler.z) < 1e-8
-    ) {
-      return false;
-    }
+    nodes.upper.getWorldPosition(_a);
+    nodes.lower.getWorldPosition(_b);
+    nodes.hand.getWorldPosition(_c);
 
-    _euler.set(nextX, nextY, nextZ, 'YXZ');
-    upper.quaternion.setFromEuler(_euler);
-    return true;
-  }
+    const upperLength = _a.distanceTo(_b);
+    const lowerLength = _b.distanceTo(_c);
+    if (upperLength < 1e-6 || lowerLength < 1e-6) return false;
 
-  private clampLowerArmBackward(side: 'left' | 'right', lower: THREE.Object3D): boolean {
-    const target = LOWER_BACKWARD_TARGET[side];
-    _euler.setFromQuaternion(lower.quaternion, 'XYZ');
-    const nextY = side === 'left'
-      ? Math.min(_euler.y, target.y)
-      : Math.max(_euler.y, target.y);
-    if (Math.abs(nextY - _euler.y) < 1e-8) return false;
-    _euler.set(_euler.x, nextY, _euler.z, 'XYZ');
-    lower.quaternion.setFromEuler(_euler);
+    const chainLength = upperLength + lowerLength;
+    const lateralSign = side === 'left' ? 1 : -1;
+    const bias = this.constraints.arms.ik.safeTargetBias;
+    _target.copy(_a)
+      .addScaledVector(torso.left, bias.lateral * lateralSign * chainLength)
+      .addScaledVector(torso.forward, bias.forward * chainLength)
+      .addScaledVector(torso.up, bias.upward * chainLength);
+
+    const poleTuple = this.constraints.arms.ik.sidePole[side];
+    _pole.set(0, 0, 0)
+      .addScaledVector(torso.left, poleTuple[0] * lateralSign)
+      .addScaledVector(torso.up, poleTuple[1])
+      .addScaledVector(torso.forward, poleTuple[2]);
+    if (_pole.lengthSq() < 1e-8) _pole.copy(torso.up).multiplyScalar(-1);
+    else _pole.normalize();
+
+    applyTwoBoneChain({
+      rootWorld: _a,
+      targetWorld: _target,
+      poleDirection: _pole,
+      upperLength,
+      lowerLength,
+      upperNode: nodes.upper,
+      lowerNode: nodes.lower,
+      upperRestAxis: _restAxis[side],
+      lowerRestAxis: _restAxis[side],
+      lerp: this.constraints.arms.ik.correctionLerp,
+    });
     return true;
   }
 }
