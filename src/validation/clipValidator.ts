@@ -15,6 +15,7 @@ import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import {
   DEFAULT_BONE_CONSTRAINTS,
   mergeConstraints,
+  type BoneConstraintProfileId,
   type RotationConstraint,
 } from './boneConstraints';
 
@@ -70,6 +71,7 @@ function parseTrackTarget(trackName: string): string | null {
 interface ValidateOptions {
   clamp: boolean;
   overrides?: Partial<Record<VRMHumanBoneName, RotationConstraint>>;
+  profileId?: BoneConstraintProfileId;
 }
 
 function validateOrClamp(
@@ -77,7 +79,9 @@ function validateOrClamp(
   vrm: VRM,
   opts: ValidateOptions,
 ): ClipReport {
-  const constraints = opts.overrides ? mergeConstraints(opts.overrides) : DEFAULT_BONE_CONSTRAINTS;
+  const constraints = opts.overrides || opts.profileId
+    ? mergeConstraints(opts.overrides, opts.profileId)
+    : DEFAULT_BONE_CONSTRAINTS;
   const trackTargetToBone = buildTrackTargetToBone(vrm);
 
   const report: ClipReport = {
@@ -172,8 +176,9 @@ export function validateClip(
   clip: THREE.AnimationClip,
   vrm: VRM,
   overrides?: Partial<Record<VRMHumanBoneName, RotationConstraint>>,
+  profileId?: BoneConstraintProfileId,
 ): ClipReport {
-  return validateOrClamp(clip, vrm, { clamp: false, overrides });
+  return validateOrClamp(clip, vrm, { clamp: false, overrides, profileId });
 }
 
 /** Clamp all keyframes in-place. Returns the pre-clamp violation report. */
@@ -181,6 +186,7 @@ export function clampClip(
   clip: THREE.AnimationClip,
   vrm: VRM,
   overrides?: Partial<Record<VRMHumanBoneName, RotationConstraint>>,
+  profileId?: BoneConstraintProfileId,
 ): ClipReport {
-  return validateOrClamp(clip, vrm, { clamp: true, overrides });
+  return validateOrClamp(clip, vrm, { clamp: true, overrides, profileId });
 }

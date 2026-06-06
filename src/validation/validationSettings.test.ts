@@ -9,6 +9,7 @@ import {
 describe('validationSettings', () => {
   test('normalizes unknown stored values back to safe defaults', () => {
     expect(normalizeValidationSettings({
+      profileId: 'unknown',
       playbackClampMode: 'sideways',
       recordingClampMode: 'full',
       importClampMode: 'clamp',
@@ -19,12 +20,28 @@ describe('validationSettings', () => {
     });
   });
 
+  test('normalizes and persists the selected constraint profile', () => {
+    expect(normalizeValidationSettings({
+      profileId: 'mixamoLive',
+      playbackClampMode: 'full',
+      recordingClampMode: 'safe',
+      importClampMode: 'clamp',
+    })).toEqual({
+      profileId: 'mixamoLive',
+      playbackClampMode: 'full',
+      recordingClampMode: 'safe',
+      importClampMode: 'clamp',
+    });
+  });
+
   test('serializes only the persisted validation settings fields', () => {
     expect(JSON.parse(serializeValidationSettings({
+      profileId: 'mixamoLive',
       playbackClampMode: 'off',
       recordingClampMode: 'safe',
       importClampMode: 'validate',
     }))).toEqual({
+      profileId: 'mixamoLive',
       playbackClampMode: 'off',
       recordingClampMode: 'safe',
       importClampMode: 'validate',

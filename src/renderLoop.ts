@@ -75,7 +75,7 @@ export function startRenderLoop(
 ): CleanupFn {
   const { controller, pa, micro, idle } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
-  const { skelViz, validator, bonePanel, boneDrag, hipForce, hipBalance } = tooling;
+  const { skelViz, validator, poseValidator, bonePanel, boneDrag, hipForce, hipBalance } = tooling;
 
   let stopped = false;
   let rafId = 0;
@@ -127,7 +127,11 @@ export function startRenderLoop(
       mocap.applyTrackedHandsOverlay();
     }
 
-    // 3c. Clamp the final authored pose (BVH / idle / mocap / manual offsets)
+    // 3c. Capture the authored pose before validation mutates it. The red
+    // skeleton overlay uses this snapshot to show unclamped BVH/mocap motion.
+    skelViz.captureUnclampedPose();
+
+    // 3d. Clamp the final authored pose (BVH / idle / mocap / manual offsets)
     // before debug capture and before micro-animations add their small deltas.
     // Use the same exclusion mask whenever a mocap source OR a BVH clip is
     // active — this guarantees record and playback see identical clamp logic
@@ -140,26 +144,29 @@ export function startRenderLoop(
         validatorEnabled: validator.enabled,
         settings: validationSettings,
       });
-      if (clampPlan.shouldClamp) validator.clampAll(clampPlan.excludedBones);
+      if (clampPlan.shouldClamp) {
+        validator.clampAll(clampPlan.excludedBones);
+        poseValidator.validateAndClamp();
+      }
     }
 
-    // 3c1. Skeleton logger — streaming bone diagnostics (≤1 ms when active,
+    // 3d1. Skeleton logger — streaming bone diagnostics (≤1 ms when active,
     // zero overhead when not). Hooked here so the snapshot is the same final
     // pose that the BVH recorder and the on-screen view see.
     renderLoopHooks.skeletonLoggerTick?.();
 
-    // 3c2. Record the on-screen pose (post-clamp, post-overlays) into the live
+    // 3d2. Record the on-screen pose (post-clamp, post-overlays) into the live
     // recorder. Doing this AFTER clamp ensures the BVH file matches exactly
     // what the user saw during capture.
     mocap.captureRecordedFrame();
 
-    // 3d. Debug recorder — snapshot landmarks + IK targets + final bone quaternions.
+    // 3e. Debug recorder — snapshot landmarks + IK targets + final bone quaternions.
     if (dbgRecorder.active) {
       const frame = mocap.latestFrame;
       if (frame) dbgRecorder.capture(frame, mocap.debugTargets, mocap.calibration);
     }
 
-    // 3e. Debug skeleton — show performer landmarks mapped to avatar world space.
+    // 3f. Debug skeleton — show performer landmarks mapped to avatar world space.
     if (mocapDebugViz.visible) {
       const frame = mocap.latestFrame;
       if (frame) {

@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
-import { selectValidationClampPlan } from './renderLoop';
+import { selectValidationClampPlan, startRenderLoop } from './renderLoop';
 import {
   CLIP_VALIDATION_EXCLUDED_BONES,
   MOCAP_VALIDATION_EXCLUDED_BONES,
@@ -90,4 +90,72 @@ describe('selectValidationClampPlan', () => {
       excludedBones: undefined,
     });
   });
+});
+
+test('render loop captures the red skeleton pose before validation clamps the frame', () => {
+  const order: string[] = [];
+  vi.stubGlobal('requestAnimationFrame', vi.fn(() => 7));
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
+  const cleanup = startRenderLoop(
+    {
+      clock: { getDelta: () => 1 / 60 },
+      controls: { update: () => order.push('controls') },
+      renderer: { render: () => order.push('render') },
+      scene: {},
+      camera: {},
+    } as never,
+    {
+      update: () => order.push('vrm.update'),
+      humanoid: { getNormalizedBoneNode: () => null },
+    } as never,
+    {
+      controller: { update: () => order.push('controller.update'), hasBvhActive: true, muted: false },
+      idle: { update: () => order.push('idle.update') },
+      pa: { applyAll: () => order.push('pa.applyAll') },
+      micro: { update: () => order.push('micro.update') },
+    } as never,
+    {
+      mocap: {
+        state: 'off',
+        applyLatestFrame: () => order.push('mocap.applyLatestFrame'),
+        applyTrackedHandsOverlay: () => order.push('mocap.applyTrackedHandsOverlay'),
+        captureRecordedFrame: () => order.push('mocap.captureRecordedFrame'),
+        latestFrame: null,
+        debugTargets: {},
+        calibration: {},
+        hipsBaseWorld: {},
+      },
+      debugViz: { visible: false },
+      dbgRecorder: { active: false },
+    } as never,
+    {
+      skelViz: {
+        captureUnclampedPose: () => order.push('skelViz.captureUnclampedPose'),
+        update: () => order.push('skelViz.update'),
+      },
+      validator: {
+        enabled: true,
+        clampAll: () => order.push('validator.clampAll'),
+      },
+      poseValidator: {
+        enabled: true,
+        validateAndClamp: () => order.push('poseValidator.validateAndClamp'),
+      },
+      bonePanel: { apply: () => order.push('bonePanel.apply') },
+      boneDrag: {
+        update: () => order.push('boneDrag.update'),
+        apply: () => order.push('boneDrag.apply'),
+      },
+      hipForce: { update: () => order.push('hipForce.update') },
+      hipBalance: { apply: () => order.push('hipBalance.apply') },
+    } as never,
+  );
+
+  cleanup();
+
+  expect(order.indexOf('controller.update')).toBeLessThan(order.indexOf('skelViz.captureUnclampedPose'));
+  expect(order.indexOf('boneDrag.apply')).toBeLessThan(order.indexOf('skelViz.captureUnclampedPose'));
+  expect(order.indexOf('skelViz.captureUnclampedPose')).toBeLessThan(order.indexOf('validator.clampAll'));
+  expect(order.indexOf('validator.clampAll')).toBeLessThan(order.indexOf('poseValidator.validateAndClamp'));
 });

@@ -1,9 +1,11 @@
 import { reactive, watch } from 'vue';
+import type { BoneConstraintProfileId } from './boneConstraints';
 
 export type ValidationClampMode = 'safe' | 'full' | 'off';
 export type ImportClampMode = 'validate' | 'clamp';
 
 export interface ValidationSettings {
+  profileId: BoneConstraintProfileId;
   playbackClampMode: ValidationClampMode;
   recordingClampMode: ValidationClampMode;
   importClampMode: ImportClampMode;
@@ -12,10 +14,15 @@ export interface ValidationSettings {
 export const VALIDATION_SETTINGS_STORAGE_KEY = 'vrm-player.validation-settings';
 
 export const DEFAULT_VALIDATION_SETTINGS: ValidationSettings = {
+  profileId: 'default',
   playbackClampMode: 'safe',
   recordingClampMode: 'safe',
   importClampMode: 'validate',
 };
+
+function isProfileId(value: unknown): value is BoneConstraintProfileId {
+  return value === 'default' || value === 'mixamoLive';
+}
 
 function isClampMode(value: unknown): value is ValidationClampMode {
   return value === 'safe' || value === 'full' || value === 'off';
@@ -30,6 +37,9 @@ export function normalizeValidationSettings(value: unknown): ValidationSettings 
     ? value as Partial<Record<keyof ValidationSettings, unknown>>
     : {};
   return {
+    profileId: isProfileId(input.profileId)
+      ? input.profileId
+      : DEFAULT_VALIDATION_SETTINGS.profileId,
     playbackClampMode: isClampMode(input.playbackClampMode)
       ? input.playbackClampMode
       : DEFAULT_VALIDATION_SETTINGS.playbackClampMode,
@@ -44,6 +54,7 @@ export function normalizeValidationSettings(value: unknown): ValidationSettings 
 
 export function serializeValidationSettings(settings: ValidationSettings): string {
   return JSON.stringify({
+    profileId: settings.profileId,
     playbackClampMode: settings.playbackClampMode,
     recordingClampMode: settings.recordingClampMode,
     importClampMode: settings.importClampMode,

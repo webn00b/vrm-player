@@ -40,6 +40,7 @@ import type { MocapController } from '../mocap/pipeline/mocapController';
 import type { MocapDebugViz } from '../mocap/diagnostics/mocapDebugViz';
 import type { MocapDebugRecorder } from '../mocap/diagnostics/mocapDebugRecorder';
 import type { BoneValidator } from '../validation/boneValidator';
+import type { PoseValidator } from '../validation/poseValidator';
 import type { SkeletonVisualizer } from '../skeletonVisualizer';
 import type { BonePosePanel } from '../bonePosePanel';
 import type { BoneDragController } from '../boneDragController';
@@ -66,6 +67,7 @@ const props = defineProps<{
   mocapDebugViz: MocapDebugViz;
   // Props for the Vue-migrated tools sections (Skeleton, Validation, etc).
   validator:       BoneValidator;
+  poseValidator:   PoseValidator;
   skelViz:         SkeletonVisualizer;
   bonePanel:       BonePosePanel;
   boneDrag:        BoneDragController;
@@ -237,6 +239,7 @@ onMounted(() => {
         <div class="dbg-section">
           <ValidationFoldContent
             :validator="validator"
+            :poseValidator="poseValidator"
             :skeletonLogger="skeletonLogger"
             :motionTraceRecorder="motionTraceRecorder"
             :mocap="mocap"

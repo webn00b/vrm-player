@@ -7,6 +7,7 @@ import type { MocapDebugViz } from './mocap/diagnostics/mocapDebugViz';
 import type { MocapDebugRecorder } from './mocap/diagnostics/mocapDebugRecorder';
 import type { SkeletonVisualizer } from './skeletonVisualizer';
 import type { BoneValidator } from './validation/boneValidator';
+import type { PoseValidator } from './validation/poseValidator';
 import type { BonePosePanel } from './bonePosePanel';
 import type { BoneDragController } from './boneDragController';
 import type { HipForceTracker } from './physics/hipForce';
@@ -30,6 +31,7 @@ export interface MocapSystems {
 export interface ToolingSystems {
   skelViz: SkeletonVisualizer;
   validator: BoneValidator;
+  poseValidator: PoseValidator;
   bonePanel: BonePosePanel;
   boneDrag: BoneDragController;
   hipForce: HipForceTracker;

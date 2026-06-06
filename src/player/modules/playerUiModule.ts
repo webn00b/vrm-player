@@ -159,6 +159,7 @@ export const playerUiModule: PlayerModule = {
       hipForce,
       hipBalance,
       validator,
+      poseValidator,
     } = tooling;
     const cleanupFns: Array<() => void> = [];
     const registerCleanup = (...fns: Array<(() => void) | undefined>): void => {
@@ -221,6 +222,7 @@ export const playerUiModule: PlayerModule = {
 
     const validationControlsApp = createApp(ValidationControlsPanel, {
       validator,
+      poseValidator,
     });
     installPrimeVueOn(validationControlsApp);
     validationControlsApp.mount('#validation-controls-root');

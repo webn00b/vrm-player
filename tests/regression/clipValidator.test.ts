@@ -185,6 +185,22 @@ test('clampClip: clamped value stays within constraint bounds', () => {
   assert.ok(eu.x <= c.max[0] + 1e-4, `clamped X ${(eu.x * 180 / Math.PI).toFixed(1)}° should be ≤ max`);
 });
 
+test('clampClip: uses the selected constraint profile when clamping imported clips', () => {
+  const vrm   = makeMockVrm(VRMHumanBoneName.LeftLowerArm);
+  const track = makeTrack(VRMHumanBoneName.LeftLowerArm, -6, 0, 0, 'XYZ');
+  const clip  = new THREE.AnimationClip('test', 1, [track]);
+
+  clampClip(clip, vrm, undefined, 'mixamoLive');
+
+  const qt = track.values;
+  const q  = new THREE.Quaternion(qt[0], qt[1], qt[2], qt[3]);
+  const eu = new THREE.Euler().setFromQuaternion(q, 'XYZ');
+  assert.ok(
+    Math.abs(eu.x) < 1e-4,
+    `Mixamo Live import clamp should lock elbow hyperextension to 0°, got ${(eu.x * 180 / Math.PI).toFixed(1)}°`,
+  );
+});
+
 test('worst bone reports the larger violation', () => {
   const vrm = makeMockVrm(
     VRMHumanBoneName.LeftLowerArm,

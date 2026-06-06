@@ -7,6 +7,7 @@ import type { ParsedBVH } from './bvhLoader';
 import { convertBVHToVRMAnimation } from './bvh2vrma/convertBVHToVRMAnimation.js';
 import { applyHumanoidRestCorrectionsToClip } from './humanoidRestPose';
 import { validateClip, clampClip } from './validation/clipValidator';
+import type { BoneConstraintProfileId } from './validation/boneConstraints';
 import { normalizeQuaternionSignsAcrossClip } from './animationLoaders/quaternionContinuity';
 
 interface NormalizedRestPoseLike {
@@ -33,6 +34,8 @@ function uniqueTrackTargets(clip: THREE.AnimationClip): number {
 export interface RetargetOptions {
   /** If true, keyframes outside anatomical ROM are clamped in-place. Default false (log only). */
   clampOutOfRange?: boolean;
+  /** Constraint profile used for import-time validation/clamping. */
+  profileId?: BoneConstraintProfileId;
   /**
    * Skip the rest-pose correction step entirely. Rarely useful; mainly for
    * debugging.
@@ -91,7 +94,9 @@ export async function retargetBvhToVrm(
   }
 
   // Step 3: validate (and optionally clamp) against anatomical ROM
-  const report = opts.clampOutOfRange ? clampClip(clip, vrm) : validateClip(clip, vrm);
+  const report = opts.clampOutOfRange
+    ? clampClip(clip, vrm, undefined, opts.profileId)
+    : validateClip(clip, vrm, undefined, opts.profileId);
   if (report.violationCount > 0) {
     const worst = report.worstBone
       ? `worst ${report.worstBone} (+${(report.worstOverBy * 180 / Math.PI).toFixed(1)}°)`

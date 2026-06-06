@@ -84,11 +84,12 @@ export async function loadAnimationFile(
   if (!fmt) throw new Error(`Unsupported file extension: ${file.name}`);
   const baseName = file.name.replace(SUPPORTED_REGEX, '');
   const clampOutOfRange = options.clampOutOfRange ?? shouldClampImportedAnimations(validationSettings);
+  const profileId = validationSettings.profileId;
 
   if (fmt === 'bvh') {
     const text = await file.text();
     const bvh  = parseBVH(text);
-    const clip = await retargetBvhToVrm(vrm, bvh, baseName, { clampOutOfRange });
+    const clip = await retargetBvhToVrm(vrm, bvh, baseName, { clampOutOfRange, profileId });
     logImportedAnimation({ file, format: 'bvh', name: baseName, clip, parsedBvh: bvh });
     return { name: baseName, clip, parsedBvh: bvh, format: 'bvh' };
   }
@@ -108,7 +109,7 @@ export async function loadAnimationFile(
       return { name: baseName, clip, parsedBvh: null, format: 'channel-json' };
     }
     const motion = parseCanonicalMotionJson(text, baseName);
-    const offlineOpts: OfflineRetargetOptions = { clampOutOfRange };
+    const offlineOpts: OfflineRetargetOptions = { clampOutOfRange, profileId };
     if (motion.source === 'gvhmr' || motion.source === 'smpl' || motion.coordinateSpace === 'smpl') {
       offlineOpts.positionSmoothingAlpha = 0.45;
       offlineOpts.rootMotionMode = 'locked';

@@ -211,10 +211,16 @@ const mixamoLiveSpineSegment: RotationConstraint = {
   max: [d(+45), d(+30), d(+25)],
 };
 
-const mixamoLiveUpperArm: RotationConstraint = {
+const mixamoLiveLeftUpperArm: RotationConstraint = {
   order: 'YXZ',
-  min: [d(-80), d(-95), d(-70)],
-  max: [d(+130), d(+95), d(+170)],
+  min: [d(-80), d(-65), d(-30)],
+  max: [d(+130), d(+24), d(+170)],
+};
+
+const mixamoLiveRightUpperArm: RotationConstraint = {
+  order: 'YXZ',
+  min: [d(-80), d(0), d(-70)],
+  max: [d(+130), d(+65), d(+50)],
 };
 
 const mixamoLiveLowerArm: RotationConstraint = {
@@ -322,10 +328,10 @@ export const MIXAMO_LIVE_BONE_CONSTRAINTS: Partial<Record<VRMHumanBoneName, Rota
   [VRMHumanBoneName.Chest]:      sym(mixamoLiveSpineSegment),
   [VRMHumanBoneName.UpperChest]: sym(mixamoLiveSpineSegment),
 
-  [VRMHumanBoneName.LeftUpperArm]:  sym(mixamoLiveUpperArm),
+  [VRMHumanBoneName.LeftUpperArm]:  sym(mixamoLiveLeftUpperArm),
   [VRMHumanBoneName.LeftLowerArm]:  sym(mixamoLiveLowerArm),
   [VRMHumanBoneName.LeftHand]:      sym(mixamoLiveHand),
-  [VRMHumanBoneName.RightUpperArm]: sym(mixamoLiveUpperArm),
+  [VRMHumanBoneName.RightUpperArm]: sym(mixamoLiveRightUpperArm),
   [VRMHumanBoneName.RightLowerArm]: sym(mixamoLiveLowerArm),
   [VRMHumanBoneName.RightHand]:     sym(mixamoLiveHand),
 

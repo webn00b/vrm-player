@@ -13,6 +13,7 @@ import { sceneControlsState } from '../../playerVue/sceneControlsState';
 import { renderLoopHooks } from '../../renderLoopHooks';
 import { SkeletonVisualizer } from '../../skeletonVisualizer';
 import { BoneValidator } from '../../validation/boneValidator';
+import { PoseValidator } from '../../validation/poseValidator';
 import { requirePlayback, requireScene, requireVrm } from '../assertions';
 import type { PlayerModule } from '../types';
 
@@ -28,6 +29,7 @@ export const toolingModule: PlayerModule = {
     if (!controller) throw new Error('Player playback controller is required before tooling runs');
 
     const validator = new BoneValidator(vrm);
+    const poseValidator = new PoseValidator(vrm);
     const skelViz = new SkeletonVisualizer(vrm, scene.scene);
     const bonePanel = new BonePosePanel(vrm);
     const boneDrag = new BoneDragController(
@@ -69,6 +71,7 @@ export const toolingModule: PlayerModule = {
     const tooling: ToolingSystems = {
       skelViz,
       validator,
+      poseValidator,
       bonePanel,
       boneDrag,
       hipForce,

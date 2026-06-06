@@ -3,6 +3,7 @@ import type { AnimationBridge, PlayerContext } from './types';
 import { clipToAgentOgiJson, downloadAgentOgiJson } from '../animationToJsonConverter';
 import { mocapModule } from './modules/mocapModule';
 import { retargetBvhToVrm } from '../retarget';
+import { DEFAULT_VALIDATION_SETTINGS, validationSettings } from '../validation/validationSettings';
 
 const mocapState = vi.hoisted(() => ({
   controllers: [] as Array<{
@@ -59,9 +60,10 @@ vi.mock('../bvhLoader', () => ({
 }));
 
 vi.mock('../retarget', () => ({
-  retargetBvhToVrm: vi.fn(async (_vrm: unknown, _bvh: unknown, name: string, opts?: { clampOutOfRange?: boolean }) => {
-    const clip: { name: string; duration: number; clampOutOfRange?: boolean } = { name, duration: 2 };
+  retargetBvhToVrm: vi.fn(async (_vrm: unknown, _bvh: unknown, name: string, opts?: { clampOutOfRange?: boolean; profileId?: string }) => {
+    const clip: { name: string; duration: number; clampOutOfRange?: boolean; profileId?: string } = { name, duration: 2 };
     if (opts) clip.clampOutOfRange = opts.clampOutOfRange ?? false;
+    if (opts?.profileId) clip.profileId = opts.profileId;
     return clip;
   }),
 }));
@@ -120,6 +122,7 @@ function createContext(animation = createAnimationBridge()): PlayerContext {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.assign(validationSettings, DEFAULT_VALIDATION_SETTINGS);
   mocapState.controllers.length = 0;
   mocapState.debugViz.length = 0;
   mocapState.recorders.length = 0;
@@ -143,7 +146,7 @@ test('mocapModule stores mocap systems and replays recorded BVH through the anim
   expect(registerAndEnqueue).toHaveBeenCalledWith(
     'take-1',
     { text: 'HIERARCHY' },
-    { name: 'take-1', duration: 2, clampOutOfRange: false },
+    { name: 'take-1', duration: 2, clampOutOfRange: false, profileId: 'default' },
     expect.any(File),
   );
   expect(ctx.playback?.controller?.jumpTo).toHaveBeenCalledWith(4, { immediate: true });
@@ -160,7 +163,7 @@ test('mocapModule downloads agent_ogi_front JSON for video capture when requeste
   });
 
   expect(clipToAgentOgiJson).toHaveBeenCalledWith(
-    { name: 'take-1', duration: 2, clampOutOfRange: false },
+    { name: 'take-1', duration: 2, clampOutOfRange: false, profileId: 'default' },
     ctx.vrm,
   );
   expect(downloadAgentOgiJson).toHaveBeenCalledWith(
@@ -184,17 +187,32 @@ test('mocapModule clamps video agent_ogi_front JSON when validation is requested
     ctx.vrm,
     { text: 'HIERARCHY' },
     'take-1',
-    { clampOutOfRange: false },
+    { clampOutOfRange: false, profileId: 'default' },
   );
   expect(retargetBvhToVrm).toHaveBeenNthCalledWith(
     2,
     ctx.vrm,
     { text: 'HIERARCHY' },
     'take-1',
-    { clampOutOfRange: true },
+    { clampOutOfRange: true, profileId: 'default' },
   );
   expect(clipToAgentOgiJson).toHaveBeenCalledWith(
-    { name: 'take-1', duration: 2, clampOutOfRange: true },
+    { name: 'take-1', duration: 2, clampOutOfRange: true, profileId: 'default' },
     ctx.vrm,
+  );
+});
+
+test('mocapModule retargets recorded BVH with the selected validation profile', async () => {
+  validationSettings.profileId = 'mixamoLive';
+  const ctx = createContext();
+
+  mocapModule.setup(ctx);
+  await mocapState.controllers[0].onBvhReady?.('HIERARCHY', 'take-1');
+
+  expect(retargetBvhToVrm).toHaveBeenCalledWith(
+    ctx.vrm,
+    { text: 'HIERARCHY' },
+    'take-1',
+    { clampOutOfRange: false, profileId: 'mixamoLive' },
   );
 });

@@ -1,0 +1,93 @@
+import * as THREE from 'three';
+import { describe, expect, test } from 'vitest';
+import { buildMockVRM } from '../../tests/fixtures/mockVrm';
+import { PoseValidator } from './poseValidator';
+
+function setEuler(
+  node: THREE.Object3D | undefined,
+  xDeg: number,
+  yDeg: number,
+  zDeg: number,
+): void {
+  if (!node) throw new Error('missing mock bone');
+  node.quaternion.setFromEuler(new THREE.Euler(
+    THREE.MathUtils.degToRad(xDeg),
+    THREE.MathUtils.degToRad(yDeg),
+    THREE.MathUtils.degToRad(zDeg),
+    'YXZ',
+  ));
+}
+
+describe('PoseValidator arm guardrails', () => {
+  test('leaves a normal side-reach arm pose unchanged', () => {
+    const vrm = buildMockVRM();
+    const validator = new PoseValidator(vrm);
+
+    const stats = validator.validateAndClamp();
+
+    expect(stats.clampedThisFrame).toBe(0);
+    expect(stats.arms.left.poseClass).toBe('sideReach');
+    expect(stats.arms.right.poseClass).toBe('sideReach');
+    expect(stats.violations).toHaveLength(0);
+  });
+
+  test('classifies overhead arms without clamping them as backward violations', () => {
+    const vrm = buildMockVRM();
+    const validator = new PoseValidator(vrm);
+    setEuler(vrm.bones.get('leftUpperArm'), 0, 0, 85);
+    setEuler(vrm.bones.get('rightUpperArm'), 0, 0, -85);
+
+    const stats = validator.validateAndClamp();
+
+    expect(stats.clampedThisFrame).toBe(0);
+    expect(stats.arms.left.poseClass).toBe('overhead');
+    expect(stats.arms.right.poseClass).toBe('overhead');
+    expect(stats.violations).toHaveLength(0);
+  });
+
+  test('classifies cross-body reach without clamping it as backward', () => {
+    const vrm = buildMockVRM();
+    const validator = new PoseValidator(vrm);
+    setEuler(vrm.bones.get('leftUpperArm'), 0, 0, 170);
+    setEuler(vrm.bones.get('rightUpperArm'), 0, 0, -170);
+
+    const stats = validator.validateAndClamp();
+
+    expect(stats.clampedThisFrame).toBe(0);
+    expect(stats.arms.left.poseClass).toBe('crossBody');
+    expect(stats.arms.right.poseClass).toBe('crossBody');
+    expect(stats.violations).toHaveLength(0);
+  });
+
+  test('clamps the dumped backward-arm posture with side-aware arm guardrails', () => {
+    const vrm = buildMockVRM();
+    const validator = new PoseValidator(vrm);
+    setEuler(vrm.bones.get('leftUpperArm'), 17.343728791417004, 42.350678057468286, -47.30201530824238);
+    setEuler(vrm.bones.get('rightUpperArm'), 38.88549593486809, -64.93106939034894, 61.06655999486631);
+
+    const stats = validator.validateAndClamp();
+
+    expect(stats.clampedThisFrame).toBe(2);
+    expect(stats.violations).toContain('leftUpperArm.backwardChain');
+    expect(stats.violations).toContain('rightUpperArm.backwardChain');
+    expect(stats.arms.left.upperArmForwardDeg).toBeLessThanOrEqual(120);
+    expect(stats.arms.right.upperArmForwardDeg).toBeLessThanOrEqual(120);
+  });
+
+  test('clamps post-ROM dump where upper arm is at local limit but still points backward', () => {
+    const vrm = buildMockVRM();
+    const validator = new PoseValidator(vrm);
+    setEuler(vrm.bones.get('leftUpperArm'), 22.873734256102377, 23.999999077874545, -29.999999999999996);
+    setEuler(vrm.bones.get('leftLowerArm'), 38.87501093621991, 74.99999999999984, -6.000000000000001);
+    setEuler(vrm.bones.get('rightUpperArm'), 31.534855987754675, 7.662148652643806e-7, 50);
+    setEuler(vrm.bones.get('rightLowerArm'), 1.525472584744723e-8, -45.40185762610094, -6.000000000000001);
+
+    const stats = validator.validateAndClamp();
+
+    expect(stats.clampedThisFrame).toBeGreaterThanOrEqual(2);
+    expect(stats.violations).toContain('leftUpperArm.backwardChain');
+    expect(stats.violations).toContain('rightLowerArm.backwardChain');
+    expect(stats.arms.left.upperArmForwardDeg).toBeLessThanOrEqual(120);
+    expect(stats.arms.right.forearmForwardDeg).toBeLessThanOrEqual(120);
+  });
+});

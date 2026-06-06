@@ -2,6 +2,7 @@
 import { shallowRef } from 'vue';
 import type { BoneValidator } from '../validation/boneValidator';
 import type { BoneConstraintProfileId } from '../validation/boneConstraints';
+import type { PoseValidator } from '../validation/poseValidator';
 import {
   validationSettings,
   type ImportClampMode,
@@ -10,10 +11,12 @@ import {
 
 const props = defineProps<{
   validator: BoneValidator;
+  poseValidator?: PoseValidator;
 }>();
 
+props.validator.setProfile(validationSettings.profileId);
 const runtimeEnabled = shallowRef(props.validator.enabled);
-const profileId = shallowRef<BoneConstraintProfileId>(props.validator.profileId);
+const profileId = shallowRef<BoneConstraintProfileId>(validationSettings.profileId);
 
 function toggleRuntime(): void {
   runtimeEnabled.value = !runtimeEnabled.value;
@@ -23,6 +26,7 @@ function toggleRuntime(): void {
 function setProfile(event: Event): void {
   const next = (event.target as HTMLSelectElement).value as BoneConstraintProfileId;
   profileId.value = next;
+  validationSettings.profileId = next;
   props.validator.setProfile(next);
 }
 
@@ -36,6 +40,17 @@ function setRecordingMode(event: Event): void {
 
 function setImportMode(event: Event): void {
   validationSettings.importClampMode = (event.target as HTMLSelectElement).value as ImportClampMode;
+}
+
+function dumpValidationState(): void {
+  console.log('[validator] controls dump', {
+    enabled: props.validator.enabled,
+    profileId: props.validator.profileId,
+    settings: validationSettings,
+    stats: props.validator.getStats(),
+    poseStats: props.poseValidator?.getStats() ?? null,
+    constraints: props.validator.getConstraints(),
+  });
 }
 </script>
 
@@ -87,6 +102,16 @@ function setImportMode(event: Event): void {
         <option value="clamp">Clamp</option>
       </select>
     </label>
+
+    <button
+      class="validation-chip validation-dump"
+      type="button"
+      aria-label="Dump validation state"
+      title="Dump active validation state to console"
+      @click="dumpValidationState"
+    >
+      Dump
+    </button>
   </section>
 </template>
 
@@ -132,6 +157,10 @@ function setImportMode(event: Event): void {
 .validation-chip {
   padding: 0 8px;
   cursor: pointer;
+}
+
+.validation-dump {
+  color: rgba(255, 255, 255, 0.68);
 }
 
 .validation-chip.active {

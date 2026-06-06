@@ -45,10 +45,11 @@ export const mocapModule: PlayerModule = {
       try {
         const bvh = parseBVH(bvhText);
         const clampOutOfRange = shouldClampImportedAnimations(validationSettings);
-        const clip = await retargetBvhToVrm(vrm, bvh, name, { clampOutOfRange });
+        const profileId = validationSettings.profileId;
+        const clip = await retargetBvhToVrm(vrm, bvh, name, { clampOutOfRange, profileId });
         if (options?.source === 'video' && options.exportAgentOgiJson) {
           const agentClip = clampOutOfRange || options.clampAgentOgiOutOfRange
-            ? await retargetBvhToVrm(vrm, bvh, name, { clampOutOfRange: true })
+            ? await retargetBvhToVrm(vrm, bvh, name, { clampOutOfRange: true, profileId })
             : clip;
           const filename = `${name}.agent_ogi.json`;
           downloadAgentOgiJson(

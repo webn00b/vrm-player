@@ -4,9 +4,11 @@ import type { CanonicalJointName, CanonicalMotionClip, Vec3Tuple } from './canon
 import { cleanupCanonicalMotionClip } from './motionCleanup';
 import { normalizeQuaternionSignsAcrossClip } from '../../animationLoaders/quaternionContinuity';
 import { clampClip, validateClip } from '../../validation/clipValidator';
+import type { BoneConstraintProfileId } from '../../validation/boneConstraints';
 
 export interface OfflineRetargetOptions {
   clampOutOfRange?: boolean;
+  profileId?: BoneConstraintProfileId;
   positionSmoothingAlpha?: number;
   rootMotionMode?: 'preserve' | 'horizontal' | 'locked';
   rootMotionScale?: number;
@@ -335,7 +337,9 @@ export function retargetCanonicalMotionToVrm(
     );
   }
 
-  const report = opts.clampOutOfRange ? clampClip(out, vrm) : validateClip(out, vrm);
+  const report = opts.clampOutOfRange
+    ? clampClip(out, vrm, undefined, opts.profileId)
+    : validateClip(out, vrm, undefined, opts.profileId);
   if (report.violationCount > 0) {
     const worst = report.worstBone
       ? `worst ${report.worstBone} (+${THREE.MathUtils.radToDeg(report.worstOverBy).toFixed(1)} deg)`
