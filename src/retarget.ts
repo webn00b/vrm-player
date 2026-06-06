@@ -22,6 +22,10 @@ type HumanoidWithNormalizedRestPose = VRM['humanoid'] & {
   normalizedRestPose?: NormalizedRestPoseLike;
 };
 
+type AnimationClipWithUserData = THREE.AnimationClip & {
+  userData?: Record<string, unknown>;
+};
+
 function uniqueTrackTargets(clip: THREE.AnimationClip): number {
   const targets = new Set<string>();
   for (const track of clip.tracks) {
@@ -108,8 +112,9 @@ export async function retargetBvhToVrm(
   }
 
   const clipTargets = uniqueTrackTargets(clip);
-  clip.userData = {
-    ...clip.userData,
+  const clipWithUserData = clip as AnimationClipWithUserData;
+  clipWithUserData.userData = {
+    ...clipWithUserData.userData,
     retargetInfo: {
       source: 'bvh-vrma',
       name,
