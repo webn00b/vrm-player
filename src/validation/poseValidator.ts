@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
+import { getCachedHumanoidRestAxes, type HumanoidRestAxisInfo } from '../humanoidRestPose';
 import { applyTwoBoneChain } from '../mocap/solvers/twoBoneChainApplication';
 import { getPoseConstraints, type PoseConstraintProfileId, type PoseConstraints } from './poseConstraints';
 
@@ -69,7 +70,7 @@ const _target = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 const _upperDir = new THREE.Vector3();
 const _forearmDir = new THREE.Vector3();
-const _restAxis = {
+const FALLBACK_REST_AXIS = {
   left: new THREE.Vector3(1, 0, 0),
   right: new THREE.Vector3(-1, 0, 0),
 } as const;
@@ -104,10 +105,12 @@ export class PoseValidator {
 
   private stats: PoseValidationStats = makeInitialStats();
   private constraints: PoseConstraints;
+  private readonly restAxes: Map<string, HumanoidRestAxisInfo>;
 
   constructor(private readonly vrm: VRM, opts: PoseValidatorOptions = {}) {
     this.profileId = opts.profileId ?? 'mixamoLive';
     this.constraints = getPoseConstraints(this.profileId);
+    this.restAxes = getCachedHumanoidRestAxes(vrm);
   }
 
   validateAndClamp(): PoseValidationStats {
@@ -311,11 +314,15 @@ export class PoseValidator {
       lowerLength,
       upperNode: nodes.upper,
       lowerNode: nodes.lower,
-      upperRestAxis: _restAxis[side],
-      lowerRestAxis: _restAxis[side],
+      upperRestAxis: this.getArmRestAxis(side, 'UpperArm'),
+      lowerRestAxis: this.getArmRestAxis(side, 'LowerArm'),
       lerp: this.constraints.arms.ik.correctionLerp,
     });
     return true;
+  }
+
+  private getArmRestAxis(side: 'left' | 'right', segment: 'UpperArm' | 'LowerArm'): THREE.Vector3 {
+    return this.restAxes.get(`${side}${segment}`)?.rawAxis ?? FALLBACK_REST_AXIS[side];
   }
 
   private shouldApplyArmIkGuardrail(side: 'left' | 'right', stats: PoseArmStats): boolean {

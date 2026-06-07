@@ -35,6 +35,22 @@ function setEulerOrder(
   ));
 }
 
+function setLeftArmRestAxisY(vrm: ReturnType<typeof buildMockVRM>): void {
+  const lower = vrm.bones.get('leftLowerArm');
+  const hand = vrm.bones.get('leftHand');
+  if (!lower || !hand) throw new Error('missing mock arm chain');
+  lower.position.set(0, 0.25, 0);
+  hand.position.set(0, 0.25, 0);
+  vrm.scene.updateMatrixWorld(true);
+}
+
+function getWorldPosition(node: THREE.Object3D | undefined): THREE.Vector3 {
+  if (!node) throw new Error('missing mock bone');
+  const out = new THREE.Vector3();
+  node.getWorldPosition(out);
+  return out;
+}
+
 describe('PoseValidator arm guardrails', () => {
   test('Mixamo Live pose profile exposes arm chain thresholds', () => {
     const constraints = getPoseConstraints('mixamoLive');
@@ -154,5 +170,28 @@ describe('PoseValidator arm guardrails', () => {
     expect(stats.clampedThisFrame).toBe(0);
     expect(after.upperArmForwardDeg).toBeCloseTo(before.upperArmForwardDeg!, 5);
     expect(after.forearmForwardDeg).toBeCloseTo(before.forearmForwardDeg!, 5);
+  });
+
+  test('IK guardrail uses actual arm rest axes when writing corrected quaternions', () => {
+    const vrm = buildMockVRM();
+    setLeftArmRestAxisY(vrm);
+    const validator = new PoseValidator(vrm, { profileId: 'mixamoLive' });
+    setEulerOrder(vrm.bones.get('leftUpperArm'), 'YXZ', -120, -120, 70);
+    setEulerOrder(vrm.bones.get('leftLowerArm'), 'XYZ', -60, -100, -60);
+    vrm.scene.updateMatrixWorld(true);
+
+    const shoulder = getWorldPosition(vrm.bones.get('leftUpperArm'));
+    const chainLength =
+      getWorldPosition(vrm.bones.get('leftLowerArm')).distanceTo(shoulder)
+      + getWorldPosition(vrm.bones.get('leftHand')).distanceTo(getWorldPosition(vrm.bones.get('leftLowerArm')));
+    const expectedTarget = shoulder.clone()
+      .add(new THREE.Vector3(chainLength * 0.5, 0, chainLength * 0.28));
+
+    const stats = validator.validateAndClamp();
+    vrm.scene.updateMatrixWorld(true);
+    const hand = getWorldPosition(vrm.bones.get('leftHand'));
+
+    expect(stats.clampedThisFrame).toBeGreaterThan(0);
+    expect(hand.distanceTo(expectedTarget)).toBeLessThan(0.01);
   });
 });
