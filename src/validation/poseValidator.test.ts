@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, test } from 'vitest';
+import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import { buildMockVRM } from '../../tests/fixtures/mockVrm';
 import { PoseValidator } from './poseValidator';
 import { MIXAMO_LIVE_POSE_CONSTRAINTS, getPoseConstraints } from './poseConstraints';
@@ -193,5 +194,27 @@ describe('PoseValidator arm guardrails', () => {
 
     expect(stats.clampedThisFrame).toBeGreaterThan(0);
     expect(hand.distanceTo(expectedTarget)).toBeLessThan(0.01);
+  });
+
+  test('does not correct arm chains excluded from mocap validation', () => {
+    const vrm = buildMockVRM();
+    const validator = new PoseValidator(vrm, { profileId: 'mixamoLive' });
+    setEuler(vrm.bones.get('leftUpperArm'), 22.873734256102377, 23.999999077874545, -29.999999999999996);
+    setEuler(vrm.bones.get('leftLowerArm'), 38.87501093621991, 74.99999999999984, -6.000000000000001);
+    vrm.scene.updateMatrixWorld(true);
+
+    const before = validator.getArmWorldSnapshot('left');
+    const stats = validator.validateAndClamp(new Set([
+      VRMHumanBoneName.LeftUpperArm,
+      VRMHumanBoneName.LeftLowerArm,
+      VRMHumanBoneName.LeftHand,
+    ]));
+    const after = validator.getArmWorldSnapshot('left');
+
+    expect(stats.violations).toContain('leftUpperArm.backwardChain');
+    expect(stats.clampedThisFrame).toBe(0);
+    expect(stats.arms.left.clamped).toBe(false);
+    expect(after.upperArmForwardDeg).toBeCloseTo(before.upperArmForwardDeg!, 5);
+    expect(after.forearmForwardDeg).toBeCloseTo(before.forearmForwardDeg!, 5);
   });
 });

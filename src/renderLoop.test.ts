@@ -94,6 +94,7 @@ describe('selectValidationClampPlan', () => {
 
 test('render loop captures the red skeleton pose before validation clamps the frame', () => {
   const order: string[] = [];
+  const poseClampMasks: Array<ReadonlySet<VRMHumanBoneName> | undefined> = [];
   vi.stubGlobal('requestAnimationFrame', vi.fn(() => 7));
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
 
@@ -140,7 +141,10 @@ test('render loop captures the red skeleton pose before validation clamps the fr
       },
       poseValidator: {
         enabled: true,
-        validateAndClamp: () => order.push('poseValidator.validateAndClamp'),
+        validateAndClamp: (excludedBones?: ReadonlySet<VRMHumanBoneName>) => {
+          order.push('poseValidator.validateAndClamp');
+          poseClampMasks.push(excludedBones);
+        },
       },
       bonePanel: { apply: () => order.push('bonePanel.apply') },
       boneDrag: {
@@ -158,4 +162,76 @@ test('render loop captures the red skeleton pose before validation clamps the fr
   expect(order.indexOf('boneDrag.apply')).toBeLessThan(order.indexOf('skelViz.captureUnclampedPose'));
   expect(order.indexOf('skelViz.captureUnclampedPose')).toBeLessThan(order.indexOf('validator.clampAll'));
   expect(order.indexOf('validator.clampAll')).toBeLessThan(order.indexOf('poseValidator.validateAndClamp'));
+  expect(poseClampMasks).toEqual([CLIP_VALIDATION_EXCLUDED_BONES]);
+});
+
+test('render loop passes mocap recording exclusions to pose validation', () => {
+  const boneClampMasks: Array<ReadonlySet<VRMHumanBoneName> | undefined> = [];
+  const poseClampMasks: Array<ReadonlySet<VRMHumanBoneName> | undefined> = [];
+  vi.stubGlobal('requestAnimationFrame', vi.fn(() => 7));
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
+  const cleanup = startRenderLoop(
+    {
+      clock: { getDelta: () => 1 / 60 },
+      controls: { update: () => undefined },
+      renderer: { render: () => undefined },
+      scene: {},
+      camera: {},
+    } as never,
+    {
+      update: () => undefined,
+      humanoid: { getNormalizedBoneNode: () => null },
+    } as never,
+    {
+      controller: { update: () => undefined, hasBvhActive: false, muted: false },
+      idle: { update: () => undefined },
+      pa: { applyAll: () => undefined },
+      micro: { update: () => undefined },
+    } as never,
+    {
+      mocap: {
+        state: 'recording',
+        applyLatestFrame: () => undefined,
+        applyTrackedHandsOverlay: () => undefined,
+        captureRecordedFrame: () => undefined,
+        latestFrame: null,
+        debugTargets: {},
+        calibration: {},
+        hipsBaseWorld: {},
+      },
+      debugViz: { visible: false },
+      dbgRecorder: { active: false },
+    } as never,
+    {
+      skelViz: {
+        captureUnclampedPose: () => undefined,
+        update: () => undefined,
+      },
+      validator: {
+        enabled: true,
+        clampAll: (excludedBones?: ReadonlySet<VRMHumanBoneName>) => {
+          boneClampMasks.push(excludedBones);
+        },
+      },
+      poseValidator: {
+        enabled: true,
+        validateAndClamp: (excludedBones?: ReadonlySet<VRMHumanBoneName>) => {
+          poseClampMasks.push(excludedBones);
+        },
+      },
+      bonePanel: { apply: () => undefined },
+      boneDrag: {
+        update: () => undefined,
+        apply: () => undefined,
+      },
+      hipForce: { update: () => undefined },
+      hipBalance: { apply: () => undefined },
+    } as never,
+  );
+
+  cleanup();
+
+  expect(boneClampMasks).toEqual([MOCAP_VALIDATION_EXCLUDED_BONES]);
+  expect(poseClampMasks).toEqual([MOCAP_VALIDATION_EXCLUDED_BONES]);
 });

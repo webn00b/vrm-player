@@ -146,7 +146,7 @@ export function startRenderLoop(
       });
       if (clampPlan.shouldClamp) {
         validator.clampAll(clampPlan.excludedBones);
-        poseValidator.validateAndClamp();
+        poseValidator.validateAndClamp(clampPlan.excludedBones);
       }
     }
 

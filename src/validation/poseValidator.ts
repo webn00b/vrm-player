@@ -113,7 +113,7 @@ export class PoseValidator {
     this.restAxes = getCachedHumanoidRestAxes(vrm);
   }
 
-  validateAndClamp(): PoseValidationStats {
+  validateAndClamp(excludedBones?: ReadonlySet<VRMHumanBoneName>): PoseValidationStats {
     this.stats = makeInitialStats();
     if (!this.enabled) return this.stats;
 
@@ -123,8 +123,12 @@ export class PoseValidator {
 
     const leftBefore = this.computeArmStats('left', torso);
     const rightBefore = this.computeArmStats('right', torso);
-    const leftClamped = this.applyArmIkGuardrail('left', leftBefore, torso);
-    const rightClamped = this.applyArmIkGuardrail('right', rightBefore, torso);
+    const leftClamped = this.isArmChainExcluded('left', excludedBones)
+      ? false
+      : this.applyArmIkGuardrail('left', leftBefore, torso);
+    const rightClamped = this.isArmChainExcluded('right', excludedBones)
+      ? false
+      : this.applyArmIkGuardrail('right', rightBefore, torso);
 
     if (leftClamped || rightClamped) this.vrm.scene?.updateMatrixWorld(true);
 
@@ -323,6 +327,14 @@ export class PoseValidator {
 
   private getArmRestAxis(side: 'left' | 'right', segment: 'UpperArm' | 'LowerArm'): THREE.Vector3 {
     return this.restAxes.get(`${side}${segment}`)?.rawAxis ?? FALLBACK_REST_AXIS[side];
+  }
+
+  private isArmChainExcluded(side: 'left' | 'right', excludedBones?: ReadonlySet<VRMHumanBoneName>): boolean {
+    if (!excludedBones) return false;
+    const upper = side === 'left' ? VRMHumanBoneName.LeftUpperArm : VRMHumanBoneName.RightUpperArm;
+    const lower = side === 'left' ? VRMHumanBoneName.LeftLowerArm : VRMHumanBoneName.RightLowerArm;
+    const hand = side === 'left' ? VRMHumanBoneName.LeftHand : VRMHumanBoneName.RightHand;
+    return excludedBones.has(upper) || excludedBones.has(lower) || excludedBones.has(hand);
   }
 
   private shouldApplyArmIkGuardrail(side: 'left' | 'right', stats: PoseArmStats): boolean {
