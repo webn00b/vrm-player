@@ -35,6 +35,7 @@ test('start mocap with fake camera: state transitions to "live" without errors',
   });
 
   await page.goto('/');
+  await page.getByRole('button', { name: 'Capture', exact: true }).click();
   const primaryBtn = page.getByTestId('capture-primary');
   await expect(primaryBtn).toBeVisible({ timeout: 10_000 });
 
@@ -72,6 +73,7 @@ test('start mocap with fake camera: state transitions to "live" without errors',
 test('with real fake-video: avatar bones move when mocap is live', async ({ page }) => {
   test.skip(!HAS_REAL_VIDEO, 'Requires FAKE_VIDEO_PATH env var pointing at a body-motion .y4m');
   await page.goto('/');
+  await page.getByRole('button', { name: 'Capture', exact: true }).click();
   await expect(page.getByTestId('capture-primary')).toBeVisible();
 
   // Start mocap.
