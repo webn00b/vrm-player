@@ -11,9 +11,12 @@ import {
 const DEFAULT_PORT = 5333;
 const DEFAULT_TIMEOUT_MS = 180_000;
 const DEFAULT_FPS = 30;
-const DEFAULT_WIDTH = 1280;
-const DEFAULT_HEIGHT = 720;
+const DEFAULT_WIDTH = 1920;
+const DEFAULT_HEIGHT = 1080;
+const DEFAULT_PIXEL_RATIO = 1;
+const DEFAULT_VIDEO_BITS_PER_SECOND = 12_000_000;
 const DEFAULT_PADDING_SECONDS = 0.25;
+const SCENE_CONTROLS_STORAGE_KEY = 'vrm-player.scene-controls';
 
 export function usage() {
   return [
@@ -29,8 +32,11 @@ export function usage() {
     `  --fps <number>        Canvas capture FPS. Default: ${DEFAULT_FPS}`,
     `  --width <number>      Browser viewport width. Default: ${DEFAULT_WIDTH}`,
     `  --height <number>     Browser viewport height. Default: ${DEFAULT_HEIGHT}`,
+    `  --pixel-ratio <num>   Browser device scale factor. Default: ${DEFAULT_PIXEL_RATIO}`,
+    `  --video-bitrate <bps> WebM video bitrate. Default: ${DEFAULT_VIDEO_BITS_PER_SECOND}`,
     '  --duration <seconds>  Override recording duration. Defaults to BVH Frames * Frame Time',
     `  --padding <seconds>   Extra recording tail after duration. Default: ${DEFAULT_PADDING_SECONDS}`,
+    '  --show-debug          Keep skeleton/debug overlays visible in the recorded video',
     '  --headed              Show Chromium while recording',
     '  -h, --help            Show this help',
   ].join('\n');
@@ -77,8 +83,11 @@ export function parseCliArgs(argv) {
     fps: DEFAULT_FPS,
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
+    pixelRatio: DEFAULT_PIXEL_RATIO,
+    videoBitsPerSecond: DEFAULT_VIDEO_BITS_PER_SECOND,
     durationSeconds: undefined,
     paddingSeconds: DEFAULT_PADDING_SECONDS,
+    cleanScene: true,
     headed: false,
     help: false,
   };
@@ -89,6 +98,8 @@ export function parseCliArgs(argv) {
       parsed.help = true;
     } else if (arg === '--headed') {
       parsed.headed = true;
+    } else if (arg === '--show-debug') {
+      parsed.cleanScene = false;
     } else if (arg === '-o' || arg === '--output') {
       parsed.output = readFlagValue(argv, i, arg);
       i += 1;
@@ -112,6 +123,12 @@ export function parseCliArgs(argv) {
       i += 1;
     } else if (arg === '--height') {
       parsed.height = parsePositiveInt(readFlagValue(argv, i, arg), arg);
+      i += 1;
+    } else if (arg === '--pixel-ratio') {
+      parsed.pixelRatio = parsePositiveNumber(readFlagValue(argv, i, arg), arg);
+      i += 1;
+    } else if (arg === '--video-bitrate') {
+      parsed.videoBitsPerSecond = parsePositiveInt(readFlagValue(argv, i, arg), arg);
       i += 1;
     } else if (arg === '--duration') {
       parsed.durationSeconds = parsePositiveNumber(readFlagValue(argv, i, arg), arg);
@@ -171,7 +188,10 @@ export function resolveCliOptions(parsed, cwd = process.cwd()) {
       fps: parsed.fps,
       width: parsed.width,
       height: parsed.height,
+      pixelRatio: parsed.pixelRatio,
+      videoBitsPerSecond: parsed.videoBitsPerSecond,
       paddingSeconds: parsed.paddingSeconds,
+      cleanScene: parsed.cleanScene,
       help: true,
     };
   }
@@ -203,14 +223,35 @@ export function resolveCliOptions(parsed, cwd = process.cwd()) {
     fps: parsed.fps,
     width: parsed.width,
     height: parsed.height,
+    pixelRatio: parsed.pixelRatio,
+    videoBitsPerSecond: parsed.videoBitsPerSecond,
     ...(parsed.durationSeconds ? { durationSeconds: parsed.durationSeconds } : {}),
     paddingSeconds: parsed.paddingSeconds,
+    cleanScene: parsed.cleanScene,
   };
+}
+
+export async function installSceneRecordingSettings(context, cleanScene) {
+  if (!cleanScene) return;
+  await context.addInitScript(
+    ({ key }) => {
+      localStorage.setItem(key, JSON.stringify({
+        modelOn: true,
+        skeletonOn: false,
+        skelBodyOn: false,
+        skelFingersOn: false,
+        skelLabelsOn: false,
+        unclampedSkeletonOn: false,
+        dragOn: false,
+      }));
+    },
+    { key: SCENE_CONTROLS_STORAGE_KEY },
+  );
 }
 
 async function recordCanvasToWebm(page, options) {
   const downloadPromise = page.waitForEvent('download', { timeout: options.timeoutMs });
-  await page.evaluate(async ({ fps, durationSeconds, paddingSeconds, outputName }) => {
+  await page.evaluate(async ({ fps, durationSeconds, paddingSeconds, outputName, videoBitsPerSecond }) => {
     const api = window.__vrmPlayerCli;
     if (!api) throw new Error('VRM player CLI bridge is not available');
     const canvas = document.querySelector('#app canvas');
@@ -225,7 +266,7 @@ async function recordCanvasToWebm(page, options) {
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
       ? 'video/webm;codecs=vp9'
       : 'video/webm';
-    const recorder = new MediaRecorder(stream, { mimeType });
+    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond });
     const stopped = new Promise((resolve, reject) => {
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.push(event.data);
@@ -252,6 +293,7 @@ async function recordCanvasToWebm(page, options) {
     fps: options.fps,
     durationSeconds: options.durationSeconds,
     paddingSeconds: options.paddingSeconds,
+    videoBitsPerSecond: options.videoBitsPerSecond,
     outputName: basename(options.output),
   });
   return downloadPromise;
@@ -280,7 +322,9 @@ export async function runBvhToVideo(options) {
     const context = await browser.newContext({
       acceptDownloads: true,
       viewport: { width: options.width, height: options.height },
+      deviceScaleFactor: options.pixelRatio,
     });
+    await installSceneRecordingSettings(context, options.cleanScene);
     const page = await context.newPage();
     page.setDefaultTimeout(options.timeoutMs);
     page.setDefaultNavigationTimeout(options.timeoutMs);
