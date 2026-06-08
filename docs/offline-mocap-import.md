@@ -113,6 +113,27 @@ This writes:
 Use `--validation-mode full` together with `--validation-pair` if the corrected
 variant should use full ROM/pose validation instead of safe validation.
 
+## BVH To Video CLI
+
+To render a BVH animation back to a browser-recorded video, use:
+
+```bash
+npm run bvh:video -- ./take.bvh --output ./take.webm
+```
+
+The command starts the same frontend, imports the BVH through the player
+animation input, restarts the active clip from frame zero, records the Three.js
+canvas with Chromium `MediaRecorder`, and saves a `.webm` file. By default the
+recording duration is read from the BVH `Frames` and `Frame Time` fields.
+
+Useful options:
+
+```bash
+npm run bvh:video -- ./take.bvh --output ./take.webm --vrm ./avatar.vrm
+npm run bvh:video -- ./take.bvh --output ./take.webm --duration 3 --fps 24
+npm run bvh:video -- ./take.bvh --output ./take.webm --width 1920 --height 1080 --headed
+```
+
 ### Conversion script shortcuts
 
 The browser-backed JavaScript tools live in `tools/` and are exposed as npm
@@ -126,6 +147,7 @@ npm run video:bvh:debug -- ./input.mp4 --output ./take.bvh
 npm run video:bvh:batch -- ./videos --output-dir ./bvh
 npm run motion:bvh -- ./take.motion.json --output ./take.bvh
 npm run motion:bvh:batch -- ./motions --output-dir ./bvh
+npm run bvh:video -- ./take.bvh --output ./take.webm
 ```
 
 - `video:bvh:pair` writes corrected/raw variants.
@@ -134,6 +156,8 @@ npm run motion:bvh:batch -- ./motions --output-dir ./bvh
 - `video:bvh:batch` recursively converts `.mp4`, `.mov`, `.webm`, and `.m4v`.
 - `motion:bvh` and `motion:bvh:batch` load `.motion.json`, `.wham.json`, or
   `.gvhmr.json` through the same frontend animation import/export path.
+- `bvh:video` loads `.bvh` through the player animation import path and records
+  the player canvas to `.webm`.
 
 ## Two-Camera MediaPipe MVP
 
