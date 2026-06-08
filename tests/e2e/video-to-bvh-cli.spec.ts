@@ -27,3 +27,17 @@ test('motion-json CLI can target the frontend animation export upload path', asy
   await expect(input).toHaveAttribute('accept', /motion\.json/);
   await expect(page.getByTestId('capture-primary')).toContainText(/Choose animation/);
 });
+
+test('bvh-to-video CLI can target the player animation upload path', async ({ page }) => {
+  await page.goto('/');
+
+  const input = page.getByTestId('start-add-animation-input');
+  await expect(input).toHaveCount(1);
+  await expect(input).toHaveAttribute('type', 'file');
+  await expect(input).toHaveAttribute('accept', '.bvh,.vrma,.fbx');
+
+  await expect.poll(
+    () => page.evaluate(() => typeof window.__vrmPlayerCli?.getPlaybackInfo),
+    { timeout: 10_000 },
+  ).toBe('function');
+});

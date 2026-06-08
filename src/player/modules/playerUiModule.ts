@@ -24,6 +24,16 @@ import { requireAnimation, requirePlayback, requireTooling, requireVrm } from '.
 import { writeQueueLoopMode } from '../queueLoopMode';
 import type { PlayerModule, QueueHandle } from '../types';
 
+declare global {
+  interface Window {
+    __vrmPlayerCli?: {
+      getPlaybackInfo(): { active: boolean; duration: number; time: number; name: string; queueLength: number };
+      restartPlayback(): void;
+      setPaused(paused: boolean): void;
+    };
+  }
+}
+
 interface QueuePanelProps extends Record<string, unknown> {
   mode?: 'full' | 'exportsOnly';
   onJump?: (queueIndex: number) => void;
@@ -239,6 +249,30 @@ export const playerUiModule: PlayerModule = {
     setStatus('drop a .bvh file or record from mocap to start');
 
     vrm.scene.visible = sceneControlsState.modelOn;
+
+    const cliBridge = {
+      getPlaybackInfo: () => ({
+        active: controller.hasBvhActive,
+        duration: controller.currentDuration,
+        time: controller.currentTime,
+        name: controller.currentName,
+        queueLength: controller.queueLength,
+      }),
+      restartPlayback: () => {
+        if (controller.queueLength > 0) {
+          controller.jumpTo(0, { immediate: true });
+          controller.seek(0);
+          controller.setPaused(false);
+        }
+      },
+      setPaused: (paused: boolean) => {
+        controller.setPaused(paused);
+      },
+    };
+    window.__vrmPlayerCli = cliBridge;
+    registerCleanup(() => {
+      if (window.__vrmPlayerCli === cliBridge) delete window.__vrmPlayerCli;
+    });
 
     const bvhByIndex = animation.bvhByIndex;
     const names = animation.names;
