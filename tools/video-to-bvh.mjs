@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,6 +8,8 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 const DEFAULT_RECORDING_CLAMP_MODE = 'safe';
 const VALIDATION_SETTINGS_STORAGE_KEY = 'vrm-player.validation-settings';
 const VALIDATION_MODES = new Set(['safe', 'full', 'off']);
+export const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.webm', '.m4v'];
+export const MOTION_EXTENSIONS = ['.motion.json', '.wham.json', '.gvhmr.json', '.json'];
 
 export function usage() {
   return [
@@ -114,9 +116,36 @@ function defaultOutputFor(video) {
   return join(dirname(video), `${basename(video, extension)}.bvh`);
 }
 
-function outputVariantPath(output, variant) {
+export function outputVariantPath(output, variant) {
   const extension = extname(output) || '.bvh';
   return join(dirname(output), `${basename(output, extname(output))}.${variant}${extension}`);
+}
+
+function hasAnyExtension(path, extensions) {
+  const lower = path.toLowerCase();
+  return extensions.some((extension) => lower.endsWith(extension.toLowerCase()));
+}
+
+export function listConvertibleFiles(input, extensions) {
+  if (!existsSync(input)) throw new Error(`Input path does not exist: ${input}`);
+  const stat = statSync(input);
+  if (stat.isFile()) return hasAnyExtension(input, extensions) ? [input] : [];
+  if (!stat.isDirectory()) throw new Error(`Input path is not a file or directory: ${input}`);
+
+  const out = [];
+  const visit = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.isFile() && hasAnyExtension(path, extensions)) out.push(path);
+    }
+  };
+  visit(input);
+  return out.sort((a, b) => a.localeCompare(b));
+}
+
+export function resolveMatrixOutputs(output, modes = ['safe', 'full', 'off']) {
+  return Object.fromEntries(modes.map((mode) => [mode, outputVariantPath(output, mode)]));
 }
 
 export function readBvhFrameCount(text) {
@@ -183,7 +212,7 @@ export function resolveCliOptions(parsed, cwd = process.cwd()) {
   };
 }
 
-async function startViteServer(options) {
+export async function startViteServer(options) {
   const { createServer } = await import('vite');
   const server = await createServer({
     logLevel: 'warn',
@@ -201,7 +230,7 @@ async function startViteServer(options) {
   };
 }
 
-async function loadOptionalVrm(page, vrmPath, timeoutMs) {
+export async function loadOptionalVrm(page, vrmPath, timeoutMs) {
   if (!vrmPath) return;
   const firstVrmInput = page.locator('input[type="file"][accept=".vrm"]').first();
   await firstVrmInput.setInputFiles(vrmPath);
@@ -209,7 +238,7 @@ async function loadOptionalVrm(page, vrmPath, timeoutMs) {
   await page.waitForTimeout(500);
 }
 
-function installPageDiagnostics(page, errors) {
+export function installPageDiagnostics(page, errors) {
   page.on('console', (msg) => {
     const text = msg.text();
     if (msg.type() === 'error') errors.push(text);
@@ -222,7 +251,7 @@ function installPageDiagnostics(page, errors) {
   });
 }
 
-async function installValidationSettings(context, recordingClampMode) {
+export async function installValidationSettings(context, recordingClampMode) {
   await context.addInitScript(
     ({ key, mode }) => {
       localStorage.setItem(key, JSON.stringify({
@@ -294,6 +323,64 @@ export async function runVideoToBvh(options) {
   }
 }
 
+export async function runMotionJsonToBvh(options) {
+  const server = options.url
+    ? { url: options.url, close: async () => undefined }
+    : await startViteServer(options);
+
+  let browser;
+  try {
+    const { chromium } = await import('playwright');
+    browser = await chromium.launch({
+      headless: !options.headed,
+      args: [
+        '--autoplay-policy=no-user-gesture-required',
+        '--enable-features=SharedArrayBuffer',
+      ],
+    });
+
+    const context = await browser.newContext({
+      acceptDownloads: true,
+      viewport: { width: 1440, height: 1000 },
+    });
+    await installValidationSettings(context, options.recordingClampMode ?? DEFAULT_RECORDING_CLAMP_MODE);
+    const page = await context.newPage();
+    page.setDefaultTimeout(options.timeoutMs);
+    page.setDefaultNavigationTimeout(options.timeoutMs);
+
+    const browserErrors = [];
+    installPageDiagnostics(page, browserErrors);
+
+    await page.goto(server.url);
+    await page.locator('#app canvas').waitFor({ state: 'visible', timeout: options.timeoutMs });
+    await loadOptionalVrm(page, options.vrm, options.timeoutMs);
+
+    await page.getByRole('button', { name: 'Capture', exact: true }).click();
+    await page.getByTestId('capture-primary').waitFor({ state: 'visible', timeout: options.timeoutMs });
+    await page.getByTestId('capture-src-animfile').click();
+    await page.getByTestId('capture-anim-input').setInputFiles(options.input);
+    await page.getByTestId('capture-primary').waitFor({ state: 'visible', timeout: options.timeoutMs });
+    await page.getByTestId('capture-primary').filter({ hasText: /Record BVH/ }).waitFor({ timeout: options.timeoutMs });
+
+    mkdirSync(dirname(options.output), { recursive: true });
+    const downloadPromise = page.waitForEvent('download', { timeout: options.timeoutMs });
+    await page.getByTestId('capture-primary').click();
+    const download = await downloadPromise;
+    await download.saveAs(options.output);
+    assertBvhHasFrames(readFileSync(options.output, 'utf8'), options.output);
+
+    return {
+      output: options.output,
+      suggestedFilename: download.suggestedFilename(),
+      browserErrors,
+      url: server.url,
+    };
+  } finally {
+    await browser?.close();
+    await server.close();
+  }
+}
+
 export async function runValidationPair(options) {
   const correctedOutput = options.outputs?.corrected ?? outputVariantPath(options.output, 'corrected');
   const rawOutput = options.outputs?.raw ?? outputVariantPath(options.output, 'raw');
@@ -310,6 +397,29 @@ export async function runValidationPair(options) {
     validationPair: false,
   });
   return { corrected, raw };
+}
+
+export async function runValidationMatrix(options, modes = ['safe', 'full', 'off']) {
+  const outputs = resolveMatrixOutputs(options.output, modes);
+  const results = {};
+  for (const mode of modes) {
+    results[mode] = await runVideoToBvh({
+      ...options,
+      output: outputs[mode],
+      recordingClampMode: mode,
+      validationPair: false,
+    });
+  }
+  return results;
+}
+
+export function bvhSummary(path) {
+  const text = readFileSync(path, 'utf8');
+  return {
+    path,
+    frames: readBvhFrameCount(text),
+    bytes: statSync(path).size,
+  };
 }
 
 export async function main(argv = process.argv.slice(2), cwd = process.cwd()) {

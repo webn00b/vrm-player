@@ -113,6 +113,28 @@ This writes:
 Use `--validation-mode full` together with `--validation-pair` if the corrected
 variant should use full ROM/pose validation instead of safe validation.
 
+### Conversion script shortcuts
+
+The browser-backed JavaScript tools live in `tools/` and are exposed as npm
+scripts:
+
+```bash
+npm run video:bvh -- ./input.mp4 --output ./take.bvh
+npm run video:bvh:pair -- ./input.mp4 --output ./take.bvh
+npm run video:bvh:matrix -- ./input.mp4 --output ./take.bvh
+npm run video:bvh:debug -- ./input.mp4 --output ./take.bvh
+npm run video:bvh:batch -- ./videos --output-dir ./bvh
+npm run motion:bvh -- ./take.motion.json --output ./take.bvh
+npm run motion:bvh:batch -- ./motions --output-dir ./bvh
+```
+
+- `video:bvh:pair` writes corrected/raw variants.
+- `video:bvh:matrix` writes safe/full/off validation variants.
+- `video:bvh:debug` opens Chromium headed and prints BVH frame/size summaries.
+- `video:bvh:batch` recursively converts `.mp4`, `.mov`, `.webm`, and `.m4v`.
+- `motion:bvh` and `motion:bvh:batch` load `.motion.json`, `.wham.json`, or
+  `.gvhmr.json` through the same frontend animation import/export path.
+
 ## Two-Camera MediaPipe MVP
 
 ### Browser UI

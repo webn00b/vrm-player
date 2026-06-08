@@ -14,7 +14,13 @@
     "test:regression": "npm run test:circular && vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "video:bvh": "node tools/video-to-bvh.mjs"
+    "video:bvh": "node tools/video-to-bvh.mjs",
+    "video:bvh:pair": "node tools/video-to-bvh-pair.mjs",
+    "video:bvh:matrix": "node tools/video-to-bvh-matrix.mjs",
+    "video:bvh:debug": "node tools/video-to-bvh-debug.mjs",
+    "video:bvh:batch": "node tools/batch-video-to-bvh.mjs",
+    "motion:bvh": "node tools/motion-json-to-bvh.mjs",
+    "motion:bvh:batch": "node tools/batch-motion-to-bvh.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.34",
