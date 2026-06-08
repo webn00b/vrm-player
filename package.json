@@ -13,7 +13,8 @@
     "test:coverage": "vitest run --coverage",
     "test:regression": "npm run test:circular && vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "video:bvh": "node tools/video-to-bvh.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.34",

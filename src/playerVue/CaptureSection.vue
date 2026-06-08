@@ -423,7 +423,7 @@ onUnmounted(() => {
       size="small"
       @click="onPrimaryClick"
     />
-    <input ref="fileInputRef"     type="file" accept="video/*"          hidden @change="onVideoFileChange">
+    <input ref="fileInputRef"     type="file" accept="video/*" data-testid="capture-video-input" hidden @change="onVideoFileChange">
     <input ref="animFileInputRef" type="file" accept=".bvh,.vrma,.fbx,.json,.motion.json,.wham.json,.gvhmr.json" hidden @change="onAnimFileChange">
     <input ref="mvFrontInputRef"  type="file" accept="video/*" hidden @change="onMultiviewFrontChange">
     <input ref="mvSideInputRef"   type="file" accept="video/*" hidden @change="onMultiviewSideChange">
