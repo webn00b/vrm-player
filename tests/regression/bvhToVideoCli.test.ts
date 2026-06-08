@@ -54,8 +54,11 @@ describe('bvh-to-video CLI options', () => {
       '--fps', '24',
       '--width', '640',
       '--height', '480',
+      '--pixel-ratio', '1.5',
+      '--video-bitrate', '20000000',
       '--duration', '2.5',
       '--padding', '0.1',
+      '--show-debug',
       '--headed',
     ])).toEqual({
       input: './walk.bvh',
@@ -67,8 +70,11 @@ describe('bvh-to-video CLI options', () => {
       fps: 24,
       width: 640,
       height: 480,
+      pixelRatio: 1.5,
+      videoBitsPerSecond: 20_000_000,
       durationSeconds: 2.5,
       paddingSeconds: 0.1,
+      cleanScene: false,
       headed: true,
       help: false,
     });
@@ -87,9 +93,12 @@ describe('bvh-to-video CLI options', () => {
       headed: false,
       timeoutMs: 180_000,
       fps: 30,
-      width: 1280,
-      height: 720,
+      width: 1920,
+      height: 1080,
+      pixelRatio: 1,
+      videoBitsPerSecond: 12_000_000,
       paddingSeconds: 0.25,
+      cleanScene: true,
     });
   });
 

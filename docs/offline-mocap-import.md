@@ -131,8 +131,12 @@ Useful options:
 ```bash
 npm run bvh:video -- ./take.bvh --output ./take.webm --vrm ./avatar.vrm
 npm run bvh:video -- ./take.bvh --output ./take.webm --duration 3 --fps 24
-npm run bvh:video -- ./take.bvh --output ./take.webm --width 1920 --height 1080 --headed
+npm run bvh:video -- ./take.bvh --output ./take.webm --width 1920 --height 1080 --video-bitrate 20000000 --headed
 ```
+
+The default output is 1080p WebM at 12 Mbps. Increase `--video-bitrate` for
+cleaner edges, or use `--pixel-ratio 2` when you intentionally want a larger
+drawing buffer than the viewport.
 
 ### Conversion script shortcuts
 

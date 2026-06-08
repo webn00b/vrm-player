@@ -12,6 +12,7 @@ data/multiview-test/
 # Playwright e2e artifacts
 playwright-report/
 test-results/
+exports/
 
 # Vitest coverage reports
 coverage/
