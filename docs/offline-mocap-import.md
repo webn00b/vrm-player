@@ -70,6 +70,32 @@ python tools/offline_mocap/convert_wham_gvhmr.py result.pkl --source wham --key 
 
 The generated JSON can be loaded through the existing animation import flow.
 
+## Browser Video To BVH CLI
+
+For local video files, use the JavaScript CLI when you want the exact same
+browser pipeline as the app UI:
+
+```bash
+npm run video:bvh -- ./input.mp4 --output ./output.bvh
+```
+
+The CLI starts the Vite app, opens Chromium through Playwright, switches the
+Capture panel to Video, uploads the file through the existing `<input
+type="file">`, waits for the browser BVH download, and saves it to `--output`.
+This uses the same MediaPipe model, render loop, validation settings and
+`BvhRecorder` as the frontend video flow.
+
+Useful options:
+
+```bash
+npm run video:bvh -- ./input.mp4 --output ./output.bvh --headed
+npm run video:bvh -- ./input.mp4 --vrm ./avatar.vrm --output ./avatar-output.bvh
+npm run video:bvh -- ./input.mp4 --url http://127.0.0.1:5333 --timeout 240000
+```
+
+Use `--headed` when debugging pose flips or performance stalls, because it lets
+you watch the same UI state that a manual conversion would show.
+
 ## Two-Camera MediaPipe MVP
 
 ### Browser UI
