@@ -1,8 +1,9 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, test } from 'vitest';
+import packageJson from '../../package.json';
 
 const cliModuleUrl = new URL('../../tools/video-to-bvh.mjs', import.meta.url);
 
@@ -11,6 +12,7 @@ async function loadCli() {
     parseCliArgs: (argv: string[]) => unknown;
     readBvhFrameCount: (text: string) => number | null;
     assertBvhHasFrames: (text: string, output: string) => void;
+    listConvertibleFiles: (input: string, extensions: string[]) => string[];
     resolveCliOptions: (parsed: unknown, cwd: string) => {
       video: string;
       output: string;
@@ -23,6 +25,7 @@ async function loadCli() {
       recordingClampMode: 'safe' | 'full' | 'off';
       validationPair: boolean;
     };
+    resolveMatrixOutputs: (output: string, modes?: Array<'safe' | 'full' | 'off'>) => Record<string, string>;
   }>;
 }
 
@@ -117,5 +120,57 @@ describe('video-to-bvh CLI options', () => {
     expect(readBvhFrameCount('not a bvh')).toBeNull();
     expect(() => assertBvhHasFrames('HIERARCHY\nMOTION\nFrames: 0\nFrame Time: 0.033333', 'empty.bvh'))
       .toThrow(/0 frames/i);
+  });
+
+  test('discovers convertible video and motion files in deterministic order', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'vrm-video-cli-'));
+    mkdirSync(join(dir, 'nested'));
+    writeFileSync(join(dir, 'b.mov'), '');
+    writeFileSync(join(dir, 'a.mp4'), '');
+    writeFileSync(join(dir, 'notes.txt'), '');
+    writeFileSync(join(dir, 'nested/c.webm'), '');
+    const { listConvertibleFiles } = await loadCli();
+
+    expect(listConvertibleFiles(dir, ['.mp4', '.mov', '.webm'])).toEqual([
+      join(dir, 'a.mp4'),
+      join(dir, 'b.mov'),
+      join(dir, 'nested/c.webm'),
+    ]);
+    expect(listConvertibleFiles(dir, ['.motion.json', '.wham.json'])).toEqual([]);
+  });
+
+  test('resolves validation matrix output names', async () => {
+    const { resolveMatrixOutputs } = await loadCli();
+
+    expect(resolveMatrixOutputs('/tmp/take.bvh')).toEqual({
+      safe: '/tmp/take.safe.bvh',
+      full: '/tmp/take.full.bvh',
+      off: '/tmp/take.off.bvh',
+    });
+  });
+
+  test('conversion entrypoint scripts are importable and wired to package scripts', async () => {
+    const scripts = [
+      'video-to-bvh-pair',
+      'video-to-bvh-matrix',
+      'video-to-bvh-debug',
+      'batch-video-to-bvh',
+      'motion-json-to-bvh',
+      'batch-motion-to-bvh',
+    ];
+
+    for (const script of scripts) {
+      const mod = await import(pathToFileURL(join(process.cwd(), `tools/${script}.mjs`)).href);
+      expect(mod).toHaveProperty('main');
+    }
+
+    expect(packageJson.scripts).toMatchObject({
+      'video:bvh:pair': 'node tools/video-to-bvh-pair.mjs',
+      'video:bvh:matrix': 'node tools/video-to-bvh-matrix.mjs',
+      'video:bvh:debug': 'node tools/video-to-bvh-debug.mjs',
+      'video:bvh:batch': 'node tools/batch-video-to-bvh.mjs',
+      'motion:bvh': 'node tools/motion-json-to-bvh.mjs',
+      'motion:bvh:batch': 'node tools/batch-motion-to-bvh.mjs',
+    });
   });
 });
