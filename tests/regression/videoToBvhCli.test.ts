@@ -14,11 +14,14 @@ async function loadCli() {
     resolveCliOptions: (parsed: unknown, cwd: string) => {
       video: string;
       output: string;
+      outputs?: { corrected: string; raw: string };
       vrm?: string;
       url?: string;
       port: number;
       headed: boolean;
       timeoutMs: number;
+      recordingClampMode: 'safe' | 'full' | 'off';
+      validationPair: boolean;
     };
   }>;
 }
@@ -34,6 +37,8 @@ describe('video-to-bvh CLI options', () => {
       '--url', 'http://127.0.0.1:5333',
       '--port', '5444',
       '--timeout', '12345',
+      '--validation-mode', 'full',
+      '--validation-pair',
       '--headed',
     ])).toEqual({
       video: './input.mp4',
@@ -42,6 +47,8 @@ describe('video-to-bvh CLI options', () => {
       url: 'http://127.0.0.1:5333',
       port: 5444,
       timeoutMs: 12345,
+      recordingClampMode: 'full',
+      validationPair: true,
       headed: true,
       help: false,
     });
@@ -59,7 +66,36 @@ describe('video-to-bvh CLI options', () => {
       port: 5333,
       headed: false,
       timeoutMs: 180_000,
+      recordingClampMode: 'safe',
+      validationPair: false,
     });
+  });
+
+  test('resolves validation comparison output pair paths', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'vrm-video-cli-'));
+    const video = join(dir, 'dance.mp4');
+    writeFileSync(video, 'fake video placeholder');
+    const { parseCliArgs, resolveCliOptions } = await loadCli();
+
+    expect(resolveCliOptions(parseCliArgs([
+      video,
+      '--output', 'exports/dance.bvh',
+      '--validation-pair',
+    ]), dir)).toMatchObject({
+      output: join(dir, 'exports/dance.bvh'),
+      outputs: {
+        corrected: join(dir, 'exports/dance.corrected.bvh'),
+        raw: join(dir, 'exports/dance.raw.bvh'),
+      },
+      recordingClampMode: 'safe',
+      validationPair: true,
+    });
+  });
+
+  test('rejects invalid validation modes', async () => {
+    const { parseCliArgs } = await loadCli();
+
+    expect(() => parseCliArgs(['input.mp4', '--validation-mode', 'sometimes'])).toThrow(/validation-mode/i);
   });
 
   test('rejects missing video input', async () => {

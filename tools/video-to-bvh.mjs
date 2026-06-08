@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 const DEFAULT_PORT = 5333;
 const DEFAULT_TIMEOUT_MS = 180_000;
+const DEFAULT_RECORDING_CLAMP_MODE = 'safe';
+const VALIDATION_SETTINGS_STORAGE_KEY = 'vrm-player.validation-settings';
+const VALIDATION_MODES = new Set(['safe', 'full', 'off']);
 
 export function usage() {
   return [
@@ -17,6 +20,8 @@ export function usage() {
     '  --url <url>           Use an already-running vrm-player app instead of starting Vite',
     `  --port <number>       Vite port when --url is omitted. Default: ${DEFAULT_PORT}`,
     `  --timeout <ms>        Browser conversion timeout. Default: ${DEFAULT_TIMEOUT_MS}`,
+    `  --validation-mode <mode> Recording validation mode for single output: safe, full, off. Default: ${DEFAULT_RECORDING_CLAMP_MODE}`,
+    '  --validation-pair     Write two BVH files: .corrected.bvh with validation and .raw.bvh without it',
     '  --headed              Show Chromium while converting',
     '  -h, --help            Show this help',
   ].join('\n');
@@ -36,6 +41,13 @@ function parsePositiveInt(value, flag) {
   return parsed;
 }
 
+function parseValidationMode(value, flag) {
+  if (!VALIDATION_MODES.has(value)) {
+    throw new Error(`${flag} must be one of: safe, full, off`);
+  }
+  return value;
+}
+
 export function parseCliArgs(argv) {
   const parsed = {
     video: undefined,
@@ -44,6 +56,8 @@ export function parseCliArgs(argv) {
     url: undefined,
     port: DEFAULT_PORT,
     timeoutMs: DEFAULT_TIMEOUT_MS,
+    recordingClampMode: DEFAULT_RECORDING_CLAMP_MODE,
+    validationPair: false,
     headed: false,
     help: false,
   };
@@ -54,6 +68,8 @@ export function parseCliArgs(argv) {
       parsed.help = true;
     } else if (arg === '--headed') {
       parsed.headed = true;
+    } else if (arg === '--validation-pair' || arg === '--pair') {
+      parsed.validationPair = true;
     } else if (arg === '-o' || arg === '--output') {
       parsed.output = readFlagValue(argv, i, arg);
       i += 1;
@@ -68,6 +84,9 @@ export function parseCliArgs(argv) {
       i += 1;
     } else if (arg === '--timeout') {
       parsed.timeoutMs = parsePositiveInt(readFlagValue(argv, i, arg), arg);
+      i += 1;
+    } else if (arg === '--validation-mode') {
+      parsed.recordingClampMode = parseValidationMode(readFlagValue(argv, i, arg), arg);
       i += 1;
     } else if (arg.startsWith('-')) {
       throw new Error(`Unknown option: ${arg}`);
@@ -95,6 +114,11 @@ function defaultOutputFor(video) {
   return join(dirname(video), `${basename(video, extension)}.bvh`);
 }
 
+function outputVariantPath(output, variant) {
+  const extension = extname(output) || '.bvh';
+  return join(dirname(output), `${basename(output, extname(output))}.${variant}${extension}`);
+}
+
 export function readBvhFrameCount(text) {
   const match = /^Frames:\s*(\d+)\s*$/m.exec(text);
   return match ? Number(match[1]) : null;
@@ -117,6 +141,8 @@ export function resolveCliOptions(parsed, cwd = process.cwd()) {
       port: parsed.port,
       headed: parsed.headed,
       timeoutMs: parsed.timeoutMs,
+      recordingClampMode: parsed.recordingClampMode,
+      validationPair: parsed.validationPair,
       help: true,
     };
   }
@@ -139,11 +165,21 @@ export function resolveCliOptions(parsed, cwd = process.cwd()) {
   return {
     video,
     output,
+    ...(parsed.validationPair
+      ? {
+          outputs: {
+            corrected: outputVariantPath(output, 'corrected'),
+            raw: outputVariantPath(output, 'raw'),
+          },
+        }
+      : {}),
     ...(vrm ? { vrm } : {}),
     ...(parsed.url ? { url: parsed.url } : {}),
     port: parsed.port,
     headed: parsed.headed,
     timeoutMs: parsed.timeoutMs,
+    recordingClampMode: parsed.recordingClampMode,
+    validationPair: parsed.validationPair,
   };
 }
 
@@ -186,6 +222,20 @@ function installPageDiagnostics(page, errors) {
   });
 }
 
+async function installValidationSettings(context, recordingClampMode) {
+  await context.addInitScript(
+    ({ key, mode }) => {
+      localStorage.setItem(key, JSON.stringify({
+        profileId: 'default',
+        playbackClampMode: 'safe',
+        recordingClampMode: mode,
+        importClampMode: 'validate',
+      }));
+    },
+    { key: VALIDATION_SETTINGS_STORAGE_KEY, mode: recordingClampMode },
+  );
+}
+
 export async function runVideoToBvh(options) {
   const server = options.url
     ? { url: options.url, close: async () => undefined }
@@ -207,6 +257,7 @@ export async function runVideoToBvh(options) {
       permissions: ['camera'],
       viewport: { width: 1440, height: 1000 },
     });
+    await installValidationSettings(context, options.recordingClampMode ?? DEFAULT_RECORDING_CLAMP_MODE);
     const page = await context.newPage();
     page.setDefaultTimeout(options.timeoutMs);
     page.setDefaultNavigationTimeout(options.timeoutMs);
@@ -235,11 +286,30 @@ export async function runVideoToBvh(options) {
       suggestedFilename: download.suggestedFilename(),
       browserErrors,
       url: server.url,
+      recordingClampMode: options.recordingClampMode ?? DEFAULT_RECORDING_CLAMP_MODE,
     };
   } finally {
     await browser?.close();
     await server.close();
   }
+}
+
+export async function runValidationPair(options) {
+  const correctedOutput = options.outputs?.corrected ?? outputVariantPath(options.output, 'corrected');
+  const rawOutput = options.outputs?.raw ?? outputVariantPath(options.output, 'raw');
+  const corrected = await runVideoToBvh({
+    ...options,
+    output: correctedOutput,
+    recordingClampMode: options.recordingClampMode ?? DEFAULT_RECORDING_CLAMP_MODE,
+    validationPair: false,
+  });
+  const raw = await runVideoToBvh({
+    ...options,
+    output: rawOutput,
+    recordingClampMode: 'off',
+    validationPair: false,
+  });
+  return { corrected, raw };
 }
 
 export async function main(argv = process.argv.slice(2), cwd = process.cwd()) {
@@ -252,17 +322,27 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()) {
   const options = resolveCliOptions(parsed, cwd);
   console.log(`[video-to-bvh] opening ${options.url ?? `local Vite:${options.port}`}`);
   console.log(`[video-to-bvh] processing ${options.video}`);
-  const result = await runVideoToBvh(options);
-  console.log(`[video-to-bvh] saved ${result.output}`);
-  if (result.browserErrors.length > 0) {
-    console.warn(`[video-to-bvh] browser reported ${result.browserErrors.length} error(s) during conversion`);
+  if (options.validationPair) {
+    const result = await runValidationPair(options);
+    console.log(`[video-to-bvh] saved corrected ${result.corrected.output}`);
+    console.log(`[video-to-bvh] saved raw ${result.raw.output}`);
+    const errors = result.corrected.browserErrors.length + result.raw.browserErrors.length;
+    if (errors > 0) {
+      console.warn(`[video-to-bvh] browser reported ${errors} error(s) during conversion`);
+    }
+  } else {
+    const result = await runVideoToBvh(options);
+    console.log(`[video-to-bvh] saved ${result.output}`);
+    if (result.browserErrors.length > 0) {
+      console.warn(`[video-to-bvh] browser reported ${result.browserErrors.length} error(s) during conversion`);
+    }
   }
   return 0;
 }
 
 const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 function isUsageError(message) {
-  return /^(Unknown option|Unexpected extra argument|.+ requires a value|.+ must be a positive integer|A video file is required|Video file does not exist|Video path is not a file|VRM file)/.test(message);
+  return /^(Unknown option|Unexpected extra argument|.+ requires a value|.+ must be a positive integer|.+ must be one of|A video file is required|Video file does not exist|Video path is not a file|VRM file)/.test(message);
 }
 
 if (isDirectRun) {

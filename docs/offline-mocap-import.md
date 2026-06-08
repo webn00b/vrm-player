@@ -96,6 +96,23 @@ npm run video:bvh -- ./input.mp4 --url http://127.0.0.1:5333 --timeout 240000
 Use `--headed` when debugging pose flips or performance stalls, because it lets
 you watch the same UI state that a manual conversion would show.
 
+To compare validation/correction against the raw mocap solve, ask the CLI to
+write both variants:
+
+```bash
+npm run video:bvh -- ./input.mp4 --output ./take.bvh --validation-pair
+```
+
+This writes:
+
+- `take.corrected.bvh` - frontend video conversion with recording validation
+  enabled (`recordingClampMode: "safe"` by default).
+- `take.raw.bvh` - the same frontend video conversion with recording validation
+  disabled (`recordingClampMode: "off"`).
+
+Use `--validation-mode full` together with `--validation-pair` if the corrected
+variant should use full ROM/pose validation instead of safe validation.
+
 ## Two-Camera MediaPipe MVP
 
 ### Browser UI
