@@ -156,7 +156,6 @@ export class BoneValidator {
       this.stats.clampedThisFrame = 0;
       this.stats.worstBone = null;
       this.stats.worstDelta = 0;
-      this.updateArmPostureStats();
       return this.stats;
     }
 
@@ -176,7 +175,6 @@ export class BoneValidator {
     this.stats.clampedThisFrame = clamped;
     this.stats.worstBone = worstBone;
     this.stats.worstDelta = worstDelta;
-    this.updateArmPostureStats();
     return this.stats;
   }
 
@@ -285,10 +283,12 @@ export class BoneValidator {
     this.stats.clampedThisFrame = 0;
     this.stats.worstBone = null;
     this.stats.worstDelta = 0;
-    this.updateArmPostureStats();
   }
 
   getStats(): ValidationStats {
+    // Arm posture needs world matrices (forced updateMatrixWorld), so it is
+    // computed lazily here — consumers poll at UI rate, not per frame.
+    this.updateArmPostureStats();
     return this.stats;
   }
 

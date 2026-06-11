@@ -148,7 +148,15 @@ function validateOrClamp(
         ey = Math.min(Math.max(ey, minY), maxY);
         ez = Math.min(Math.max(ez, minZ), maxZ);
         _euler.set(ex, ey, ez, c.order);
+        const origX = values[i], origY = values[i + 1], origZ = values[i + 2], origW = values[i + 3];
         _quat.setFromEuler(_euler);
+        // Preserve hemisphere: setFromEuler returns a canonical form that can
+        // be antipodal to the stored key. Retarget normalizes quaternion signs
+        // across the clip BEFORE this clamp, so flipping a key here would
+        // reintroduce slerp glitches against unclamped neighbours.
+        if (_quat.x * origX + _quat.y * origY + _quat.z * origZ + _quat.w * origW < 0) {
+          _quat.set(-_quat.x, -_quat.y, -_quat.z, -_quat.w);
+        }
         values[i]     = _quat.x;
         values[i + 1] = _quat.y;
         values[i + 2] = _quat.z;

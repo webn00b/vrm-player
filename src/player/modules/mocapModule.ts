@@ -48,12 +48,9 @@ export const mocapModule: PlayerModule = {
         const profileId = validationSettings.profileId;
         const clip = await retargetBvhToVrm(vrm, bvh, name, { clampOutOfRange, profileId });
         if (options?.source === 'video' && options.exportAgentOgiJson) {
-          const agentClip = clampOutOfRange || options.clampAgentOgiOutOfRange
-            ? await retargetBvhToVrm(vrm, bvh, name, { clampOutOfRange: true, profileId })
-            : clip;
           const filename = `${name}.agent_ogi.json`;
           downloadAgentOgiJson(
-            clipToAgentOgiJson(agentClip, vrm),
+            clipToAgentOgiJson(clip, vrm),
             filename,
           );
           notify({ severity: 'success', summary: 'Agent OGI JSON saved', detail: filename });

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import { buildMockVRM } from '../../tests/fixtures/mockVrm';
 import { BoneValidator } from './boneValidator';
+import { PoseValidator } from './poseValidator';
 
 describe('BoneValidator constraint profiles', () => {
   test('switches to the Mixamo Live profile and applies its stricter elbow hinge limit', () => {
@@ -11,20 +12,22 @@ describe('BoneValidator constraint profiles', () => {
     const elbow = vrm.bones.get('leftLowerArm');
     expect(elbow).toBeTruthy();
 
+    // Backward elbow bend (+Y for the left forearm): default allows ≤10°,
+    // Mixamo Live tightens the hinge to ≤6°.
     validator.setProfile('mixamoLive');
     elbow!.quaternion.setFromEuler(new THREE.Euler(
-      THREE.MathUtils.degToRad(-12),
       0,
+      THREE.MathUtils.degToRad(12),
       0,
-      'XYZ',
+      'YZX',
     ));
 
     const stats = validator.clampAll();
-    const clampedEuler = new THREE.Euler().setFromQuaternion(elbow!.quaternion, 'XYZ');
+    const clampedEuler = new THREE.Euler().setFromQuaternion(elbow!.quaternion, 'YZX');
 
     expect(validator.profileId).toBe('mixamoLive');
     expect(stats.worstBone).toBe(VRMHumanBoneName.LeftLowerArm);
-    expect(THREE.MathUtils.radToDeg(clampedEuler.x)).toBeCloseTo(0, 4);
+    expect(THREE.MathUtils.radToDeg(clampedEuler.y)).toBeCloseTo(6, 4);
   });
 
   test('Mixamo Live profile clamps excessive upper-arm axial twist', () => {
@@ -62,16 +65,20 @@ describe('BoneValidator constraint profiles', () => {
       'YXZ',
     ));
 
-    const stats = validator.clampAll();
+    const clampStats = validator.clampAll();
+    // Arm posture is computed lazily on getStats() — the per-frame clamp path
+    // must not pay for the forced world-matrix update it needs.
+    const stats = validator.getStats();
 
-    expect(stats.clampedThisFrame).toBe(0);
+    expect(clampStats.clampedThisFrame).toBe(0);
     expect(stats.armPosture.left.available).toBe(true);
     expect(stats.armPosture.left.upperArmForwardDeg).toBeGreaterThan(100);
   });
 
-  test('Mixamo Live profile clamps dumped backward-arm posture', () => {
+  test('Mixamo Live ROM clamp + pose guardrail recover dumped backward-arm posture', () => {
     const vrm = buildMockVRM();
     const validator = new BoneValidator(vrm);
+    const poseValidator = new PoseValidator(vrm, { profileId: 'mixamoLive' });
     const leftUpperArm = vrm.bones.get('leftUpperArm');
     const rightUpperArm = vrm.bones.get('rightUpperArm');
     expect(leftUpperArm).toBeTruthy();
@@ -91,10 +98,14 @@ describe('BoneValidator constraint profiles', () => {
       'YXZ',
     ));
 
-    const stats = validator.clampAll();
+    // Runtime ordering (renderLoop): per-bone ROM clamp first, then the
+    // world-space pose guardrail that IK-corrects backward-pointing chains.
+    // The ROM box is deliberately loose here — recovering this posture is the
+    // pose guardrail's job, so only the final world-space direction matters.
+    validator.clampAll();
+    const poseStats = poseValidator.validateAndClamp();
 
-    expect(stats.clampedThisFrame).toBeGreaterThanOrEqual(2);
-    expect(stats.armPosture.left.upperArmForwardDeg).toBeLessThanOrEqual(120);
-    expect(stats.armPosture.right.upperArmForwardDeg).toBeLessThanOrEqual(120);
+    expect(poseStats.arms.left.upperArmForwardDeg).toBeLessThanOrEqual(120);
+    expect(poseStats.arms.right.upperArmForwardDeg).toBeLessThanOrEqual(120);
   });
 });

@@ -17,7 +17,6 @@ const props = defineProps<{
 props.validator.setProfile(validationSettings.profileId);
 props.poseValidator?.setProfile(validationSettings.profileId);
 const runtimeEnabled = shallowRef(props.validator.enabled);
-const profileId = shallowRef<BoneConstraintProfileId>(validationSettings.profileId);
 
 function toggleRuntime(): void {
   runtimeEnabled.value = !runtimeEnabled.value;
@@ -26,7 +25,6 @@ function toggleRuntime(): void {
 
 function setProfile(event: Event): void {
   const next = (event.target as HTMLSelectElement).value as BoneConstraintProfileId;
-  profileId.value = next;
   validationSettings.profileId = next;
   props.validator.setProfile(next);
   props.poseValidator?.setProfile(next);
@@ -74,7 +72,7 @@ function dumpValidationState(): void {
 
     <label class="validation-field">
       <span>Profile</span>
-      <select :value="profileId" @change="setProfile">
+      <select :value="validationSettings.profileId" @change="setProfile">
         <option value="default">Default</option>
         <option value="mixamoLive">Mixamo Live</option>
       </select>

@@ -19,7 +19,6 @@ export function useCaptureVideoFile(options: CaptureVideoFileOptions) {
     const mocap = options.getMocap();
     if (!mocap || mocap.state !== 'off') return;
     mocap.exportAgentOgiJsonForVideo = options.agentOgiEnabled.value;
-    mocap.clampAgentOgiOutOfRangeForVideo = false;
     options.dbgRecorder.start(Infinity);
     notify({ severity: 'info', summary: 'Processing video', detail: file.name, life: 2200 });
     try {

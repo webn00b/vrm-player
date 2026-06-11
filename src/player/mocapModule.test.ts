@@ -9,7 +9,7 @@ const mocapState = vi.hoisted(() => ({
   controllers: [] as Array<{
     vrm: unknown;
     videoEl: unknown;
-    onBvhReady?: (bvhText: string, name: string, options?: { source?: 'camera' | 'video'; exportAgentOgiJson?: boolean; clampAgentOgiOutOfRange?: boolean }) => Promise<void>;
+    onBvhReady?: (bvhText: string, name: string, options?: { source?: 'camera' | 'video'; exportAgentOgiJson?: boolean }) => Promise<void>;
     dispose: ReturnType<typeof vi.fn>;
   }>,
   debugViz: [] as Array<{ scene: unknown; dispose: ReturnType<typeof vi.fn> }>,
@@ -24,7 +24,7 @@ const mocapState = vi.hoisted(() => ({
 
 vi.mock('../mocap/pipeline/mocapController', () => ({
   MocapController: class MocapController {
-    onBvhReady?: (bvhText: string, name: string, options?: { source?: 'camera' | 'video'; exportAgentOgiJson?: boolean; clampAgentOgiOutOfRange?: boolean }) => Promise<void>;
+    onBvhReady?: (bvhText: string, name: string, options?: { source?: 'camera' | 'video'; exportAgentOgiJson?: boolean }) => Promise<void>;
     readonly dispose = vi.fn();
 
     constructor(readonly vrm: unknown, readonly videoEl: unknown) {
@@ -172,25 +172,18 @@ test('mocapModule downloads agent_ogi_front JSON for video capture when requeste
   );
 });
 
-test('mocapModule clamps video agent_ogi_front JSON when validation is requested', async () => {
+test('mocapModule clamps video agent_ogi_front JSON when global import clamp is on', async () => {
+  validationSettings.importClampMode = 'clamp';
   const ctx = createContext();
 
   mocapModule.setup(ctx);
   await mocapState.controllers[0].onBvhReady?.('HIERARCHY', 'take-1', {
     source: 'video',
     exportAgentOgiJson: true,
-    clampAgentOgiOutOfRange: true,
   });
 
-  expect(retargetBvhToVrm).toHaveBeenNthCalledWith(
-    1,
-    ctx.vrm,
-    { text: 'HIERARCHY' },
-    'take-1',
-    { clampOutOfRange: false, profileId: 'default' },
-  );
-  expect(retargetBvhToVrm).toHaveBeenNthCalledWith(
-    2,
+  expect(retargetBvhToVrm).toHaveBeenCalledTimes(1);
+  expect(retargetBvhToVrm).toHaveBeenCalledWith(
     ctx.vrm,
     { text: 'HIERARCHY' },
     'take-1',
