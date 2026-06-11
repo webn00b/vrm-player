@@ -70,6 +70,99 @@ python tools/offline_mocap/convert_wham_gvhmr.py result.pkl --source wham --key 
 
 The generated JSON can be loaded through the existing animation import flow.
 
+## Browser Video To BVH CLI
+
+For local video files, use the JavaScript CLI when you want the exact same
+browser pipeline as the app UI:
+
+```bash
+npm run video:bvh -- ./input.mp4 --output ./output.bvh
+```
+
+The CLI starts the Vite app, opens Chromium through Playwright, switches the
+Capture panel to Video, uploads the file through the existing `<input
+type="file">`, waits for the browser BVH download, and saves it to `--output`.
+This uses the same MediaPipe model, render loop, validation settings and
+`BvhRecorder` as the frontend video flow.
+
+Useful options:
+
+```bash
+npm run video:bvh -- ./input.mp4 --output ./output.bvh --headed
+npm run video:bvh -- ./input.mp4 --vrm ./avatar.vrm --output ./avatar-output.bvh
+npm run video:bvh -- ./input.mp4 --url http://127.0.0.1:5333 --timeout 240000
+```
+
+Use `--headed` when debugging pose flips or performance stalls, because it lets
+you watch the same UI state that a manual conversion would show.
+
+To compare validation/correction against the raw mocap solve, ask the CLI to
+write both variants:
+
+```bash
+npm run video:bvh -- ./input.mp4 --output ./take.bvh --validation-pair
+```
+
+This writes:
+
+- `take.corrected.bvh` - frontend video conversion with recording validation
+  enabled (`recordingClampMode: "safe"` by default).
+- `take.raw.bvh` - the same frontend video conversion with recording validation
+  disabled (`recordingClampMode: "off"`).
+
+Use `--validation-mode full` together with `--validation-pair` if the corrected
+variant should use full ROM/pose validation instead of safe validation.
+
+## BVH To Video CLI
+
+To render a BVH animation back to a browser-recorded video, use:
+
+```bash
+npm run bvh:video -- ./take.bvh --output ./take.webm
+```
+
+The command starts the same frontend, imports the BVH through the player
+animation input, restarts the active clip from frame zero, records the Three.js
+canvas with Chromium `MediaRecorder`, and saves a `.webm` file. By default the
+recording duration is read from the BVH `Frames` and `Frame Time` fields.
+
+Useful options:
+
+```bash
+npm run bvh:video -- ./take.bvh --output ./take.webm --vrm ./avatar.vrm
+npm run bvh:video -- ./take.bvh --output ./take.webm --duration 3 --fps 24
+npm run bvh:video -- ./take.bvh --output ./take.webm --width 1920 --height 1080 --video-bitrate 20000000 --headed
+```
+
+The default output is 1080p WebM at 12 Mbps. Increase `--video-bitrate` for
+cleaner edges, or use `--pixel-ratio 2` when you intentionally want a larger
+drawing buffer than the viewport.
+
+### Conversion script shortcuts
+
+The browser-backed JavaScript tools live in `tools/` and are exposed as npm
+scripts:
+
+```bash
+npm run video:bvh -- ./input.mp4 --output ./take.bvh
+npm run video:bvh:pair -- ./input.mp4 --output ./take.bvh
+npm run video:bvh:matrix -- ./input.mp4 --output ./take.bvh
+npm run video:bvh:debug -- ./input.mp4 --output ./take.bvh
+npm run video:bvh:batch -- ./videos --output-dir ./bvh
+npm run motion:bvh -- ./take.motion.json --output ./take.bvh
+npm run motion:bvh:batch -- ./motions --output-dir ./bvh
+npm run bvh:video -- ./take.bvh --output ./take.webm
+```
+
+- `video:bvh:pair` writes corrected/raw variants.
+- `video:bvh:matrix` writes safe/full/off validation variants.
+- `video:bvh:debug` opens Chromium headed and prints BVH frame/size summaries.
+- `video:bvh:batch` recursively converts `.mp4`, `.mov`, `.webm`, and `.m4v`.
+- `motion:bvh` and `motion:bvh:batch` load `.motion.json`, `.wham.json`, or
+  `.gvhmr.json` through the same frontend animation import/export path.
+- `bvh:video` loads `.bvh` through the player animation import path and records
+  the player canvas to `.webm`.
+
 ## Two-Camera MediaPipe MVP
 
 ### Browser UI

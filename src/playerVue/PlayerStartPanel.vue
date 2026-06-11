@@ -124,6 +124,7 @@ onUnmounted(() => clearInterval(timer));
       accept=".bvh,.vrma,.fbx"
       multiple
       hidden
+      data-testid="start-add-animation-input"
       @change="onAddFileChange"
     />
     <input
