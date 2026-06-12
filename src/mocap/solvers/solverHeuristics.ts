@@ -51,10 +51,14 @@ export function computeHandsTogetherBlend(
 ): number {
   if (shoulderSpan <= 1e-4) return 0;
 
+  // Engage only when the wrists practically TOUCH (clasped/prayer poses):
+  // full blend below ~12% of shoulder span, zero from ~30%. The previous
+  // 25..55% window glued the hands together during ordinary chest-level
+  // gesturing, where the wrists hover 10-20 cm apart.
   const gapRatio = wristGap / shoulderSpan;
   const wristLevelRatio = Math.abs(wristLevelDelta) / shoulderSpan;
-  return wristLevelRatio <= 0.25
-    ? THREE.MathUtils.clamp((0.55 - gapRatio) / 0.30, 0, 1)
+  return wristLevelRatio <= 0.2
+    ? THREE.MathUtils.clamp((0.30 - gapRatio) / 0.18, 0, 1)
     : 0;
 }
 

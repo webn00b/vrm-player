@@ -45,9 +45,15 @@
   ],
   "handsTogetherBlend": [
     {
-      "name": "close wrists on same level trigger folded-hands blend",
+      "name": "touching wrists on same level trigger folded-hands blend",
+      "args": { "shoulderSpan": 0.30, "wristGap": 0.04, "wristLevelDelta": 0.01 },
+      "expected": 0.9259259259,
+      "tolerance": 0.000001
+    },
+    {
+      "name": "gesturing wrists 30% of shoulder span apart stay unglued",
       "args": { "shoulderSpan": 0.30, "wristGap": 0.09, "wristLevelDelta": 0.01 },
-      "expected": 0.8333333333,
+      "expected": 0,
       "tolerance": 0.000001
     },
     {
