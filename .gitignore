@@ -9,6 +9,10 @@ dist/
 animations/*.bvh
 data/multiview-test/
 
+# MotionBERT lifter artifacts — restore with: node tools/setup-lifter.mjs
+public/ort/
+public/models/*.onnx
+
 # Playwright e2e artifacts
 playwright-report/
 test-results/

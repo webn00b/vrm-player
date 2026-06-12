@@ -10,6 +10,11 @@ import {
 } from '../trackers/landmarkStabilizer';
 import { LandmarkFilter } from '../trackers/oneEuroFilter';
 import { fixedVideoFrameTimes } from './videoFrameTimes';
+import {
+  planPersonCrops,
+  remapCroppedPoseFrame,
+  type CropRect,
+} from './personCropPlanner';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,6 +47,22 @@ export type PoseModelQuality = 'lite' | 'full' | 'heavy';
 export interface FixedVideoFileOptions {
   fps?: number;
   afterFrame?: (timeSec: number, frameIndex: number) => Promise<void> | void;
+  /**
+   * Run a second detection pass over a square person crop. The rough pass's
+   * landmarks plan the crops; the refined pass sees the performer at full
+   * inference resolution, which massively improves 2D accuracy for subjects
+   * far from the camera. Roughly doubles processing time.
+   */
+  cropRedetect?: boolean;
+}
+
+export interface CollectedFileFrames {
+  /** One entry per fixed-FPS sample; null where no pose was detected. */
+  frames: (PoseFrame | null)[];
+  /** False when the run was stopped before reaching the end of the video. */
+  completed: boolean;
+  /** videoHeight / videoWidth at open time (for image-space normalization). */
+  aspect: number;
 }
 
 export const DEFAULT_FILE_CAPTURE_FPS = 30;
@@ -69,6 +90,10 @@ const HAND_WORLD_STABILIZER_OPTIONS: LandmarkStabilizerOptions = {
   maxZStep: 0.08,
 };
 const HAND_WORLD_TO_NORM_STEP_SCALE = 2 / 3;
+
+// Refine-pass crop is drawn at this resolution before detection — comfortably
+// above Holistic's internal input size so the resize chain loses nothing.
+const CROP_CANVAS_SIZE = 512;
 
 // ── Skeleton connections (for canvas preview) ─────────────────────────────────
 
@@ -116,6 +141,9 @@ export class PoseDetector {
 
   private _canvas: HTMLCanvasElement | null = null;
   private _ctx:    CanvasRenderingContext2D | null = null;
+  // Offscreen canvas for the crop-redetect refine pass.
+  private _cropCanvas: HTMLCanvasElement | null = null;
+  private _cropCtx:    CanvasRenderingContext2D | null = null;
 
   // World landmarks (metres): high beta so fast arm/leg motion isn't lagged.
   // sysAnimOnline uses beta=1 for body pose — the 1€ filter becomes responsive
@@ -283,6 +311,102 @@ export class PoseDetector {
     return completed;
   }
 
+  /**
+   * Pass A of the two-pass file pipeline: seek through the video at fixed FPS
+   * and collect RAW pose frames (no online filtering, no onFrame callback).
+   * The caller smooths the result offline and replays it through the applier.
+   *
+   * With `cropRedetect` a second pass re-runs detection on a square person
+   * crop planned from the rough pass — see personCropPlanner.
+   */
+  async collectFileFramesAtFixedFps(
+    file: File,
+    options: FixedVideoFileOptions = {},
+  ): Promise<CollectedFileFrames> {
+    if (this._running) return { frames: [], completed: false, aspect: 1 };
+    const fps = options.fps ?? DEFAULT_FILE_CAPTURE_FPS;
+
+    const rough = await this._collectPass(file, fps, options.afterFrame, null, 0);
+    if (!rough.completed || !options.cropRedetect) return rough.result;
+
+    const crops = planPersonCrops(rough.result.frames, rough.videoWidth, rough.videoHeight);
+    if (!crops) return rough.result;
+
+    console.info('[mocap:two-pass] crop-redetect: refining detection on person crops');
+    // Holistic VIDEO-mode sessions require monotonically increasing
+    // timestamps — offset the refine pass past the rough pass's range.
+    const refined = await this._collectPass(
+      file, fps, options.afterFrame, crops, rough.lastTimestampMs + 1000,
+    );
+    if (!refined.completed) return rough.result;
+
+    // Frames the refined pass lost but the rough pass had: keep the rough
+    // ones — a worse detection beats a dropout.
+    const frames = refined.result.frames.map((f, i) => f ?? rough.result.frames[i]);
+    return { frames, completed: true, aspect: rough.result.aspect };
+  }
+
+  private async _collectPass(
+    file: File,
+    fps: number,
+    afterFrame: FixedVideoFileOptions['afterFrame'],
+    crops: CropRect[] | null,
+    timestampOffsetMs: number,
+  ): Promise<{
+    result: CollectedFileFrames;
+    completed: boolean;
+    videoWidth: number;
+    videoHeight: number;
+    lastTimestampMs: number;
+  }> {
+    await this.init();
+    await this._openFile(file);
+    const videoWidth = this.video.videoWidth;
+    const videoHeight = this.video.videoHeight;
+    const aspect = videoWidth > 0 ? videoHeight / videoWidth : 1;
+
+    const times = fixedVideoFrameTimes(this.video.duration || 0, fps);
+    const frames: (PoseFrame | null)[] = [];
+    let completed = true;
+    let lastTimestampMs = timestampOffsetMs;
+    this._running = true;
+
+    try {
+      for (let frameIndex = 0; frameIndex < times.length; frameIndex++) {
+        const time = times[frameIndex];
+        if (!this._running) {
+          completed = false;
+          break;
+        }
+        await this._seekFileVideo(time);
+        if (!this._running) {
+          completed = false;
+          break;
+        }
+        lastTimestampMs = timestampOffsetMs + Math.round(time * 1000);
+        const crop = crops?.[frameIndex];
+        frames.push(
+          crop
+            ? this._detectRawOnceFromCrop(crop, videoWidth, videoHeight, lastTimestampMs)
+            : this._detectRawOnce(lastTimestampMs),
+        );
+        await afterFrame?.(time, frameIndex);
+      }
+    } finally {
+      const wasRunning = this._running;
+      this.stop();
+      completed = completed && wasRunning;
+    }
+
+    return {
+      result: { frames, completed, aspect },
+      completed,
+      videoWidth,
+      videoHeight,
+      lastTimestampMs,
+    };
+  }
+
   pause(): void {
     if (!this._running || this._paused) return;
     this._paused = true;
@@ -389,74 +513,8 @@ export class PoseDetector {
 
       if (!result.poseLandmarks.length || !this.onFrame) return;
 
-      const tSec = timestampMs / 1000;
-
-      const rawBodyNorm  = result.poseLandmarks[0]      as Landmark3D[];
-      const rawBodyWorld = result.poseWorldLandmarks[0] as Landmark3D[];
-
-      // World landmarks have no visibility field in HolisticLandmarker — copy from
-      // normalized landmarks so downstream visibility gates work correctly.
-      for (let i = 0; i < rawBodyWorld.length; i++) {
-        if (rawBodyWorld[i] && rawBodyNorm[i]?.visibility !== undefined) {
-          (rawBodyWorld[i] as Landmark3D).visibility = rawBodyNorm[i].visibility;
-        }
-      }
-
-      const bodyNorm  = this._filterEnabled ? this._fBodyNorm.filter (rawBodyNorm,  tSec) : rawBodyNorm;
-      const stableBodyWorld = this._filterEnabled
-        ? this._bodyWorldStabilizer.stabilize(rawBodyWorld, tSec)
-        : rawBodyWorld;
-      const bodyWorld = this._filterEnabled ? this._fBodyWorld.filter(stableBodyWorld, tSec) : stableBodyWorld;
-
-      const rawFace = (result.faceLandmarks[0] ?? []) as Landmark3D[];
-      const faceLandmarks = (rawFace.length && this._filterEnabled)
-        ? this._fFace.filter(rawFace, tSec)
-        : rawFace;
-
-      // HolisticLandmarker returns separate left/right hand arrays (from the
-      // perspective of the person, not the camera — matching sysAnimOnline).
-      const hands: HandFrame[] = [];
-
-      const addHand = (
-        norm: Landmark3D[],
-        world: Landmark3D[],
-        side: 'Left' | 'Right',
-      ): void => {
-        if (!norm.length) {
-          this._handNormStabilizer[side].markMissing();
-          this._handWorldStabilizer[side].markMissing();
-          return;
-        }
-        const stableNorm = this._filterEnabled
-          ? this._handNormStabilizer[side].stabilize(norm, tSec)
-          : norm;
-        const stableWorld = this._filterEnabled && world.length
-          ? this._handWorldStabilizer[side].stabilize(world, tSec)
-          : world;
-        if (!world.length) this._handWorldStabilizer[side].markMissing();
-        hands.push({
-          side,
-          landmarks:      this._filterEnabled ? this._fHandNorm [side].filter(stableNorm,  tSec) : stableNorm,
-          worldLandmarks: this._filterEnabled ? this._fHandWorld[side].filter(stableWorld, tSec) : stableWorld,
-        });
-      };
-
-      // Self-view (selfie) mirror: person's LEFT hand appears on the RIGHT side
-      // of the screen → drives avatar's RIGHT arm, and vice versa.
-      // Flip labels to match body tracking, which also mirrors L↔R via LIMB_BONES.
-      // Matches sysAnimOnline's explicit LR flip for holistic hand landmarks.
-      addHand(
-        (result.leftHandLandmarks[0]      ?? []) as Landmark3D[],
-        (result.leftHandWorldLandmarks[0] ?? []) as Landmark3D[],
-        'Right',  // person's left → avatar's right
-      );
-      addHand(
-        (result.rightHandLandmarks[0]      ?? []) as Landmark3D[],
-        (result.rightHandWorldLandmarks[0] ?? []) as Landmark3D[],
-        'Left',   // person's right → avatar's left
-      );
-
-      const frame: PoseFrame = { landmarks: bodyNorm, worldLandmarks: bodyWorld, faceLandmarks, hands };
+      const frame = this._composeFrame(result, timestampMs / 1000, this._filterEnabled);
+      if (!frame) return;
 
       if (this._canvas && this._ctx) this._draw(frame, result);
 
@@ -464,6 +522,147 @@ export class PoseDetector {
     } catch (e) {
       this.onError?.(e instanceof Error ? e : new Error(String(e)));
     }
+  }
+
+  /**
+   * Refine-pass detection: draw the person crop onto an offscreen canvas,
+   * detect there (person fills the inference input → far better 2D), then
+   * remap normalized coordinates back to full-frame space.
+   */
+  private _detectRawOnceFromCrop(
+    crop: CropRect,
+    videoWidth: number,
+    videoHeight: number,
+    timestampMs: number,
+  ): PoseFrame | null {
+    if (this.video.readyState < 2) return null;
+    if (!this._cropCanvas) {
+      this._cropCanvas = document.createElement('canvas');
+      this._cropCanvas.width = CROP_CANVAS_SIZE;
+      this._cropCanvas.height = CROP_CANVAS_SIZE;
+      this._cropCtx = this._cropCanvas.getContext('2d', { willReadFrequently: true });
+    }
+    const ctx = this._cropCtx;
+    if (!ctx) return null;
+    try {
+      ctx.drawImage(
+        this.video,
+        crop.sx, crop.sy, crop.size, crop.size,
+        0, 0, CROP_CANVAS_SIZE, CROP_CANVAS_SIZE,
+      );
+      const result: HolisticLandmarkerResult =
+        this.holistic!.detectForVideo(this._cropCanvas!, timestampMs);
+      if (!result.poseLandmarks.length) return null;
+      const frame = this._composeFrame(result, timestampMs / 1000, false);
+      if (frame) remapCroppedPoseFrame(frame, crop, videoWidth, videoHeight);
+      if (frame && this._canvas && this._ctx) this._draw(frame, result);
+      return frame;
+    } catch (e) {
+      this.onError?.(e instanceof Error ? e : new Error(String(e)));
+      return null;
+    }
+  }
+
+  /**
+   * Run detection once and return the RAW (unfiltered) frame, bypassing the
+   * online filter/stabilizer chain and the onFrame callback. Used by the
+   * two-pass file pipeline, which smooths offline (zero-phase) instead.
+   */
+  private _detectRawOnce(timestampMs: number): PoseFrame | null {
+    if (this.video.readyState < 2) return null;
+    try {
+      const result: HolisticLandmarkerResult =
+        this.holistic!.detectForVideo(this.video, timestampMs);
+      if (!result.poseLandmarks.length) return null;
+      const frame = this._composeFrame(result, timestampMs / 1000, false);
+      if (frame && this._canvas && this._ctx) this._draw(frame, result);
+      return frame;
+    } catch (e) {
+      this.onError?.(e instanceof Error ? e : new Error(String(e)));
+      return null;
+    }
+  }
+
+  /**
+   * Build a PoseFrame from a HolisticLandmarker result. With `applyFilters`
+   * the online 1€ + stabilizer chain runs (live path); without it the raw
+   * landmarks pass through untouched and no filter state is mutated.
+   */
+  private _composeFrame(
+    result: HolisticLandmarkerResult,
+    tSec: number,
+    applyFilters: boolean,
+  ): PoseFrame | null {
+    if (!result.poseLandmarks.length) return null;
+
+    const rawBodyNorm  = result.poseLandmarks[0]      as Landmark3D[];
+    const rawBodyWorld = result.poseWorldLandmarks[0] as Landmark3D[];
+
+    // World landmarks have no visibility field in HolisticLandmarker — copy from
+    // normalized landmarks so downstream visibility gates work correctly.
+    for (let i = 0; i < rawBodyWorld.length; i++) {
+      if (rawBodyWorld[i] && rawBodyNorm[i]?.visibility !== undefined) {
+        (rawBodyWorld[i] as Landmark3D).visibility = rawBodyNorm[i].visibility;
+      }
+    }
+
+    const bodyNorm  = applyFilters ? this._fBodyNorm.filter (rawBodyNorm,  tSec) : rawBodyNorm;
+    const stableBodyWorld = applyFilters
+      ? this._bodyWorldStabilizer.stabilize(rawBodyWorld, tSec)
+      : rawBodyWorld;
+    const bodyWorld = applyFilters ? this._fBodyWorld.filter(stableBodyWorld, tSec) : stableBodyWorld;
+
+    const rawFace = (result.faceLandmarks[0] ?? []) as Landmark3D[];
+    const faceLandmarks = (rawFace.length && applyFilters)
+      ? this._fFace.filter(rawFace, tSec)
+      : rawFace;
+
+    // HolisticLandmarker returns separate left/right hand arrays (from the
+    // perspective of the person, not the camera — matching sysAnimOnline).
+    const hands: HandFrame[] = [];
+
+    const addHand = (
+      norm: Landmark3D[],
+      world: Landmark3D[],
+      side: 'Left' | 'Right',
+    ): void => {
+      if (!norm.length) {
+        if (applyFilters) {
+          this._handNormStabilizer[side].markMissing();
+          this._handWorldStabilizer[side].markMissing();
+        }
+        return;
+      }
+      const stableNorm = applyFilters
+        ? this._handNormStabilizer[side].stabilize(norm, tSec)
+        : norm;
+      const stableWorld = applyFilters && world.length
+        ? this._handWorldStabilizer[side].stabilize(world, tSec)
+        : world;
+      if (!world.length && applyFilters) this._handWorldStabilizer[side].markMissing();
+      hands.push({
+        side,
+        landmarks:      applyFilters ? this._fHandNorm [side].filter(stableNorm,  tSec) : stableNorm,
+        worldLandmarks: applyFilters ? this._fHandWorld[side].filter(stableWorld, tSec) : stableWorld,
+      });
+    };
+
+    // Self-view (selfie) mirror: person's LEFT hand appears on the RIGHT side
+    // of the screen → drives avatar's RIGHT arm, and vice versa.
+    // Flip labels to match body tracking, which also mirrors L↔R via LIMB_BONES.
+    // Matches sysAnimOnline's explicit LR flip for holistic hand landmarks.
+    addHand(
+      (result.leftHandLandmarks[0]      ?? []) as Landmark3D[],
+      (result.leftHandWorldLandmarks[0] ?? []) as Landmark3D[],
+      'Right',  // person's left → avatar's right
+    );
+    addHand(
+      (result.rightHandLandmarks[0]      ?? []) as Landmark3D[],
+      (result.rightHandWorldLandmarks[0] ?? []) as Landmark3D[],
+      'Left',   // person's right → avatar's left
+    );
+
+    return { landmarks: bodyNorm, worldLandmarks: bodyWorld, faceLandmarks, hands };
   }
 
   private _draw(frame: PoseFrame, result: HolisticLandmarkerResult): void {

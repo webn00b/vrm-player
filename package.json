@@ -21,7 +21,9 @@
     "video:bvh:batch": "node tools/batch-video-to-bvh.mjs",
     "motion:bvh": "node tools/motion-json-to-bvh.mjs",
     "motion:bvh:batch": "node tools/batch-motion-to-bvh.mjs",
-    "bvh:video": "node tools/bvh-to-video.mjs"
+    "bvh:video": "node tools/bvh-to-video.mjs",
+    "bvh:quality": "node tools/bvh-quality.mjs",
+    "bvh:benchmark": "node tools/bvh-vs-gt.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.34",
@@ -29,6 +31,7 @@
     "@pixiv/three-vrm-animation": "^3.5.2",
     "@primevue/themes": "^4.5.4",
     "kalidokit": "^1.1.5",
+    "onnxruntime-web": "^1.26.0",
     "primeicons": "^7.0.0",
     "primevue": "^4.5.5",
     "three": "^0.170.0",

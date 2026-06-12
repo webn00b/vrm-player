@@ -9,6 +9,9 @@ import {
 import { DirectPoseApplier } from '../retargeters/directPoseApplier';
 import { FaceApplier } from '../retargeters/faceApplier';
 import { downloadBvh, BVH_FRAME_RATE } from '../bvh/bvhRecorder';
+import { smoothMocapFrames } from './offlineLandmarkSmoother';
+import { MotionBertLifter, readLiftingEnabled } from './poseLifter';
+import { FULL_BODY_COVERAGE_MIN, fullBodyCoverage } from './bodyCoverage';
 import { MocapCalibration, type CalibrationStatus } from '../trackers/mocapCalibration';
 import type { LandmarkStabilizerOptions } from '../trackers/landmarkStabilizer';
 import type { PoseSnapshot } from '../bvh/bvhRoundtripVerifier';
@@ -35,7 +38,41 @@ export interface PoseBvhExport {
   bvhText: string;
 }
 
+export interface FileCaptureProgress {
+  /** analyze = pass A (detection), lift = MotionBERT 3D lifting,
+   *  smooth = offline filtering, replay = pass B (BVH capture). */
+  phase: 'analyze' | 'lift' | 'smooth' | 'replay';
+  frameIndex: number;
+  totalFrames: number;
+}
+
 const DEFAULT_FILE_CAPTURE_CALIBRATION_PREROLL_SEC = 1.5;
+
+// localStorage overrides for the two-pass file pipeline; let headless tools
+// and A/B comparisons flip stages without a UI round-trip.
+const OFFLINE_SMOOTHING_STORAGE_KEY = 'vrm-player.mocap.offlineSmoothing';
+const CROP_REDETECT_STORAGE_KEY = 'vrm-player.mocap.cropRedetect';
+const CHAIN_SCALE_STORAGE_KEY = 'vrm-player.mocap.chainScale';
+
+function readStorageToggle(key: string): boolean {
+  try {
+    return localStorage.getItem(key) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+function readOfflineSmoothingDefault(): boolean {
+  return readStorageToggle(OFFLINE_SMOOTHING_STORAGE_KEY);
+}
+
+function readCropRedetectEnabled(): boolean {
+  try {
+    return localStorage.getItem(CROP_REDETECT_STORAGE_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Orchestrates the webcam → pose → VRM → BVH pipeline.
@@ -59,6 +96,19 @@ export class MocapController {
   private _fixedFileCaptureActive = false;
   private _fixedFileFramePending = false;
   private _fileCaptureCalibrationPrerollSec = DEFAULT_FILE_CAPTURE_CALIBRATION_PREROLL_SEC;
+  // Two-pass file capture: collect raw landmarks first, smooth offline
+  // (zero-phase), then replay through the applier. See offlineLandmarkSmoother.
+  private _offlineSmoothingEnabled = readOfflineSmoothingDefault();
+  private _fileProgress: FileCaptureProgress | null = null;
+  // MotionBERT temporal 3D lifting (two-pass file capture only). Lazy-loads
+  // the ONNX model; silently unavailable when the model isn't deployed.
+  private _lifter = new MotionBertLifter();
+  private _liftingEnabled = readLiftingEnabled();
+  // Second detection pass over a person crop (personCropPlanner). Default
+  // OFF: Holistic runs its own internal ROI tracking, so the extra pass
+  // measured no 2D improvement on AIST (10 px either way) while doubling
+  // pass-A time. Kept as an experimental toggle for extreme cases.
+  private _cropRedetectEnabled = readCropRedetectEnabled();
 
   // Latest detected frame — applied each render tick via applyLatestFrame()
   // so mocap overlays on top of the BVH mixer output rather than fighting it.
@@ -85,6 +135,7 @@ export class MocapController {
     this.session      = new MocapBvhSession(vrm, (name) => this.applier.getQuaternion(name));
 
     this._calibration.onStatusChange = (s) => this.onCalibrationChange?.(s);
+    this._calibration.setChainScaleEnabled(readStorageToggle(CHAIN_SCALE_STORAGE_KEY));
 
     this.detector.onFrame = (frame) => {
       // Accumulate calibration data every frame.
@@ -111,6 +162,10 @@ export class MocapController {
   get isPaused():           boolean           { return this.detector.isPaused; }
   get latestFrame():        PoseFrame | null  { return this._latestFrame; }
   get videoElement():       HTMLVideoElement  { return this.detector.video; }
+  /** True while a video file is being converted (either pipeline). */
+  get isFileCapture():      boolean           { return this._fileCaptureActive; }
+  /** Two-pass conversion progress, null outside two-pass file capture. */
+  get fileCaptureProgress(): FileCaptureProgress | null { return this._fileProgress; }
 
   /** Attach / detach the preview canvas. Call after startLive(). */
   setCanvas(canvas: HTMLCanvasElement | null): void {
@@ -141,6 +196,83 @@ export class MocapController {
     }
   }
 
+  /**
+   * Two-pass file capture. Pass A seeks through the video and collects RAW
+   * landmarks (no online filtering — no per-frame render waits either, so it
+   * runs at decode speed). The buffer is then gap-filled and smoothed with a
+   * zero-phase low-pass (no lag, unlike the causal live filters). Pass B
+   * replays the smoothed frames through calibration + applier at render pace,
+   * capturing each rendered pose into the BVH session exactly like the
+   * single-pass path. Returns false when stopped early.
+   */
+  private async _runTwoPassFileCapture(file: File): Promise<boolean> {
+    const collected = await this.detector.collectFileFramesAtFixedFps(file, {
+      fps: BVH_FRAME_RATE,
+      cropRedetect: this._cropRedetectEnabled,
+      afterFrame: (_timeSec, frameIndex) => {
+        const total = Math.max(
+          frameIndex + 1,
+          Math.round((this.detector.duration || 0) * BVH_FRAME_RATE),
+        );
+        this._fileProgress = { phase: 'analyze', frameIndex, totalFrames: total };
+        if (frameIndex % 60 === 0) console.info(`[mocap:two-pass] pass A frame ${frameIndex}`);
+      },
+    });
+    if (!collected.completed || this._state !== 'recording') return false;
+
+    const detected = collected.frames.filter(Boolean).length;
+    console.info(
+      `[mocap:two-pass] pass A done: ${detected}/${collected.frames.length} frames detected`,
+    );
+
+    // Trusted-geometry profile only when the LOWER BODY is credibly visible.
+    // Half-body footage gives hallucinated legs; lifting them or deriving the
+    // hip height from fake ankles dismantles the pose — fall back to the
+    // guarded live-style heuristics instead.
+    const coverage = fullBodyCoverage(collected.frames);
+    const trusted = coverage >= FULL_BODY_COVERAGE_MIN;
+    this.applier.setTrustedInputMode(trusted);
+    console.info(
+      `[mocap:two-pass] full-body coverage ${(coverage * 100).toFixed(0)}% → ` +
+      `${trusted ? 'trusted-geometry' : 'guarded-heuristics'} retarget`,
+    );
+
+    // Temporal 3D lifting: replace MediaPipe's per-frame depth-guessed world
+    // landmarks with MotionBERT's trajectory-lifted 3D before smoothing.
+    if (this._liftingEnabled && trusted) {
+      this._fileProgress = { phase: 'lift', frameIndex: 0, totalFrames: collected.frames.length };
+      if (await this._lifter.init()) {
+        await this._lifter.liftSequence(collected.frames, collected.aspect);
+      }
+      if (this._state !== 'recording') return false;
+    }
+
+    this._fileProgress = { phase: 'smooth', frameIndex: 0, totalFrames: collected.frames.length };
+    const frames = smoothMocapFrames(collected.frames, { fps: BVH_FRAME_RATE });
+    console.info('[mocap:two-pass] pass B: replaying smoothed frames');
+
+    for (let i = 0; i < frames.length; i++) {
+      if (this._state !== 'recording') return false;
+      this._fileProgress = { phase: 'replay', frameIndex: i, totalFrames: frames.length };
+      const frame = frames[i];
+      if (frame) {
+        this._calibration.feed(frame);
+        this._latestFrame = frame;
+        this._frameRecorded = false;
+      }
+      // Nothing detected yet — nothing to apply or record (matches the
+      // single-pass behaviour before the first detection).
+      if (!this._latestFrame) continue;
+      await this._awaitRenderedFixedFileCapture(i / BVH_FRAME_RATE);
+    }
+
+    // Final cleanup in quaternion space: the palm-orientation solve amplifies
+    // residual landmark noise into wrist swings that landmark smoothing can't
+    // reach. See bvhRotationSmoother.
+    this.session.smoothRecordedRotations();
+    return true;
+  }
+
   // ── Debug knobs ────────────────────────────────────────────────────────────
 
   setPoseQuality(q: PoseModelQuality): Promise<void> { return this.detector.setPoseQuality(q); }
@@ -148,6 +280,9 @@ export class MocapController {
 
   setFilterEnabled(v: boolean): void { this.detector.setFilterEnabled(v); }
   get filterEnabled(): boolean { return this.detector.filterEnabled; }
+
+  setOfflineSmoothingEnabled(v: boolean): void { this._offlineSmoothingEnabled = v; }
+  get offlineSmoothingEnabled(): boolean { return this._offlineSmoothingEnabled; }
 
   setFileCaptureCalibrationPrerollSec(sec: number): void {
     this._fileCaptureCalibrationPrerollSec = Number.isFinite(sec)
@@ -474,8 +609,10 @@ export class MocapController {
   private _teardownFileCapture(): void {
     this._fixedFileCaptureActive = false;
     this._fixedFileFramePending = false;
+    this._fileProgress = null;
     if (this._fileCaptureActive) {
       this.applier.setHighQualityMode(false);
+      this.applier.setTrustedInputMode(false);
       this._fileCaptureActive = false;
     }
     this.detector.onEnd = null;
@@ -537,10 +674,12 @@ export class MocapController {
       this.session.live.start();
       this.session.startReplay();
       this._setState('recording');
-      const completed = await this.detector.processFileAtFixedFps(file, {
-        fps: BVH_FRAME_RATE,
-        afterFrame: (timeSec) => this._awaitRenderedFixedFileCapture(timeSec),
-      });
+      const completed = this._offlineSmoothingEnabled
+        ? await this._runTwoPassFileCapture(file)
+        : await this.detector.processFileAtFixedFps(file, {
+            fps: BVH_FRAME_RATE,
+            afterFrame: (timeSec) => this._awaitRenderedFixedFileCapture(timeSec),
+          });
       if (!completed || this.state !== 'recording') return;
 
       const { name, replayText } = this.session.finishRecording('video');

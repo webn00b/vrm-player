@@ -226,7 +226,7 @@ function updateMocapUI(state: MocapState): void {
     setPreviewVisible(true);
     if (previewCvs) m?.setCanvas(previewCvs);
   } else if (state === 'recording') {
-    const isFile = (m?.duration ?? 0) > 0;
+    const isFile = m?.isFileCapture || (m?.duration ?? 0) > 0;
     statusText.value   = isFile ? '🎬 Processing video…' : '📷 Recording…';
     primaryLabel.value = isFile ? '⏹ Cancel' : '⏹ Stop';
     primaryRecording.value = true;
@@ -237,6 +237,19 @@ function updateMocapUI(state: MocapState): void {
     framesTimer = trackInterval(() => {
       const mm = props.getMocap();
       if (!mm) return;
+      const progress = mm.fileCaptureProgress;
+      if (progress) {
+        // Two-pass file conversion: phase + frame fraction.
+        const label = progress.phase === 'analyze' ? 'analyzing'
+          : progress.phase === 'lift' ? 'lifting 3D'
+          : progress.phase === 'smooth' ? 'smoothing'
+          : 'rendering';
+        const pct = progress.totalFrames > 0
+          ? Math.min(100, Math.round((100 * progress.frameIndex) / progress.totalFrames))
+          : 0;
+        framesText.value = `${label} ${progress.frameIndex}/${progress.totalFrames} · ${pct}%`;
+        return;
+      }
       const dur = mm.duration;
       framesText.value = dur > 0
         ? `${mm.currentTime.toFixed(1)}s / ${dur.toFixed(1)}s`
