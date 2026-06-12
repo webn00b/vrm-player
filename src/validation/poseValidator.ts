@@ -3,9 +3,14 @@ import type { VRM } from '@pixiv/three-vrm';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import { getCachedHumanoidRestAxes, type HumanoidRestAxisInfo } from '../humanoidRestPose';
 import { applyTwoBoneChain } from '../mocap/solvers/twoBoneChainApplication';
-import { getPoseConstraints, type PoseConstraintProfileId, type PoseConstraints } from './poseConstraints';
+import {
+  getPoseConstraints,
+  type ArmPoseClass,
+  type PoseConstraintProfileId,
+  type PoseConstraints,
+} from './poseConstraints';
 
-export type ArmPoseClass = 'sideReach' | 'frontReach' | 'overhead' | 'crossBody' | 'behindBack' | 'unknown';
+export type { ArmPoseClass } from './poseConstraints';
 
 export interface PoseArmStats {
   available: boolean;

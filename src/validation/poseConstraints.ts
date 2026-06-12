@@ -1,4 +1,4 @@
-import type { ArmPoseClass } from './poseValidator';
+export type ArmPoseClass = 'sideReach' | 'frontReach' | 'overhead' | 'crossBody' | 'behindBack' | 'unknown';
 
 export type PoseConstraintProfileId = 'default' | 'mixamoLive';
 
