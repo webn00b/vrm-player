@@ -113,7 +113,9 @@ export class BoneValidator {
   /** Per-bone soft-clamp correction strength, 0..1. */
   private softStrength = new Map<VRMHumanBoneName, number>();
 
-  enabled = true;
+  // Disabled by default — runtime ROM clamping is opt-in via the Limiters
+  // panel; recordings/playback should pass through unclamped out of the box.
+  enabled = false;
   profileId: BoneConstraintProfileId = 'default';
 
   constructor(vrm: VRM, overrides?: Partial<Record<VRMHumanBoneName, RotationConstraint>>) {

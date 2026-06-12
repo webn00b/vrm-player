@@ -1,6 +1,14 @@
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { selectValidationClampPlan, startRenderLoop } from './renderLoop';
-import { DEFAULT_VALIDATION_SETTINGS } from './validation/validationSettings';
+import {
+  DEFAULT_VALIDATION_SETTINGS,
+  validationSettings,
+} from './validation/validationSettings';
+
+// Validators are off by default; the clamp-order tests below opt in explicitly.
+afterEach(() => {
+  Object.assign(validationSettings, DEFAULT_VALIDATION_SETTINGS);
+});
 
 describe('selectValidationClampPlan', () => {
   test('safe recording mode clamps all bones softly during live mocap', () => {
@@ -8,8 +16,19 @@ describe('selectValidationClampPlan', () => {
       hasBvhActive: false,
       mocapState: 'live',
       validatorEnabled: true,
-      settings: DEFAULT_VALIDATION_SETTINGS,
+      settings: { ...DEFAULT_VALIDATION_SETTINGS, recordingClampMode: 'safe' },
     })).toEqual({ shouldClamp: true, soft: true });
+  });
+
+  test('defaults leave both playback and recording unclamped', () => {
+    for (const [mocapState, hasBvhActive] of [['recording', false], ['off', true]] as const) {
+      expect(selectValidationClampPlan({
+        hasBvhActive,
+        mocapState,
+        validatorEnabled: true,
+        settings: DEFAULT_VALIDATION_SETTINGS,
+      })).toEqual({ shouldClamp: false, soft: false });
+    }
   });
 
   test('full recording mode clamps hard during capture', () => {
@@ -72,6 +91,7 @@ describe('selectValidationClampPlan', () => {
 test('render loop captures the red skeleton pose before validation clamps the frame', () => {
   const order: string[] = [];
   const clampArgs: unknown[][] = [];
+  validationSettings.playbackClampMode = 'safe';
   vi.stubGlobal('requestAnimationFrame', vi.fn(() => 7));
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
 
@@ -141,13 +161,14 @@ test('render loop captures the red skeleton pose before validation clamps the fr
   expect(order.indexOf('boneDrag.apply')).toBeLessThan(order.indexOf('skelViz.captureUnclampedPose'));
   expect(order.indexOf('skelViz.captureUnclampedPose')).toBeLessThan(order.indexOf('validator.clampAll'));
   expect(order.indexOf('validator.clampAll')).toBeLessThan(order.indexOf('poseValidator.validateAndClamp'));
-  // Default playback mode is 'safe' → soft clamp of all bones, no mask.
+  // Playback mode 'safe' (set above) → soft clamp of all bones, no mask.
   expect(clampArgs).toEqual([[undefined, { soft: true, deltaSeconds: 1 / 60 }]]);
 });
 
 test('render loop soft-clamps all bones while recording mocap', () => {
   const boneClampArgs: unknown[][] = [];
   const poseClampArgs: unknown[][] = [];
+  validationSettings.recordingClampMode = 'safe';
   vi.stubGlobal('requestAnimationFrame', vi.fn(() => 7));
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
 

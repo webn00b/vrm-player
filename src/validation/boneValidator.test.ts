@@ -9,6 +9,7 @@ describe('BoneValidator constraint profiles', () => {
   test('switches to the Mixamo Live profile and applies its stricter elbow hinge limit', () => {
     const vrm = buildMockVRM();
     const validator = new BoneValidator(vrm);
+    validator.setEnabled(true);
     const elbow = vrm.bones.get('leftLowerArm');
     expect(elbow).toBeTruthy();
 
@@ -33,6 +34,7 @@ describe('BoneValidator constraint profiles', () => {
   test('soft clamp blends the correction in over time and settles on the bound', () => {
     const vrm = buildMockVRM();
     const validator = new BoneValidator(vrm);
+    validator.setEnabled(true);
     const elbow = vrm.bones.get('leftLowerArm');
     expect(elbow).toBeTruthy();
 
@@ -61,6 +63,7 @@ describe('BoneValidator constraint profiles', () => {
   test('soft clamp is a no-op for poses already inside the bounds', () => {
     const vrm = buildMockVRM();
     const validator = new BoneValidator(vrm);
+    validator.setEnabled(true);
     const elbow = vrm.bones.get('leftLowerArm');
     const raw = new THREE.Quaternion().setFromEuler(new THREE.Euler(
       0, THREE.MathUtils.degToRad(-90), 0, 'YZX', // normal forward flexion
@@ -75,6 +78,7 @@ describe('BoneValidator constraint profiles', () => {
   test('soft clamp round-trip: a pose recorded at the bound replays untouched', () => {
     const vrm = buildMockVRM();
     const validator = new BoneValidator(vrm);
+    validator.setEnabled(true);
     const elbow = vrm.bones.get('leftLowerArm');
     const raw = new THREE.Quaternion().setFromEuler(new THREE.Euler(
       0, THREE.MathUtils.degToRad(40), 0, 'YZX',
@@ -91,6 +95,7 @@ describe('BoneValidator constraint profiles', () => {
     // "Playback" through a fresh validator: the recorded pose sits exactly on
     // the bound, so re-clamping must not move it.
     const playbackValidator = new BoneValidator(vrm);
+    playbackValidator.setEnabled(true);
     elbow!.quaternion.copy(recorded);
     playbackValidator.clampAll(undefined, { soft: true, deltaSeconds: 1 / 60 });
 
@@ -100,6 +105,7 @@ describe('BoneValidator constraint profiles', () => {
   test('Mixamo Live profile clamps excessive clavicle swing', () => {
     const vrm = buildMockVRM();
     const validator = new BoneValidator(vrm);
+    validator.setEnabled(true);
     const shoulder = vrm.bones.get('leftShoulder');
     expect(shoulder).toBeTruthy();
 
@@ -123,6 +129,7 @@ describe('BoneValidator constraint profiles', () => {
   test('reports world-space arm direction after local ROM clamp', () => {
     const vrm = buildMockVRM();
     const validator = new BoneValidator(vrm);
+    validator.setEnabled(true);
     const upperArm = vrm.bones.get('leftUpperArm');
     expect(upperArm).toBeTruthy();
 
@@ -147,6 +154,7 @@ describe('BoneValidator constraint profiles', () => {
   test('Mixamo Live ROM clamp + pose guardrail recover dumped backward-arm posture', () => {
     const vrm = buildMockVRM();
     const validator = new BoneValidator(vrm);
+    validator.setEnabled(true);
     const poseValidator = new PoseValidator(vrm, { profileId: 'mixamoLive' });
     const leftUpperArm = vrm.bones.get('leftUpperArm');
     const rightUpperArm = vrm.bones.get('rightUpperArm');

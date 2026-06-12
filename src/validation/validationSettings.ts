@@ -13,10 +13,14 @@ export interface ValidationSettings {
 
 export const VALIDATION_SETTINGS_STORAGE_KEY = 'vrm-player.validation-settings';
 
+// Validators ship disabled: clamping is an opt-in guardrail, not a default
+// transform — recordings and playback should match the source motion exactly
+// unless the user explicitly asks for ROM limiting. ('validate' for import is
+// warn-only — it never mutates the clip.)
 export const DEFAULT_VALIDATION_SETTINGS: ValidationSettings = {
   profileId: 'default',
-  playbackClampMode: 'safe',
-  recordingClampMode: 'safe',
+  playbackClampMode: 'off',
+  recordingClampMode: 'off',
   importClampMode: 'validate',
 };
 

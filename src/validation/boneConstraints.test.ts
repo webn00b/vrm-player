@@ -69,6 +69,7 @@ function applyAndClamp(
 ): { clamped: boolean; driftDeg: number } {
   const vrm = buildMockVRM();
   const validator = new BoneValidator(vrm);
+  validator.setEnabled(true); // ships disabled by default; these tests exercise the clamp
   validator.setProfile(profile);
   const node = vrm.bones.get(c.bone);
   if (!node) throw new Error(`missing mock bone ${c.bone}`);
