@@ -54,7 +54,19 @@ describe('video-to-bvh CLI options', () => {
       validationPair: true,
       headed: true,
       help: false,
+      offlineSmoothing: 'on',
+      lifting: 'on',
+      cropRedetect: 'off',
+      chainScale: 'on',
     });
+  });
+
+  test('parses --offline-smoothing off', async () => {
+    const { parseCliArgs } = await loadCli();
+    expect(parseCliArgs(['./input.mp4', '--offline-smoothing', 'off']))
+      .toMatchObject({ offlineSmoothing: 'off' });
+    expect(() => parseCliArgs(['./input.mp4', '--offline-smoothing', 'maybe']))
+      .toThrow(/must be on or off/);
   });
 
   test('resolves defaults and validates input files', async () => {
@@ -71,6 +83,10 @@ describe('video-to-bvh CLI options', () => {
       timeoutMs: 180_000,
       recordingClampMode: 'safe',
       validationPair: false,
+      offlineSmoothing: 'on',
+      lifting: 'on',
+      cropRedetect: 'off',
+      chainScale: 'on',
     });
   });
 

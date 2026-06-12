@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -62,6 +62,10 @@ export function parseCliArgs(argv) {
     validationPair: false,
     headed: false,
     help: false,
+    offlineSmoothing: 'on',
+    lifting: 'on',
+    cropRedetect: 'off',
+    chainScale: 'on',
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -89,6 +93,26 @@ export function parseCliArgs(argv) {
       i += 1;
     } else if (arg === '--validation-mode') {
       parsed.recordingClampMode = parseValidationMode(readFlagValue(argv, i, arg), arg);
+      i += 1;
+    } else if (arg === '--offline-smoothing') {
+      const value = readFlagValue(argv, i, arg);
+      if (value !== 'on' && value !== 'off') throw new Error(`${arg} must be on or off`);
+      parsed.offlineSmoothing = value;
+      i += 1;
+    } else if (arg === '--lifting') {
+      const value = readFlagValue(argv, i, arg);
+      if (value !== 'on' && value !== 'off') throw new Error(`${arg} must be on or off`);
+      parsed.lifting = value;
+      i += 1;
+    } else if (arg === '--crop-redetect') {
+      const value = readFlagValue(argv, i, arg);
+      if (value !== 'on' && value !== 'off') throw new Error(`${arg} must be on or off`);
+      parsed.cropRedetect = value;
+      i += 1;
+    } else if (arg === '--chain-scale') {
+      const value = readFlagValue(argv, i, arg);
+      if (value !== 'on' && value !== 'off') throw new Error(`${arg} must be on or off`);
+      parsed.chainScale = value;
       i += 1;
     } else if (arg.startsWith('-')) {
       throw new Error(`Unknown option: ${arg}`);
@@ -209,6 +233,10 @@ export function resolveCliOptions(parsed, cwd = process.cwd()) {
     timeoutMs: parsed.timeoutMs,
     recordingClampMode: parsed.recordingClampMode,
     validationPair: parsed.validationPair,
+    offlineSmoothing: parsed.offlineSmoothing,
+    lifting: parsed.lifting,
+    cropRedetect: parsed.cropRedetect,
+    chainScale: parsed.chainScale,
   };
 }
 
@@ -241,14 +269,47 @@ export async function loadOptionalVrm(page, vrmPath, timeoutMs) {
 export function installPageDiagnostics(page, errors) {
   page.on('console', (msg) => {
     const text = msg.text();
-    if (msg.type() === 'error') errors.push(text);
-    if (msg.type() === 'warning' && /MediaPipe|Holistic|BVH|mocap/i.test(text)) {
+    if (msg.type() === 'error') {
+      errors.push(text);
+      // Print immediately — a conversion timeout would otherwise hide the cause.
+      console.warn(`[browser:error] ${text}`);
+    }
+    if (/MediaPipe|Holistic|BVH|mocap|animation:/i.test(text) && msg.type() !== 'error') {
       console.warn(`[browser:${msg.type()}] ${text}`);
     }
   });
   page.on('pageerror', (err) => {
     errors.push(`pageerror: ${err.message}`);
+    console.warn(`[browser:pageerror] ${err.message}`);
   });
+}
+
+export async function installOfflineSmoothingSetting(context, mode) {
+  await context.addInitScript(
+    ({ key, value }) => { localStorage.setItem(key, value); },
+    { key: 'vrm-player.mocap.offlineSmoothing', value: mode },
+  );
+}
+
+export async function installLiftingSetting(context, mode) {
+  await context.addInitScript(
+    ({ key, value }) => { localStorage.setItem(key, value); },
+    { key: 'vrm-player.mocap.lifting', value: mode },
+  );
+}
+
+export async function installCropRedetectSetting(context, mode) {
+  await context.addInitScript(
+    ({ key, value }) => { localStorage.setItem(key, value); },
+    { key: 'vrm-player.mocap.cropRedetect', value: mode },
+  );
+}
+
+export async function installChainScaleSetting(context, mode) {
+  await context.addInitScript(
+    ({ key, value }) => { localStorage.setItem(key, value); },
+    { key: 'vrm-player.mocap.chainScale', value: mode },
+  );
 }
 
 export async function installValidationSettings(context, recordingClampMode) {
@@ -287,6 +348,10 @@ export async function runVideoToBvh(options) {
       viewport: { width: 1440, height: 1000 },
     });
     await installValidationSettings(context, options.recordingClampMode ?? DEFAULT_RECORDING_CLAMP_MODE);
+    await installOfflineSmoothingSetting(context, options.offlineSmoothing ?? 'on');
+    await installLiftingSetting(context, options.lifting ?? 'on');
+    await installCropRedetectSetting(context, options.cropRedetect ?? 'off');
+    await installChainScaleSetting(context, options.chainScale ?? 'on');
     const page = await context.newPage();
     page.setDefaultTimeout(options.timeoutMs);
     page.setDefaultNavigationTimeout(options.timeoutMs);
@@ -309,6 +374,24 @@ export async function runVideoToBvh(options) {
     const download = await downloadPromise;
     await download.saveAs(options.output);
     assertBvhHasFrames(readFileSync(options.output, 'utf8'), options.output);
+
+    // Persist the lifter's diagnostic dump (when lifting ran) next to the BVH.
+    const liftedDump = await page.evaluate(() => window.__mocapLiftedDump ?? null);
+    if (liftedDump) {
+      const dumpPath = `${options.output}.lifted.json`;
+      writeFileSync(dumpPath, JSON.stringify(liftedDump));
+      console.log(`[video-to-bvh] lifted landmarks dump: ${dumpPath}`);
+    }
+
+    // The downloaded BVH is the internal-roundtrip variant (VRM0 x/z
+    // pre-flip). Save the plain-coordinate external text too — REQUIRED for
+    // any analysis through a stock BVH parser (bvh-vs-gt, Blender, …).
+    const externalBvh = await page.evaluate(() => window.__mocapLastExternalBvh ?? null);
+    if (externalBvh) {
+      const externalPath = `${options.output}.external.bvh`;
+      writeFileSync(externalPath, externalBvh);
+      console.log(`[video-to-bvh] external-coordinates BVH: ${externalPath}`);
+    }
 
     return {
       output: options.output,
@@ -344,6 +427,10 @@ export async function runMotionJsonToBvh(options) {
       viewport: { width: 1440, height: 1000 },
     });
     await installValidationSettings(context, options.recordingClampMode ?? DEFAULT_RECORDING_CLAMP_MODE);
+    await installOfflineSmoothingSetting(context, options.offlineSmoothing ?? 'on');
+    await installLiftingSetting(context, options.lifting ?? 'on');
+    await installCropRedetectSetting(context, options.cropRedetect ?? 'off');
+    await installChainScaleSetting(context, options.chainScale ?? 'on');
     const page = await context.newPage();
     page.setDefaultTimeout(options.timeoutMs);
     page.setDefaultNavigationTimeout(options.timeoutMs);
