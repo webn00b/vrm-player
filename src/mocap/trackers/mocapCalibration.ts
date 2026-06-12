@@ -23,9 +23,9 @@
  * unusual proportions can be tuned manually.
  */
 
-import * as THREE from 'three';
-import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
+import type { VRM } from '@pixiv/three-vrm';
 import type { PoseFrame, Landmark3D } from '../pipeline/poseDetector';
+import { measureAvatarMetrics } from '../../avatarMetrics';
 
 const LM = {
   LEFT_EAR:       7,  RIGHT_EAR:      8,
@@ -144,65 +144,26 @@ export class MocapCalibration {
   onStatusChange: ((s: CalibrationStatus) => void) | null = null;
 
   constructor(vrm: VRM) {
-    const humanoid = vrm.humanoid;
-    vrm.scene.updateMatrixWorld(true);
+    // Shared measurement module — same numbers the animation importers use
+    // for clip→avatar hips adaptation, so video mocap and loaded clips agree
+    // on the avatar's proportions. See avatarMetrics.ts for the formulas
+    // (hip/shoulder width = world distances, head = eye-distance proxy,
+    // limb lengths = child bone local offsets).
+    const metrics = measureAvatarMetrics(vrm);
 
-    const getBone = (name: VRMHumanBoneName): THREE.Object3D | null => humanoid.getNormalizedBoneNode(name);
-    const boneLen = (childName: VRMHumanBoneName): number => {
-      const node = getBone(childName);
-      return node ? node.position.length() : 0;
-    };
+    this.avatarHipWidth      = metrics.hipWidth;
+    this.avatarShoulderWidth = metrics.shoulderWidth;
+    this.avatarHeadWidth     = metrics.headWidth;
 
-    // Hip width = world distance between leftUpperLeg and rightUpperLeg origins.
-    const lHipNode = getBone('leftUpperLeg');
-    const rHipNode = getBone('rightUpperLeg');
-    const lPos = new THREE.Vector3(), rPos = new THREE.Vector3();
-    lHipNode?.getWorldPosition(lPos);
-    rHipNode?.getWorldPosition(rPos);
-    this.avatarHipWidth = lPos.distanceTo(rPos);
+    this.avatarLeftUpperArm  = metrics.leftUpperArm;
+    this.avatarLeftLowerArm  = metrics.leftLowerArm;
+    this.avatarRightUpperArm = metrics.rightUpperArm;
+    this.avatarRightLowerArm = metrics.rightLowerArm;
 
-    // Shoulder width = world distance between leftUpperArm and rightUpperArm.
-    const lShoulder = getBone('leftUpperArm');
-    const rShoulder = getBone('rightUpperArm');
-    if (lShoulder && rShoulder) {
-      const lsPos = new THREE.Vector3(), rsPos = new THREE.Vector3();
-      lShoulder.getWorldPosition(lsPos);
-      rShoulder.getWorldPosition(rsPos);
-      this.avatarShoulderWidth = lsPos.distanceTo(rsPos);
-    } else {
-      this.avatarShoulderWidth = 0;
-    }
-
-    // Head (ear-to-ear) width — prefer leftEye↔rightEye × 1.8 if VRM has
-    // eye bones (they correlate much better than head-bone length with actual
-    // face width). Fallback: head.position.length() × 1.5 as a rough proxy.
-    // If nothing usable, set to 0 and head-based scaling is disabled.
-    const lEye = getBone('leftEye');
-    const rEye = getBone('rightEye');
-    if (lEye && rEye) {
-      const lePos = new THREE.Vector3(), rePos = new THREE.Vector3();
-      lEye.getWorldPosition(lePos);
-      rEye.getWorldPosition(rePos);
-      // Ear-to-ear ≈ 1.8 × inter-pupillary; cartoon VRMs with wide-set eyes
-      // still land in the same ballpark once MediaPipe's ear-width ratio is
-      // applied.
-      this.avatarHeadWidth = lePos.distanceTo(rePos) * 1.8;
-    } else {
-      const head = getBone('head');
-      this.avatarHeadWidth = head ? head.position.length() * 1.5 : 0;
-    }
-
-    // Arm bone lengths (child bone's local position length = bone length).
-    this.avatarLeftUpperArm  = boneLen('leftLowerArm');
-    this.avatarLeftLowerArm  = boneLen('leftHand');
-    this.avatarRightUpperArm = boneLen('rightLowerArm');
-    this.avatarRightLowerArm = boneLen('rightHand');
-
-    // Leg bone lengths (upperLeg = distance to lowerLeg, lowerLeg = to foot).
-    this.avatarLeftUpperLeg  = boneLen('leftLowerLeg');
-    this.avatarLeftLowerLeg  = boneLen('leftFoot');
-    this.avatarRightUpperLeg = boneLen('rightLowerLeg');
-    this.avatarRightLowerLeg = boneLen('rightFoot');
+    this.avatarLeftUpperLeg  = metrics.leftUpperLeg;
+    this.avatarLeftLowerLeg  = metrics.leftLowerLeg;
+    this.avatarRightUpperLeg = metrics.rightUpperLeg;
+    this.avatarRightLowerLeg = metrics.rightLowerLeg;
   }
 
   get calibrated(): boolean { return this._calibrated; }

@@ -12,6 +12,7 @@ import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { getRootBone } from "./getRootBone.js";
 import { mapSkeletonToVRM } from "../skeletonMap.ts";
 import { VRMAnimationExporterPlugin } from "./VRMAnimationExporterPlugin.js";
+import { adaptSkeletonToHipsHeightInPlace } from "../animationLoaders/hipsAdaptation.ts";
 const _v3A = new THREE.Vector3();
 function createSkeletonBoundingBox(skeleton) {
     const boundingBox = new THREE.Box3();
@@ -73,17 +74,35 @@ export function convertBVHToVRMAnimation(bvh, options) {
             }
         }
         // For self-recorded BVH the caller passes `options.hipsRestY` = target
-        // VRM's normalizedRestPose.hips.position[1]. We override rootBone.y so
-        // that hips.getWorldPosition().y matches the target bind exactly —
-        // otherwise the loader's `scale = humanoidY / animationY` ≠ 1 and
-        // every hips translation keyframe gets multiplied by that ratio,
-        // producing a constant 9–10 cm drift that propagates to every
-        // descendant bone (foot/head/hand all see the same offset).
+        // VRM's normalizedRestPose.hips.position[1].
+        //
+        // Adaptation: when the source skeleton's rest hips height differs from
+        // the avatar's (external BVH from a taller/shorter performer), we apply
+        // a uniform similarity transform — every bone offset AND every hips
+        // translation keyframe is multiplied by avatarHipsY/sourceHipsY. That
+        // maps vertical bob, squat depth and horizontal stride into the
+        // avatar's proportions. For self-recorded BVH (recorder writes the
+        // avatar's real offsets) the ratio is exactly 1 and nothing is touched.
+        //
+        // Afterwards we pin the root so hips.getWorldPosition().y matches the
+        // target bind exactly — otherwise the loader's
+        // `scale = humanoidY / animationY` ≠ 1 and every hips translation
+        // keyframe gets multiplied by that ratio, producing a constant drift
+        // that propagates to every descendant bone.
+        //
         // External BVHs (no `hipsRestY` provided) keep the legacy bbox raise
         // so accidentally-grounded sources are still corrected.
         if (options && typeof options.hipsRestY === 'number') {
-            rootBone.position.y = options.hipsRestY;
-            rootBone.updateWorldMatrix(false, true);
+            const adaptation = adaptSkeletonToHipsHeightInPlace(
+                rootBone,
+                hipsBone,
+                [hipsPositionTrack, spinePositionTrack],
+                options.hipsRestY,
+                _v3A,
+            );
+            if (options.stats) {
+                options.stats.hipsAdaptation = adaptation;
+            }
         } else {
             const boundingBox = createSkeletonBoundingBox(skeleton);
             if (boundingBox.min.y < 0) {

@@ -9,6 +9,7 @@ import { applyHumanoidRestCorrectionsToClip } from './humanoidRestPose';
 import { validateClip, clampClip } from './validation/clipValidator';
 import type { BoneConstraintProfileId } from './validation/boneConstraints';
 import { normalizeQuaternionSignsAcrossClip } from './animationLoaders/quaternionContinuity';
+import type { HipsAdaptation } from './animationLoaders/hipsAdaptation';
 
 interface NormalizedRestPoseLike {
   hips?: {
@@ -67,7 +68,15 @@ export async function retargetBvhToVrm(
   // we hit the bbox-derived skeleton depth (~0.78 m) instead of true bind
   // height (~0.86 m) and every hips keyframe drifts by ~9 cm.
   const hipsRestY = (vrm.humanoid as HumanoidWithNormalizedRestPose).normalizedRestPose?.hips?.position?.[1];
-  const vrmaBuffer: ArrayBuffer = await convertBVHToVRMAnimation(bvh, { hipsRestY });
+  const converterStats: { hipsAdaptation?: HipsAdaptation } = {};
+  const vrmaBuffer: ArrayBuffer = await convertBVHToVRMAnimation(bvh, { hipsRestY, stats: converterStats });
+  const hipsAdaptation = converterStats.hipsAdaptation ?? null;
+  if (hipsAdaptation?.applied) {
+    console.info(
+      `[animation:retarget] hips adapted to avatar: sourceHipsY=${hipsAdaptation.sourceHipsY.toFixed(3)} → ` +
+      `avatarHipsY=${hipsAdaptation.avatarHipsY.toFixed(3)} (×${hipsAdaptation.scale.toFixed(4)})`,
+    );
+  }
 
   // Step 2: load the VRMA via GLTFLoader + VRMAnimationLoaderPlugin
   const loader = new GLTFLoader();
@@ -128,6 +137,7 @@ export async function retargetBvhToVrm(
       validationViolations: report.violationCount,
       validationWorstBone: report.worstBone ?? null,
       profileId: opts.profileId ?? 'default',
+      hipsAdaptScale: hipsAdaptation?.applied ? hipsAdaptation.scale : 1,
     },
   };
 

@@ -58,9 +58,17 @@ export function retargetFbxToVrmWorldSpace(
   const sampleFps = opts.sampleFps ?? 60;
 
   const mappings = buildFbxToVrmMappings(fbxRoot, vrm, opts.manualMapping);
+
+  // Bind-pose hips offset in the hips' PARENT-local frame — the same space
+  // the source clip's hips.position keyframes live in. Captured before any
+  // sampling mutates the rig; used as the rest-height reference when
+  // adapting hips translation to the avatar's proportions.
+  const hipsMapping = mappings.find((m) => m.vrmName === 'hips');
+  const sourceHipsRestY = hipsMapping ? hipsMapping.fbxNode.position.y : 0;
+
   const rest     = snapshotRestPose(fbxRoot, vrm, mappings);
   const sampled  = sampleFrames(fbxRoot, fbxClip, mappings, rest, sampleFps);
-  const built    = buildTracksFromSamples(mappings, sampled.trackData, fbxClip, vrm);
+  const built    = buildTracksFromSamples(mappings, sampled.trackData, fbxClip, vrm, sourceHipsRestY);
 
   const worstDeltaDeg = (built.worstDeltaRad * 180 / Math.PI).toFixed(1);
   const worstWarn = built.worstDeltaRad > Math.PI / 2
@@ -73,5 +81,14 @@ export function retargetFbxToVrmWorldSpace(
     `worst per-frame Δ: ${worstDeltaDeg}° on ${built.worstDeltaBone ?? '—'} @ t=${built.worstDeltaTime.toFixed(2)}s${worstWarn}`,
   );
 
-  return new THREE.AnimationClip(name, fbxClip.duration, built.tracks);
+  const clip = new THREE.AnimationClip(name, fbxClip.duration, built.tracks);
+  (clip as THREE.AnimationClip & { userData?: Record<string, unknown> }).userData = {
+    retargetInfo: {
+      source: 'fbx-world',
+      name,
+      mappedBones: mappings.length,
+      hipsAdaptScale: built.hipsAdaptation?.applied ? built.hipsAdaptation.scale : 1,
+    },
+  };
+  return clip;
 }
