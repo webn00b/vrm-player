@@ -193,23 +193,6 @@ export class MotionBertLifter {
       markLifted(f.worldLandmarks);
     }
     console.info(`[mocap:lifter] lifted ${n} frames (scale=${scale.toFixed(4)}, zSign=${zSign})`);
-
-    // Diagnostic dump for tools/landmarks-vs-gt.mjs: lets headless runs
-    // compare the lifted world landmarks against ground truth directly,
-    // isolating lifter quality from the retarget layer.
-    (window as unknown as Record<string, unknown>).__mocapLiftedDump = {
-      fps: 30,
-      aspect,
-      frames: frames.map((f) =>
-        f ? f.worldLandmarks.map((lm) => [lm.x, lm.y, lm.z]) : null,
-      ),
-      // Raw normalized 2D (x, y, visibility) — lets offline tooling re-run
-      // the lifter with different normalization/joint-order hypotheses
-      // without another browser pass.
-      rawNorm: frames.map((f) =>
-        f ? f.landmarks.map((lm) => [lm.x, lm.y, lm.visibility ?? 1]) : null,
-      ),
-    };
     return true;
   }
 

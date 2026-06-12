@@ -247,6 +247,21 @@ export class MocapController {
       if (this._state !== 'recording') return false;
     }
 
+    // Diagnostic dump for the offline tools (landmarks-vs-gt, visibility
+    // analysis): world landmarks (lifted when the lifter ran) + raw 2D with
+    // visibility. Written in BOTH retarget profiles.
+    (window as unknown as Record<string, unknown>).__mocapLiftedDump = {
+      fps: BVH_FRAME_RATE,
+      aspect: collected.aspect,
+      coverage,
+      frames: collected.frames.map((f) =>
+        f ? f.worldLandmarks.map((lm) => [lm.x, lm.y, lm.z]) : null,
+      ),
+      rawNorm: collected.frames.map((f) =>
+        f ? f.landmarks.map((lm) => [lm.x, lm.y, lm.visibility ?? 1]) : null,
+      ),
+    };
+
     this._fileProgress = { phase: 'smooth', frameIndex: 0, totalFrames: collected.frames.length };
     const frames = smoothMocapFrames(collected.frames, { fps: BVH_FRAME_RATE });
     console.info('[mocap:two-pass] pass B: replaying smoothed frames');
