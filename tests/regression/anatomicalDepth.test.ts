@@ -64,27 +64,42 @@ test('substantially foreshortened arm (60° to camera): recovers 3D position', (
   assert.ok(error < 0.01, `recovered position within 1 cm of true; got ${error.toFixed(4)}`);
 });
 
-test('sign disambiguation: respects MediaPipe Z direction hint', () => {
+test('sign disambiguation: respects a CONFIDENT MediaPipe Z direction hint', () => {
   // Same 2D projection but two valid 3D solutions (wrist in front vs behind).
-  // Hint sign determines which we pick.
+  // A hint whose magnitude is a substantial fraction of the recovered depth
+  // determines which root we pick. dzMag = √(0.36 − 0.09) ≈ 0.52.
   const shoulder = { x: 0, y: 0, z: 0 };
   const armLength = 0.6;
 
-  // Hint Z negative (wrist in front of shoulder)
-  const noisyWristFront = { x: 0.3, y: 0, z: -0.1 };
-  const resultFront = recoverWristZ({ shoulder, wrist: noisyWristFront, armLength });
-  assert.ok(resultFront.wrist.z < 0, 'with negative hint → recovered Z negative');
+  const resultFront = recoverWristZ({ shoulder, wrist: { x: 0.3, y: 0, z: -0.3 }, armLength });
+  assert.ok(resultFront.wrist.z < 0, 'with confident negative hint → recovered Z negative');
 
-  // Hint Z positive (wrist behind shoulder)
-  const noisyWristBack = { x: 0.3, y: 0, z: 0.1 };
-  const resultBack = recoverWristZ({ shoulder, wrist: noisyWristBack, armLength });
-  assert.ok(resultBack.wrist.z > 0, 'with positive hint → recovered Z positive');
+  const resultBack = recoverWristZ({ shoulder, wrist: { x: 0.3, y: 0, z: 0.3 }, armLength });
+  assert.ok(resultBack.wrist.z > 0, 'with confident positive hint → recovered Z positive');
 
   // Both recoveries should have the same |Z|.
   assert.ok(
     Math.abs(Math.abs(resultFront.wrist.z) - Math.abs(resultBack.wrist.z)) < 1e-6,
     'magnitudes should match across sign choices',
   );
+});
+
+test('sign disambiguation: a WEAK hint defaults toward the camera', () => {
+  // Under heavy foreshortening MediaPipe's Z sign is a coin flip when its
+  // magnitude is small. A wrong "behind" flip used to throw the wrist a full
+  // arm's length into the torso on pointing-at-camera gestures — the
+  // anatomical prior picks "toward the camera" (negative z) instead.
+  const shoulder = { x: 0, y: 0, z: 0 };
+  const armLength = 0.6;
+
+  // dzMag ≈ 0.52; |hint| = 0.1 is well below the trust threshold.
+  const weakBack = recoverWristZ({ shoulder, wrist: { x: 0.3, y: 0, z: 0.1 }, armLength });
+  assert.equal(weakBack.recovered, true);
+  assert.ok(weakBack.wrist.z < 0,
+    `weak positive hint must still recover toward the camera; got z=${weakBack.wrist.z}`);
+
+  const weakFront = recoverWristZ({ shoulder, wrist: { x: 0.3, y: 0, z: -0.1 }, armLength });
+  assert.ok(weakFront.wrist.z < 0, 'weak negative hint → toward camera as well');
 });
 
 test('over-extended 2D (dist2D > armLength): no recovery, fall through', () => {

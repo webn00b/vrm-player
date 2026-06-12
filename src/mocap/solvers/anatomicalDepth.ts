@@ -56,6 +56,9 @@ export interface RecoverWristZResult {
 }
 
 const DEFAULT_FORESHORTENING_GATE = 0.7;
+// Trust MediaPipe's Z sign only when its magnitude is at least this fraction
+// of the recovered depth; below that the sign is effectively a coin flip.
+const HINT_TRUST_RATIO = 0.35;
 
 export function recoverWristZ(input: RecoverWristZInput): RecoverWristZResult {
   const { shoulder, wrist, armLength } = input;
@@ -83,12 +86,18 @@ export function recoverWristZ(input: RecoverWristZInput): RecoverWristZResult {
   }
 
   const dzMag = Math.sqrt(disc);
-  // Disambiguate sign: pick the root in the same direction as MediaPipe's hint.
-  // If hint Z is exactly equal to shoulder Z, prefer "wrist in front of camera"
-  // (negative Z if camera looks at -Z; positive otherwise) — but since the body
-  // frame's Z direction is what we care about, just match the hint sign.
+  // Disambiguate the root's sign. MediaPipe's own Z is exactly what's
+  // unreliable under heavy foreshortening — when its magnitude is small its
+  // sign is a coin flip, and a wrong flip throws the wrist a full arm's
+  // length the wrong way (pointing-at-camera gestures collapse into the
+  // torso). Anatomical prior: a limb foreshortened this much points TOWARD
+  // the camera far more often than behind the back (a behind-the-back wrist
+  // is rarely detected at all). Respect the hint only when its magnitude is
+  // a substantial fraction of the recovered depth.
   const hintDz = wrist.z - shoulder.z;
-  const sign = hintDz >= 0 ? 1 : -1;
+  const sign = Math.abs(hintDz) > dzMag * HINT_TRUST_RATIO
+    ? Math.sign(hintDz)
+    : -1; // MediaPipe z decreases toward the camera
   const recoveredZ = shoulder.z + sign * dzMag;
 
   return {
