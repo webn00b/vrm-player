@@ -19,7 +19,7 @@ const emit = defineEmits<{
       class="queue-tool-btn queue-loop-btn"
       :class="{ active: loopMode === 'one' }"
       icon="pi pi-refresh"
-      :label="loopMode === 'one' ? 'Loop one' : 'Loop queue'"
+      :label="loopMode === 'one' ? 'One' : 'All'"
       text
       size="small"
       aria-label="Toggle loop mode"
@@ -28,13 +28,13 @@ const emit = defineEmits<{
       data-testid="queue-loop-toggle"
       @click="emit('toggleLoopMode')"
     />
-    <span class="queue-summary">{{ summary }}</span>
+    <span class="queue-summary" :title="summary">{{ summary }}</span>
     <Button
-      class="queue-tool-btn"
+      class="queue-tool-btn queue-clear-btn"
       icon="pi pi-trash"
-      label="Clear queue"
       text
       size="small"
+      aria-label="Clear queue"
       title="Remove every clip from the queue"
       @click="emit('clearQueue')"
     />
@@ -46,16 +46,24 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
   margin: -2px 0 6px;
 }
 
 :deep(.queue-tool-btn.p-button) {
+  flex-shrink: 0;
   height: 24px;
-  padding: 0 8px;
+  padding: 0 6px;
   color: rgba(255, 255, 255, 0.48);
   font-size: 10px;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+:deep(.queue-clear-btn.p-button) {
+  width: 24px;
+  min-width: 0;
+  padding: 0;
 }
 
 :deep(.queue-tool-btn.p-button:hover) {
@@ -81,5 +89,7 @@ const emit = defineEmits<{
   font-size: 10px;
   text-align: center;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

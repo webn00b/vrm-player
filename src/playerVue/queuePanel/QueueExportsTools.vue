@@ -10,29 +10,32 @@ const agentOgiExportEnabled = defineModel<boolean>('agentOgiExportEnabled', { re
 
 <template>
   <div class="exports-tools">
-    <div class="title">File-to-file converters</div>
-    <a href="/exports.html" target="_blank" rel="noopener" class="converter-link">
-      Open converter window
-    </a>
-    <div class="hint">
-      Standalone page - no avatar, lightweight. Supports
-      <code>.fbx</code> / <code>.bvh</code> / <code>.glb</code> /
-      <code>.gltf</code> / <code>.vrma</code> -> JSON.
+    <div class="exports-tools-row">
+      <a
+        href="/exports.html"
+        target="_blank"
+        rel="noopener"
+        class="converter-link"
+        title="Standalone converter page — no avatar, lightweight. Converts .fbx / .bvh / .glb / .gltf / .vrma to JSON."
+      >
+        Converter window
+        <i class="pi pi-external-link" />
+      </a>
+      <label
+        v-if="canExportAgentOgi"
+        class="agent-export-toggle"
+        title="Enable to create JSON files for agent_ogi_front"
+      >
+        <Checkbox
+          v-model="agentOgiExportEnabled"
+          binary
+          input-id="agent-ogi-export-toggle"
+          data-testid="agent-ogi-export-toggle"
+        />
+        <span>Agent OGI</span>
+      </label>
     </div>
-    <div class="title spaced">Per-clip downloads</div>
-    <label v-if="canExportAgentOgi" class="agent-export-toggle">
-      <Checkbox
-        v-model="agentOgiExportEnabled"
-        binary
-        input-id="agent-ogi-export-toggle"
-        data-testid="agent-ogi-export-toggle"
-      />
-      <span>Agent OGI JSON</span>
-    </label>
-    <div class="hint">
-      Use BVH, GLB, or VRMA next to each item below.
-      <span v-if="canExportAgentOgi">Enable Agent OGI JSON to create files for agent_ogi_front.</span>
-    </div>
+    <div class="hint">Hover a clip below for BVH / GLB / VRMA downloads.</div>
   </div>
 </template>
 
@@ -40,58 +43,55 @@ const agentOgiExportEnabled = defineModel<boolean>('agentOgiExportEnabled', { re
 .exports-tools {
   font-size: 11px;
   margin-bottom: 8px;
-  padding: 8px 10px;
-  background: rgba(30, 188, 196, 0.07);
-  border: 1px solid rgba(123, 225, 232, 0.12);
-  border-radius: 6px;
 }
 
-.title {
-  font-weight: 600;
-  opacity: .7;
-  margin-bottom: 4px;
-}
-
-.title.spaced {
-  margin-top: 10px;
+.exports-tools-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 6px;
 }
 
 .hint {
-  opacity: .55;
+  opacity: .5;
   font-size: 10px;
+  margin-top: 4px;
 }
 
 .agent-export-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-height: 28px;
-  margin: 3px 0 5px;
+  gap: 6px;
+  min-height: 24px;
   color: rgba(255, 255, 255, 0.86);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .converter-link {
-  display: inline-block;
-  padding: 6px 10px;
-  margin: 4px 0;
-  color: #fff;
-  background: rgba(30, 188, 196, 0.72);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  color: #b9fbff;
+  background: rgba(30, 188, 196, 0.16);
+  border: 1px solid rgba(123, 225, 232, 0.28);
   border-radius: 6px;
   text-decoration: none;
   font-weight: 600;
-  font-size: 11px;
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .converter-link:hover {
-  background: #1ebcc4;
+  background: rgba(30, 188, 196, 0.32);
 }
 
-code {
-  background: rgba(255, 255, 255, 0.07);
-  padding: 0 4px;
-  border-radius: 2px;
+.converter-link .pi {
+  font-size: 9px;
+  opacity: 0.7;
 }
 </style>

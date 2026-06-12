@@ -4,8 +4,9 @@
     {
       "name": "vite",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["-lc", "export PATH=/Users/fedor/.nvm/versions/node/v22.19.0/bin:$PATH && exec npm run dev"],
-      "port": 5333
+      "runtimeArgs": ["-lc", "export PATH=/Users/fedor/.nvm/versions/node/v22.19.0/bin:$PATH && exec npm run dev -- --port \"$PORT\" --strictPort"],
+      "port": 5333,
+      "autoPort": true
     }
   ]
 }

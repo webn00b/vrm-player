@@ -20,7 +20,8 @@
  * fires its state change events.
  */
 
-import { ref, computed } from 'vue';
+import { ref, computed, useTemplateRef } from 'vue';
+import Button from 'primevue/button';
 import { readLibraryAlias, writeLibraryAlias } from '../ui';
 import type { QueueLoopMode } from '../animationController';
 import QueueEmptyState from './queuePanel/QueueEmptyState.vue';
@@ -134,6 +135,46 @@ function toggleLoopMode(): void {
   props.onLoopModeChange?.(loopMode.value);
 }
 
+// ── Add more files (picker + file drop onto the populated list) ─────────────
+const addInputRef = useTemplateRef<HTMLInputElement>('queueAddInput');
+const fileDropActive = ref(false);
+
+function dispatchAnimationFiles(files: File[]): void {
+  if (files.length === 0) return;
+  window.dispatchEvent(new CustomEvent<File[]>('vrm-player:add-animation-files', { detail: files }));
+}
+function openAddPicker(): void {
+  addInputRef.value?.click();
+}
+function onAddFileChange(e: Event): void {
+  const input = e.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = '';
+  dispatchAnimationFiles(files);
+}
+function hasDraggedFiles(e: DragEvent): boolean {
+  return Array.from(e.dataTransfer?.items ?? []).some((item) => item.kind === 'file');
+}
+function onRootDragOver(e: DragEvent): void {
+  // Empty state owns its own drop zone; internal reorder drags are not files.
+  if (props.mode === 'exportsOnly' || isEmpty.value) return;
+  if (draggedIndex.value >= 0 || !hasDraggedFiles(e)) return;
+  e.preventDefault();
+  fileDropActive.value = true;
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+}
+function onRootDragLeave(e: DragEvent): void {
+  const next = e.relatedTarget as Node | null;
+  if (next && (e.currentTarget as HTMLElement).contains(next)) return;
+  fileDropActive.value = false;
+}
+function onRootDrop(e: DragEvent): void {
+  if (!fileDropActive.value) return;
+  e.preventDefault();
+  fileDropActive.value = false;
+  dispatchAnimationFiles(Array.from(e.dataTransfer?.files ?? []));
+}
+
 // ── Drag-and-drop reorder ────────────────────────────────────────────────────
 function onDragStart(e: DragEvent, qi: number): void {
   if (props.mode === 'exportsOnly') return;
@@ -153,6 +194,13 @@ function onDragOver(e: DragEvent, qi: number): void {
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
   const isTopHalf = e.clientY < rect.top + rect.height / 2;
   dropTarget.value = isTopHalf ? qi : qi + 1;
+}
+function onListDragOver(e: DragEvent): void {
+  // Dragging below the last row drops at the end of the queue.
+  if (props.mode === 'exportsOnly' || draggedIndex.value < 0) return;
+  if ((e.target as HTMLElement).closest('.q-item')) return;
+  e.preventDefault();
+  dropTarget.value = items.value.length;
 }
 function onDrop(e: DragEvent): void {
   if (props.mode === 'exportsOnly') return;
@@ -178,7 +226,15 @@ function dropClass(qi: number): string {
 </script>
 
 <template>
-  <div class="queue-panel-root" :data-tab="activeTab">
+  <div
+    class="queue-panel-root"
+    :data-tab="activeTab"
+    :class="{ 'file-drop-active': fileDropActive }"
+    @dragenter="onRootDragOver"
+    @dragover="onRootDragOver"
+    @dragleave="onRootDragLeave"
+    @drop="onRootDrop"
+  >
     <QueueTabs v-if="mode !== 'exportsOnly'" v-model:active-tab="activeTab" />
 
     <QueueTools
@@ -196,7 +252,11 @@ function dropClass(qi: number): string {
       :can-export-agent-ogi="!!onExportAgentOgi"
     />
 
-    <ul class="queue-list">
+    <ul
+      class="queue-list"
+      @dragover="onListDragOver"
+      @drop="onDrop"
+    >
       <QueueItemRow
         v-for="(item, qi) in items"
         :key="item.id"
@@ -232,7 +292,35 @@ function dropClass(qi: number): string {
       />
     </ul>
 
+    <div
+      v-if="mode !== 'exportsOnly' && activeTab === 'queue' && !isEmpty"
+      class="queue-add-row"
+    >
+      <input
+        ref="queueAddInput"
+        type="file"
+        accept=".bvh,.vrma,.fbx"
+        multiple
+        hidden
+        @change="onAddFileChange"
+      />
+      <Button
+        class="queue-add-more-btn"
+        icon="pi pi-plus"
+        label="Add animation"
+        text
+        size="small"
+        title="Add animation files (or drop them anywhere on this panel)"
+        data-testid="queue-add-more"
+        @click="openAddPicker"
+      />
+    </div>
+
     <QueueEmptyState v-if="isEmpty" :mode="mode" />
+
+    <div v-if="fileDropActive" class="queue-file-drop-hint">
+      <span>Drop to add</span>
+    </div>
   </div>
 </template>
 
@@ -241,6 +329,9 @@ function dropClass(qi: number): string {
    (index.html). These rules only style elements specific to this Vue island. */
 
 .queue-panel-root {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   font-family: var(--font-ui);
@@ -251,8 +342,55 @@ function dropClass(qi: number): string {
   list-style: none;
   margin: 0;
   padding: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
+  align-content: start;
   gap: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.queue-add-row {
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+:deep(.queue-add-more-btn.p-button) {
+  width: 100%;
+  height: 26px;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.42);
+  border: 1px dashed rgba(169, 210, 215, 0.18);
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+:deep(.queue-add-more-btn.p-button:hover) {
+  color: #b9fbff;
+  border-color: rgba(123, 225, 232, 0.45);
+  background: rgba(30, 188, 196, 0.1);
+}
+
+/* Full-panel highlight while dragging files over a populated queue. */
+.queue-file-drop-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(30, 188, 196, 0.12);
+  border: 1.5px dashed rgba(123, 225, 232, 0.72);
+  border-radius: 8px;
+  color: #b9fbff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 </style>

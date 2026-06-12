@@ -61,16 +61,24 @@ const showQueueActions = computed(() => props.mode !== 'exportsOnly' && props.ac
       {
         active: queueIndex === activeIndex,
         dragging: queueIndex === draggedIndex,
+        'has-export-state': rowExportState !== null,
       },
     ]"
     :draggable="mode !== 'exportsOnly' && !renaming"
+    tabindex="0"
     @click="emit('itemClick', $event, queueIndex)"
+    @keydown.enter.self.prevent="emit('jump', queueIndex)"
+    @keydown.delete.self.prevent="emit('remove', queueIndex)"
+    @keydown.f2.self.prevent="emit('startRename', queueIndex)"
     @dragstart="emit('dragStart', $event, queueIndex)"
     @dragend="emit('dragEnd')"
     @dragover="emit('dragOver', $event, queueIndex)"
     @drop="emit('drop', $event)"
   >
-    <span class="q-num">{{ String(queueIndex + 1).padStart(2, '0') }}.</span>
+    <span class="q-num">
+      <i v-if="queueIndex === activeIndex" class="pi pi-play q-now" aria-label="Now playing" />
+      <template v-else>{{ String(queueIndex + 1).padStart(2, '0') }}</template>
+    </span>
 
     <input
       v-if="renaming"
@@ -85,31 +93,33 @@ const showQueueActions = computed(() => props.mode !== 'exportsOnly' && props.ac
     <span
       v-else
       class="q-label"
-      :title="item.rawName"
+      :title="`${item.rawName}\nDouble-click (or F2) to rename`"
       @dblclick.stop="emit('startRename', queueIndex)"
     >{{ displayName(item.rawName) }}</span>
     <span class="q-duration">{{ formatDuration(item.duration) }}</span>
 
-    <QueueExportActions
-      v-if="showExports"
-      :queue-index="queueIndex"
-      :row-export-state="rowExportState"
-      :agent-ogi-export-enabled="agentOgiExportEnabled"
-      :on-export-vrma="onExportVrma"
-      :on-export-bvh="onExportBvh"
-      :on-export-glb="onExportGlb"
-      :on-export-agent-ogi="onExportAgentOgi"
-      @export="(index, kind, callback) => emit('export', index, kind, callback)"
-    />
-    <QueuePlaybackActions
-      v-if="showQueueActions"
-      :queue-index="queueIndex"
-      :can-retarget="canRetarget"
-      @jump="emit('jump', $event)"
-      @duplicate="emit('duplicate', $event)"
-      @retarget="emit('retarget', $event)"
-      @remove="emit('remove', $event)"
-    />
+    <div v-if="showExports" class="q-actions q-actions-exports">
+      <QueueExportActions
+        :queue-index="queueIndex"
+        :row-export-state="rowExportState"
+        :agent-ogi-export-enabled="agentOgiExportEnabled"
+        :on-export-vrma="onExportVrma"
+        :on-export-bvh="onExportBvh"
+        :on-export-glb="onExportGlb"
+        :on-export-agent-ogi="onExportAgentOgi"
+        @export="(index, kind, callback) => emit('export', index, kind, callback)"
+      />
+    </div>
+    <div v-if="showQueueActions" class="q-actions q-actions-queue">
+      <QueuePlaybackActions
+        :queue-index="queueIndex"
+        :can-retarget="canRetarget"
+        @jump="emit('jump', $event)"
+        @duplicate="emit('duplicate', $event)"
+        @retarget="emit('retarget', $event)"
+        @remove="emit('remove', $event)"
+      />
+    </div>
   </li>
 </template>
 
@@ -142,17 +152,34 @@ const showQueueActions = computed(() => props.mode !== 'exportsOnly' && props.ac
 }
 
 .q-item.drop-before {
-  box-shadow: 0 -2px 0 #3b5bdb;
+  box-shadow: 0 -2px 0 var(--ui-accent);
 }
 
 .q-item.drop-after {
-  box-shadow: 0 2px 0 #3b5bdb;
+  box-shadow: 0 2px 0 var(--ui-accent);
+}
+
+.q-item:focus-visible {
+  outline: 1px solid rgba(123, 225, 232, 0.55);
+  outline-offset: -1px;
 }
 
 .q-num {
   opacity: 0.35;
   flex-shrink: 0;
   width: 18px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.q-now {
+  font-size: 9px;
+  color: var(--ui-accent);
+}
+
+.q-item.active .q-num {
+  opacity: 1;
 }
 
 .q-label {
@@ -171,14 +198,66 @@ const showQueueActions = computed(() => props.mode !== 'exportsOnly' && props.ac
   font-variant-numeric: tabular-nums;
 }
 
+.q-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Size overrides for the PrimeVue buttons rendered by the multi-root
+   action components: their own scoped `:deep(...)` rules cannot match
+   (the buttons ARE the component roots), so the wrapper styles them. */
+.q-actions :deep(.q-action.p-button) {
+  width: 20px;
+  height: 20px;
+  min-width: 0;
+  padding: 0;
+}
+
+.q-actions :deep(.q-action.p-button .p-button-icon) {
+  font-size: 10px;
+}
+
+.q-actions-exports :deep(.q-action.p-button) {
+  width: auto;
+  padding: 0 5px;
+}
+
+/* Actions stay out of the way until the row is hovered, focused, or active —
+   the narrow panel otherwise crushes the clip label. Export actions also pin
+   themselves while an export is running or just finished, so the feedback
+   ("Saving…" / "Saved") does not vanish when the pointer leaves the row. */
+.q-actions-queue,
+.q-actions-exports {
+  display: none;
+}
+
+.q-item:hover .q-actions-queue,
+.q-item:focus-within .q-actions-queue,
+.q-item.active .q-actions-queue,
+.q-item:hover .q-actions-exports,
+.q-item:focus-within .q-actions-exports,
+.q-item.has-export-state .q-actions-exports {
+  display: flex;
+}
+
+/* Trade the duration for the action buttons while they are visible. */
+.q-item:hover .q-duration,
+.q-item:focus-within .q-duration,
+.q-item.active .q-duration,
+.q-item.has-export-state .q-duration {
+  display: none;
+}
+
 .q-rename-input {
   flex: 1;
   min-width: 0;
   font-family: inherit;
   font-size: 11px;
-  background: #111;
+  background: #0d1417;
   color: #fff;
-  border: 1px solid #3b5bdb;
+  border: 1px solid rgba(123, 225, 232, 0.6);
   border-radius: 3px;
   padding: 2px 5px;
   box-sizing: border-box;

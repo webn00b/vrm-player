@@ -244,7 +244,10 @@ function onShellClick(event: MouseEvent): void {
 .panel.collapsed > *:not(.panel-title) { display: none !important; }
 
 #queue-panel {
-  flex: 1 1 0;
+  /* flex-basis auto (not 0): in play mode #left-col is auto-height, and a
+     zero basis collapses the panel to its min-height instead of letting it
+     grow with the queue up to its max-height. */
+  flex: 1 1 auto;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -252,7 +255,7 @@ function onShellClick(event: MouseEvent): void {
 }
 
 #queue-panel-root {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
