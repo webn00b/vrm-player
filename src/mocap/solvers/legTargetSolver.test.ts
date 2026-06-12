@@ -128,6 +128,19 @@ test('foot lock: engages when velocity low AND near ground, then holds target', 
   }) as any);
   assert.equal(r3.locked, true, 'should lock after repeated slow + ground contact');
 
+  // The lock blends in over a few frames (no pop); run until saturated.
+  let rPinned = r3;
+  for (let i = 0; i < 3; i++) {
+    rPinned = solveLegTarget(baseInput({
+      hipWorld: new THREE.Vector3(0, 1, 0),
+      legScale: 1,
+      ankle: { x: 0, y: 1, z: 0 },
+      footLockEnabled: true,
+      state,
+    }) as any);
+  }
+  assert.equal(rPinned.lockBlend, 1, 'blend saturates to full lock');
+
   // Next frame: re-call with ankle slightly different — locked target should NOT move.
   const r2 = solveLegTarget(baseInput({
     hipWorld: new THREE.Vector3(0, 1, 0),
@@ -137,7 +150,42 @@ test('foot lock: engages when velocity low AND near ground, then holds target', 
     state,
   }) as any);
   assert.equal(r2.locked, true, 'still locked');
-  assert.ok(r3.target.distanceTo(r2.target) < 1e-6, 'locked target stays put');
+  assert.ok(rPinned.target.distanceTo(r2.target) < 1e-6, 'locked target stays put');
+});
+
+test('foot lock: lock and release transitions ramp instead of popping', () => {
+  const state = newState();
+  state.prevTarget.set(0.001, 0, 0);
+
+  // Walk into a lock at target (0, 0, 0) with ankle offset, then check the
+  // first locked frame only moves the target partway toward the lock point.
+  const callWith = (ankleX: number) => solveLegTarget(baseInput({
+    hipWorld: new THREE.Vector3(0, 1, 0),
+    legScale: 1,
+    ankle: { x: ankleX, y: 1, z: 0 },
+    footLockEnabled: true,
+    state,
+  }) as any);
+
+  callWith(0); callWith(0);
+  const locked = callWith(0);
+  assert.equal(locked.locked, true);
+  assert.ok(locked.lockBlend > 0 && locked.lockBlend < 1,
+    `first locked frame must be mid-blend; got ${locked.lockBlend}`);
+
+  // Saturate, then release via airborne frames — blend must step down, not snap.
+  callWith(0); callWith(0); callWith(0);
+  const lift = () => solveLegTarget(baseInput({
+    hipWorld: new THREE.Vector3(0, 1, 0),
+    legScale: 1,
+    ankle: { x: 0, y: 0.2, z: 0 },  // ankle high above ground
+    footLockEnabled: true,
+    state,
+  }) as any);
+  const released = lift(); // big target jump → velocity unlock fires immediately
+  assert.equal(released.locked, false, 'released on velocity spike');
+  assert.ok(released.lockBlend > 0 && released.lockBlend < 1,
+    `release must ramp out; got ${released.lockBlend}`);
 });
 
 test('foot lock: releases when target lifts off ground above footLiftThreshold', () => {
@@ -198,4 +246,37 @@ test('result.target is a CLONE (mutating it doesn\'t affect internal state)', ()
   // The internal `_v2` shouldn't have been mutated — call again to verify.
   const out2 = solveLegTarget(baseInput({}) as any);
   assert.equal(out2.target.y, before, 'subsequent call gives same target');
+});
+
+test('knee hinge guard: backward pole is pushed into the forward hemisphere', () => {
+  const state = newState();
+  const fwd = new THREE.Vector3(0, 0, 1);
+  // Knee landmark BEHIND the hip in depth → raw pole points backward.
+  const out = solveLegTarget(baseInput({
+    hipWorld: new THREE.Vector3(0, 1, 0),
+    legScale: 1,
+    knee: { x: 0, y: 0.5, z: 0.4 },   // MediaPipe z toward camera → VRM −z (backward)
+    ankle: { x: 0, y: 1, z: 0 },
+    characterForward: fwd,
+    state,
+  }) as any);
+  assert.ok(out.poleDirection.dot(fwd) >= 0.2,
+    `pole forward component must be clamped above floor; got ${out.poleDirection.dot(fwd)}`);
+});
+
+test('knee hinge guard: natural forward pole untouched', () => {
+  const state = newState();
+  const fwd = new THREE.Vector3(0, 0, 1);
+  const out = solveLegTarget(baseInput({
+    hipWorld: new THREE.Vector3(0, 1, 0),
+    legScale: 1,
+    knee: { x: 0, y: 0.5, z: -0.4 },  // knee toward camera → VRM +z (forward)
+    ankle: { x: 0, y: 1, z: 0 },
+    characterForward: fwd,
+    state,
+  }) as any);
+  // Raw pole already deep in the forward hemisphere — must pass through
+  // (the guard only adds forward when the component is below the floor).
+  const dir = out.poleDirection.clone().normalize();
+  assert.ok(dir.dot(fwd) > 0.5, `forward pole passes through; got ${dir.dot(fwd)}`);
 });

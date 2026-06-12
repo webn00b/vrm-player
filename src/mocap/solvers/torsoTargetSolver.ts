@@ -20,6 +20,9 @@ export interface HipsOrientationTargetInput {
   hipsBaseWorld: THREE.Quaternion;
   hipsParentWorldQuaternion: THREE.Quaternion;
   torsoAxisMaxDivergenceDeg: number;
+  /** Z damping of torso directions. 1 = honest depth (trusted/lifted input),
+   *  3 = legacy live-webcam damping. */
+  torsoDepthDamping?: number;
 }
 
 export interface HipPositionTargetInput {
@@ -33,6 +36,22 @@ export interface HipPositionTargetInput {
   hipsParentWorldPosition: THREE.Vector3;
   hipsParentWorldQuaternion: THREE.Quaternion;
   scale: number;
+  /**
+   * When set, the WORLD Y of the target is replaced by an absolute height
+   * derived from the legs: `groundWorldY + hipHeightM · legScale`. The
+   * image-based Y delta tracks lateral motion well but underestimates
+   * vertical amplitude (crouches barely lower the pelvis, so leg IK can't
+   * bend the knees). Hip-above-lowest-ankle height from the (lifted) world
+   * landmarks is metrically reliable.
+   */
+  absoluteHeight?: {
+    /** Performer hip height above their lowest ankle, metres. */
+    hipHeightM: number;
+    /** Performer→avatar leg scale. */
+    legScale: number;
+    /** Avatar's rest ankle height (world Y of the feet at rest). */
+    groundWorldY: number;
+  };
 }
 
 export interface SpineTargetSolverInput {
@@ -49,6 +68,8 @@ export interface SpineTargetSolverInput {
   lateralBendScale: number;
   lateralBendScaleMax: number;
   spineNodeCount: number;
+  /** Z damping of torso directions (see HipsOrientationTargetInput). */
+  torsoDepthDamping?: number;
 }
 
 export interface SpineTargetSolverResult {
@@ -81,6 +102,7 @@ export function solveHipsOrientationTarget(
     torsoAxisMaxDivergenceDeg,
   } = input;
 
+  const damping = input.torsoDepthDamping ?? 3;
   const spineDir = _v1;
   mpDirToVrmTorso(
     mirrorX,
@@ -88,6 +110,7 @@ export function solveHipsOrientationTarget(
     (leftShoulder.y + rightShoulder.y) * 0.5 - (leftHip.y + rightHip.y) * 0.5,
     (leftShoulder.z + rightShoulder.z) * 0.5 - (leftHip.z + rightHip.z) * 0.5,
     spineDir,
+    damping,
   );
   if (spineDir.lengthSq() < 1e-6) return null;
   spineDir.normalize();
@@ -99,6 +122,7 @@ export function solveHipsOrientationTarget(
     rightShoulder.y - leftShoulder.y,
     rightShoulder.z - leftShoulder.z,
     shoulderAxis,
+    damping,
   );
   if (shoulderAxis.lengthSq() < 1e-6) return null;
   shoulderAxis.normalize();
@@ -110,6 +134,7 @@ export function solveHipsOrientationTarget(
     rightHip.y - leftHip.y,
     rightHip.z - leftHip.z,
     hipAxis,
+    damping,
   );
   if (hipAxis.lengthSq() < 1e-6) return null;
   hipAxis.normalize();
@@ -160,6 +185,10 @@ export function solveHipPositionTarget(
   _v1.multiplyScalar(scale);
 
   _v2.copy(avatarBaselineWorld).add(_v1);
+  if (input.absoluteHeight) {
+    const { hipHeightM, legScale, groundWorldY } = input.absoluteHeight;
+    _v2.y = groundWorldY + hipHeightM * legScale;
+  }
   _q1.copy(hipsParentWorldQuaternion).invert();
   _v3.subVectors(_v2, hipsParentWorldPosition).applyQuaternion(_q1);
   return _v3.clone();
@@ -187,6 +216,7 @@ export function solveSpineTarget(
   const diagnostics = createTorsoSolverDiagnostics();
   const hipsVisible = !!leftHip && !!rightHip;
 
+  const damping = input.torsoDepthDamping ?? 3;
   const shoulderAxis = _v1;
   mpDirToVrmTorso(
     mirrorX,
@@ -194,6 +224,7 @@ export function solveSpineTarget(
     rightShoulder.y - leftShoulder.y,
     rightShoulder.z - leftShoulder.z,
     shoulderAxis,
+    damping,
   );
   if (shoulderAxis.lengthSq() < 1e-6) return null;
 
@@ -205,6 +236,7 @@ export function solveSpineTarget(
       rightHip!.y - leftHip!.y,
       rightHip!.z - leftHip!.z,
       hipAxis,
+      damping,
     );
     if (hipAxis.lengthSq() < 1e-6) return null;
     stabilizeTorsoCrossAxis(hipAxis, shoulderAxis, torsoAxisMaxDivergenceDeg, hipAxis);

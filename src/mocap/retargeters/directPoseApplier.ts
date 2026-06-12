@@ -172,6 +172,11 @@ export class DirectPoseApplier {
     if (enabled) this.legIK.resetFootLock();
   }
 
+  /** Trusted-geometry retarget — gate on full-body coverage, see settings. */
+  setTrustedInputMode(enabled: boolean): void {
+    this.settings.setTrustedInputMode(enabled);
+  }
+
   /** When enabled, wrist + fingers from hand tracking are treated as a top layer. */
   setHandTrackingPriorityEnabled(v: boolean): void { this.settings.handTrackingPriorityEnabled = v; }
   get handTrackingPriorityEnabled(): boolean { return this.settings.handTrackingPriorityEnabled; }

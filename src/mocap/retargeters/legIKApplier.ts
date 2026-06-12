@@ -27,6 +27,7 @@ export class LegIKApplier {
   };
   private _footStableFrames:   Record<'left' | 'right', number> = { left: 0, right: 0 };
   private _footAirborneFrames: Record<'left' | 'right', number> = { left: 0, right: 0 };
+  private _footLockBlend:      Record<'left' | 'right', number> = { left: 0, right: 0 };
   private _prevAnkleTarget: Record<'left' | 'right', THREE.Vector3> = {
     left:  new THREE.Vector3(Infinity, Infinity, Infinity),
     right: new THREE.Vector3(Infinity, Infinity, Infinity),
@@ -40,6 +41,7 @@ export class LegIKApplier {
 
   // Scratch allocations — reused each frame to avoid GC pressure
   private _v5 = new THREE.Vector3();
+  private _fwd = new THREE.Vector3();
   private _q3 = new THREE.Quaternion();
   private _qFade = new THREE.Quaternion();
 
@@ -59,6 +61,7 @@ export class LegIKApplier {
     this._prevAnkleTarget.right.set(Infinity, Infinity, Infinity);
     this._footStableFrames.left = this._footStableFrames.right = 0;
     this._footAirborneFrames.left = this._footAirborneFrames.right = 0;
+    this._footLockBlend.left = this._footLockBlend.right = 0;
   }
 
   isFootLocked(side: 'left' | 'right'): boolean { return this._footLocked[side]; }
@@ -107,12 +110,29 @@ export class LegIKApplier {
     upperNode.updateWorldMatrix(false, false);
     const hipWorld = upperNode.getWorldPosition(this._v5);
 
+    // Ground-plane forward of the character — anatomical reference for the
+    // knee hinge guard. Projected to the floor so a forward torso lean
+    // doesn't tilt the reference downward.
+    let characterForward: THREE.Vector3 | undefined;
+    const hipsNode = nodeCache.get('hips');
+    if (hipsNode) {
+      hipsNode.getWorldQuaternion(this._q3);
+      // VRM (normalized humanoid) models face −Z locally; verified
+      // empirically — +Z here bends knees backward, bird-leg style.
+      this._fwd.set(0, 0, -1).applyQuaternion(this._q3);
+      this._fwd.y = 0;
+      if (this._fwd.lengthSq() > 1e-6) {
+        characterForward = this._fwd.normalize();
+      }
+    }
+
     const legSolve = solveLegTarget({
       mirrorX: settings.mirrorX,
       hip: ph,
       knee: pk,
       ankle: pa,
       hipWorld,
+      characterForward,
       legScale: calib.legScale(),
       legSpreadX: settings.legSpreadX,
       groundY: this._groundY,
@@ -128,12 +148,14 @@ export class LegIKApplier {
         smoothedPole: this._poles[side],
         stableFrames: this._footStableFrames[side],
         airborneFrames: this._footAirborneFrames[side],
+        lockBlend: this._footLockBlend[side],
       },
     });
     const target = legSolve.target;
     this._footLocked[side] = legSolve.locked;
     this._footStableFrames[side] = legSolve.stableFrames;
     this._footAirborneFrames[side] = legSolve.airborneFrames;
+    this._footLockBlend[side] = legSolve.lockBlend;
 
     getAnkleTarget(debugTargets, side).copy(target);
     debugTargets[side === 'left' ? 'leftFootLocked' : 'rightFootLocked'] = this._footLocked[side];

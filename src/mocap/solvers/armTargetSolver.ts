@@ -39,6 +39,9 @@ export interface ArmTargetSolverInput {
   avatarShoulderWidth: number;
   armZAttenuation: number;
   armPoleZ: number;
+  /** Pure-similarity mode for trusted (lifted) input — see
+   *  DirectPoseSettings.trustInputGeometry. */
+  trustInputGeometry?: boolean;
 }
 
 export interface ArmTargetSolverResult {
@@ -84,6 +87,60 @@ export function solveArmTarget(input: ArmTargetSolverInput): ArmTargetSolverResu
     armZAttenuation,
     armPoleZ,
   } = input;
+
+  // Trusted (lifted) input: the world landmarks are geometrically right, so
+  // the IK target is a pure similarity transform — same-side anchor,
+  // ISOTROPIC scale. The heuristics below (per-axis scaling, midpoint and
+  // pose blends, Z attenuation) exist to rescue noisy webcam depth and
+  // measurably destroy clean input.
+  if (input.trustInputGeometry) {
+    mpDeltaToVrm(
+      mirrorX,
+      perfWrist.x - perfShoulder.x,
+      perfWrist.y - perfShoulder.y,
+      perfWrist.z - perfShoulder.z,
+      _v2,
+    );
+    _v2.multiplyScalar(armScale);
+    const target = _v3.copy(shoulderWorld).add(_v2);
+
+    mpDeltaToVrm(
+      mirrorX,
+      perfElbow.x - perfShoulder.x,
+      perfElbow.y - perfShoulder.y,
+      perfElbow.z - perfShoulder.z,
+      _v1,
+    );
+    _v1.multiplyScalar(armScale);
+    const elbowTarget = _v2.copy(shoulderWorld).add(_v1);
+
+    mpDirToVrm(
+      mirrorX,
+      perfElbow.x - perfShoulder.x,
+      perfElbow.y - perfShoulder.y,
+      perfElbow.z - perfShoulder.z,
+      _v1,
+    );
+    if (_v1.lengthSq() < 1e-6) _v1.set(0, -1, 0);
+
+    return {
+      target: target.clone(),
+      elbowTarget: elbowTarget.clone(),
+      rawPoleDirection: _v1.clone(),
+      frontPoseBlendBase: 0,
+      diagnostics: {
+        rawScale: rawArmScale,
+        effectiveScale: armScale,
+        segmentScaleCap: Number.NaN,
+        midpointBlend: 0,
+        handsTogetherBlend: 0,
+        chestPrayerBlend: 0,
+        wristFrontBlend: 0,
+        frontPoseBlend: 0,
+        faceNearBlend: 0,
+      },
+    };
+  }
 
   const perfMidX = (perfLeftShoulder.x + perfRightShoulder.x) * 0.5;
   const perfMidY = (perfLeftShoulder.y + perfRightShoulder.y) * 0.5;

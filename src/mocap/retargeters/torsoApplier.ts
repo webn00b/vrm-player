@@ -13,6 +13,15 @@ import type { DirectPoseRig } from './directPoseRig';
  * Hips / spine / head / shoulders retargeting. Torso runs first each frame —
  * its rotations propagate to limbs via parent world matrices.
  */
+// Hip-height smoothing/latch tuning (see _hipHeightEma field docs).
+// EMA alpha 0.25 ≈ 3-frame lag at 30 fps — imperceptible, kills jitter.
+const HIP_HEIGHT_EMA_ALPHA = 0.25;
+// Enter standing above 94% of the leg chain, leave below 92% (hysteresis),
+// pin at 98.5% — visually straight without singular full extension.
+const STAND_ENTER_RATIO = 0.94;
+const STAND_EXIT_RATIO = 0.92;
+const STAND_HEIGHT_RATIO = 0.985;
+
 export class TorsoApplier {
   private rig: DirectPoseRig;
 
@@ -29,8 +38,20 @@ export class TorsoApplier {
   private _avatarShoulderRestLocal = new THREE.Vector3(1, 0, 0);
 
   // Hip position tracking: performer hip centre delta → avatar hips.position.
+  // The baseline is stored in NORMALIZED image units (see applyHips) and
+  // converted to metres with the calibration's live metersPerNorm() ratio, so
+  // a drifting scale estimate can't accumulate into a position offset.
   private _hipPerfBaseline:      THREE.Vector3 | null = null;
   private _hipAvatarBaseline:    THREE.Vector3 = new THREE.Vector3();
+  // Avatar rest ankle height (world Y) — reference floor for the
+  // legs-derived absolute hip height. NaN until captured.
+  private _groundWorldY = Number.NaN;
+  // Smoothed hip-above-ankle height + standing latch. Raw per-frame height
+  // jitters (the lowest-ankle max flips between legs, ankle depth wobbles)
+  // and feeds straight into knee bend — visible as the avatar "breathing"
+  // through its knees while the performer stands still.
+  private _hipHeightEma = 0;
+  private _standing = false;
   private _torsoForwardBaseline: number | null = null;
   private _headYawBaseline:   number | null = null;
   private _headPitchBaseline: number | null = null;
@@ -56,6 +77,8 @@ export class TorsoApplier {
 
   /** Reset baselines — next frame re-anchors to current performer position. */
   resetBaselines(): void {
+    this._hipHeightEma = 0;
+    this._standing = false;
     this._hipPerfBaseline = null;
     this._torsoForwardBaseline = null;
     this._headYawBaseline = null;
@@ -69,6 +92,15 @@ export class TorsoApplier {
     // Make sure the whole VRM world matrix chain is fresh before reading
     this.rig.vrm.scene.updateMatrixWorld(true);
     hipsNode.getWorldQuaternion(this._hipsBaseWorld);
+
+    // Rest ankle height — floor reference for the legs-derived hip height.
+    const pos = new THREE.Vector3();
+    let minY = Infinity;
+    for (const name of ['leftFoot', 'rightFoot'] as const) {
+      const node = this.rig.nodeCache.get(name);
+      if (node) { node.getWorldPosition(pos); if (pos.y < minY) minY = pos.y; }
+    }
+    if (minY < Infinity) this._groundWorldY = minY;
 
     // Capture the avatar's shoulder line in hips-local (XZ projected). Used
     // as a twist reference when performer hips aren't visible.
@@ -180,6 +212,7 @@ export class TorsoApplier {
       hipsBaseWorld: this._hipsBaseWorld,
       hipsParentWorldQuaternion: this._q2,
       torsoAxisMaxDivergenceDeg: settings.torsoAxisMaxDivergenceDeg,
+      torsoDepthDamping: settings.torsoDepthDamping,
     });
     if (!hipsTarget) return;
 
@@ -189,10 +222,21 @@ export class TorsoApplier {
     boneTracker.markObserved('hips', hipsNode.quaternion, now);
 
     // ── Hip world position ──────────────────────────────────────────────────
+    // MediaPipe WORLD landmarks are hip-centred: the hip midpoint is ~(0,0,0)
+    // in every frame, so they cannot carry global translation (using them here
+    // froze the BVH root in place). The NORMALIZED (image-space) landmarks do
+    // move; convert image units to metres with the calibrated world/norm
+    // hip-width ratio. Note normalized z is also hip-rooted, so the midpoint z
+    // stays ~0 — depth translation is not recovered yet.
     if (settings.hipPositionEnabled) {
-      const cx = (lh.x + rh.x) * 0.5;
-      const cy = (lh.y + rh.y) * 0.5;
-      const cz = (lh.z + rh.z) * 0.5;
+      const nlh = frame.landmarks[LM.LEFT_HIP];
+      const nrh = frame.landmarks[LM.RIGHT_HIP];
+      const metersPerNorm = calibration?.metersPerNorm() ?? 0;
+      if (!nlh || !nrh || metersPerNorm <= 0) return;
+
+      const cx = (nlh.x + nrh.x) * 0.5;
+      const cy = (nlh.y + nrh.y) * 0.5;
+      const cz = (nlh.z + nrh.z) * 0.5;
 
       if (!this._hipPerfBaseline) {
         this._hipPerfBaseline = new THREE.Vector3(cx, cy, cz);
@@ -203,7 +247,52 @@ export class TorsoApplier {
       // width scale. In full-body shots the avatar can have much shorter
       // shoulders/hips but near-1:1 leg length; using bodyScale here makes the
       // pelvis move too little and forces leg IK to over-stretch.
-      const scale = calibration?.legScale() ?? 1;
+      // Delta is computed in normalized units inside the solver, then scaled
+      // to metres by the CURRENT ratio — so a drifting metersPerNorm estimate
+      // rescales the whole offset instead of accumulating error.
+      const scale = (calibration?.legScale() ?? 1) * metersPerNorm;
+
+      // Vertical: the image-space Y delta underestimates crouch depth (a deep
+      // squat barely lowers the pelvis on screen), and a too-high pelvis with
+      // ground-clamped ankle targets means leg IK can never bend the knees.
+      // Hip height above the lowest ankle in WORLD landmark space is metric
+      // and pose-true (especially when lifted) — use it as an absolute Y.
+      let absoluteHeight: { hipHeightM: number; legScale: number; groundWorldY: number } | undefined;
+      if (settings.hipHeightFromLegs && Number.isFinite(this._groundWorldY)) {
+        const la = lms[LM.LEFT_ANKLE], ra = lms[LM.RIGHT_ANKLE];
+        const anklesVisible =
+          !!la && !!ra && settings.isVisible(la) && settings.isVisible(ra);
+        if (anklesVisible) {
+          const hipY = (lh.y + rh.y) * 0.5;
+          // MediaPipe world y points DOWN: lowest ankle has the LARGEST y.
+          const hipHeightRaw = Math.max(la.y, ra.y) - hipY;
+          if (hipHeightRaw > 0.2) {
+            // EMA kills per-frame jitter; the standing latch pins an
+            // almost-straight leg to exactly straight (with hysteresis) so
+            // measurement noise can't pulse the knees while standing.
+            this._hipHeightEma = this._hipHeightEma <= 0
+              ? hipHeightRaw
+              : this._hipHeightEma * (1 - HIP_HEIGHT_EMA_ALPHA) + hipHeightRaw * HIP_HEIGHT_EMA_ALPHA;
+            let hipHeightM = this._hipHeightEma;
+            const perfChain = calibration?.performerLegChainLength() ?? 0;
+            if (perfChain > 1e-3) {
+              const ratio = hipHeightM / perfChain;
+              if (this._standing ? ratio > STAND_EXIT_RATIO : ratio > STAND_ENTER_RATIO) {
+                this._standing = true;
+                hipHeightM = perfChain * STAND_HEIGHT_RATIO;
+              } else {
+                this._standing = false;
+              }
+            }
+            absoluteHeight = {
+              hipHeightM,
+              legScale: calibration?.legScale() ?? 1,
+              groundWorldY: this._groundWorldY,
+            };
+          }
+        }
+      }
+
       hipsNode.parent!.getWorldPosition(this._v3);
       hipsNode.parent!.getWorldQuaternion(this._q1);
       const positionTarget = solveHipPositionTarget({
@@ -217,6 +306,7 @@ export class TorsoApplier {
         hipsParentWorldPosition: this._v3,
         hipsParentWorldQuaternion: this._q1,
         scale,
+        absoluteHeight,
       });
 
       if (settings.hipPositionLerp >= 1) hipsNode.position.copy(positionTarget);
@@ -357,6 +447,7 @@ export class TorsoApplier {
       torsoAxisMaxDivergenceDeg: settings.torsoAxisMaxDivergenceDeg,
       torsoForwardBaseline: this._torsoForwardBaseline,
       forwardBendScale: settings.forwardBendScale,
+      torsoDepthDamping: settings.torsoDepthDamping,
       lateralBendScale: settings.lateralBendScale,
       lateralBendScaleMax: settings.lateralBendScaleMax,
       spineNodeCount: count,

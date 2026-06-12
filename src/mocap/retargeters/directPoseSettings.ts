@@ -37,10 +37,26 @@ export class DirectPoseSettings {
   /** Hip position tracking: performer hip centre delta → avatar hips.position. */
   hipPositionEnabled = true;
 
+  /** Derive the hips' WORLD height from hip-above-ankle distance in the world
+   *  landmarks instead of the image-space Y delta. Fixes crouches: the screen
+   *  Y of the pelvis barely moves in a deep squat, leaving the avatar's legs
+   *  straight because the ground-clamped ankle targets stay within reach.
+   *  Only sane with REAL ankle landmarks — enabled via setTrustedInputMode. */
+  hipHeightFromLegs = false;
+
   // Depth (Z) is MediaPipe's least reliable axis. For narrow joints like
   // elbows this jitter is visible — we attenuate it further inside arm IK.
   // Legs' Z is less problematic (big, well-separated joints) so we leave it.
   armZAttenuation = 1;
+  /** Torso-direction Z damping (see setHighQualityMode). 1 = honest depth. */
+  torsoDepthDamping = 3;
+  /** Treat input world landmarks as geometrically trustworthy (file capture
+   *  with the temporal lifter): IK targets become pure similarity transforms
+   *  of the input — no per-axis scaling, no anatomical Z recovery, no
+   *  pose-specific blends. Those heuristics rescue noisy live-webcam depth
+   *  but DESTROY clean input (measured 90°+ arm direction error from the
+   *  anisotropic x/y/z scaling alone). */
+  trustInputGeometry = false;
   /** EMA alpha on pole smoothing. 1 = no smoothing (use current frame). */
   poleAlpha = 0.6;
   /** Z-axis weight applied to the arm pole vector (shoulder→elbow direction).
@@ -90,6 +106,24 @@ export class DirectPoseSettings {
     this.handLerp  = enabled ? 1 : 0.7;
     this.headLerp  = enabled ? 1 : 0.28;
     this.hipPositionLerp = enabled ? 1 : 0.12;
+  }
+
+  /**
+   * Trusted-input mode: the world landmarks are geometrically reliable
+   * (full-body file capture, ideally lifted). Switches the retarget from
+   * "rescue noisy webcam data" heuristics to pure-similarity geometry.
+   *
+   * MUST be gated on actual BODY COVERAGE, not on the capture source:
+   * half-body footage makes MediaPipe hallucinate the hidden legs, and
+   * trusting that geometry (hip height from fake ankles, undamped torso
+   * depth) dismantles the pose. See MocapController's coverage gate.
+   */
+  setTrustedInputMode(enabled: boolean): void {
+    this.trustInputGeometry = enabled;
+    // Damped torso Z keeps a noisy-depth body upright; honest Z lets the
+    // torso lean properly when depth is trustworthy.
+    this.torsoDepthDamping = enabled ? 1 : 3;
+    this.hipHeightFromLegs = enabled;
   }
 
   isVisible(lm?: { visibility?: number }): boolean {

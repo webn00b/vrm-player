@@ -30,8 +30,10 @@ import { measureAvatarMetrics } from '../../avatarMetrics';
 const LM = {
   LEFT_EAR:       7,  RIGHT_EAR:      8,
   LEFT_SHOULDER:  11, RIGHT_SHOULDER: 12,
+  LEFT_ELBOW:     13, RIGHT_ELBOW:    14,
   LEFT_WRIST:     15, RIGHT_WRIST:    16,
   LEFT_HIP:       23, RIGHT_HIP:      24,
+  LEFT_KNEE:      25, RIGHT_KNEE:     26,
   LEFT_ANKLE:     27, RIGHT_ANKLE:    28,
 } as const;
 
@@ -114,6 +116,25 @@ export class MocapCalibration {
    */
   private performerRightArmMax = 0;  // drives character LEFT arm
   private performerLeftArmMax  = 0;  // drives character RIGHT arm
+  /**
+   * EMA of per-segment CHAIN lengths (shoulder→elbow + elbow→wrist,
+   * hip→knee + knee→ankle). Unlike the decaying shoulder→wrist max — which
+   * over-estimates reach whenever the performer never fully extends and
+   * makes IK targets overshoot — segment sums measure the true chain length
+   * on every frame regardless of pose. Especially stable on lifted
+   * landmarks, where bone lengths are near-constant by construction.
+   */
+  private performerLeftArmChain  = 0;
+  private performerRightArmChain = 0;
+  private performerLeftLegChain  = 0;
+  private performerRightLegChain = 0;
+  // Prefer chain-based limb scaling when measurements exist (toggleable for A/B).
+  private _chainScaleEnabled = true;
+  // EMA of world-metres per normalized-image-unit, measured from the hip
+  // width in both spaces (2D xy in each, so in-plane rotation cancels).
+  // Converts normalized-landmark translation into metres — the world
+  // landmarks themselves are hip-centred and carry no global translation.
+  private _metersPerNormEma = 0;
   private _calibrated = false;
 
   // User slider multipliers — 1 = neutral.
@@ -184,9 +205,17 @@ export class MocapCalibration {
     this.performerLegLen        = 0;
     this.performerRightArmMax   = 0;
     this.performerLeftArmMax    = 0;
+    this.performerLeftArmChain  = 0;
+    this.performerRightArmChain = 0;
+    this.performerLeftLegChain  = 0;
+    this.performerRightLegChain = 0;
+    this._metersPerNormEma      = 0;
     this._calibrated = false;
     this._emit();
   }
+
+  setChainScaleEnabled(v: boolean): void { this._chainScaleEnabled = v; this._emit(); }
+  get chainScaleEnabled(): boolean { return this._chainScaleEnabled; }
 
   /**
    * Called every mocap frame. Updates the running EMA of the performer's hip
@@ -248,6 +277,31 @@ export class MocapCalibration {
       }
     }
 
+    // Segment-chain lengths (see field docs). Elbows/knees must be visible too.
+    const le2 = lms[LM.LEFT_ELBOW], re2 = lms[LM.RIGHT_ELBOW];
+    const lk = lms[LM.LEFT_KNEE], rk = lms[LM.RIGHT_KNEE];
+    const emaChain = (current: number, raw: number): number =>
+      current <= 0 ? raw : current * (1 - EMA_ALPHA) + raw * EMA_ALPHA;
+    const visOk = (...pts: (Landmark3D | undefined)[]): boolean =>
+      pts.every((p) => !!p && (p.visibility ?? 1) >= WRIST_VIS_GATE);
+
+    if (visOk(ls, le2, lw)) {
+      const chain = distance(ls!, le2!) + distance(le2!, lw!);
+      if (chain > 1e-3) this.performerLeftArmChain = emaChain(this.performerLeftArmChain, chain);
+    }
+    if (visOk(rs, re2, rw)) {
+      const chain = distance(rs!, re2!) + distance(re2!, rw!);
+      if (chain > 1e-3) this.performerRightArmChain = emaChain(this.performerRightArmChain, chain);
+    }
+    if (visOk(lh, lk, la)) {
+      const chain = distance(lh!, lk!) + distance(lk!, la!);
+      if (chain > 1e-3) this.performerLeftLegChain = emaChain(this.performerLeftLegChain, chain);
+    }
+    if (visOk(rh, rk, ra)) {
+      const chain = distance(rh!, rk!) + distance(rk!, ra!);
+      if (chain > 1e-3) this.performerRightLegChain = emaChain(this.performerRightLegChain, chain);
+    }
+
     if (!lh || !rh) return;
     if ((lh.visibility ?? 1) < this._hipVisGate) return;
     if ((rh.visibility ?? 1) < this._hipVisGate) return;
@@ -260,6 +314,22 @@ export class MocapCalibration {
       this._calibrated = true;
     } else {
       this.performerHipWidth = this.performerHipWidth * (1 - EMA_ALPHA) + rawHip * EMA_ALPHA;
+    }
+
+    // Metres-per-normalized-unit: 2D xy hip width in world space over the
+    // same width in normalized image space. Both collapse together when the
+    // performer rotates in place, so the ratio stays valid.
+    const nlh = frame.landmarks[LM.LEFT_HIP];
+    const nrh = frame.landmarks[LM.RIGHT_HIP];
+    if (nlh && nrh) {
+      const worldXY = Math.hypot(lh.x - rh.x, lh.y - rh.y);
+      const normXY  = Math.hypot(nlh.x - nrh.x, nlh.y - nrh.y);
+      if (normXY > 1e-3 && worldXY > 1e-3) {
+        const ratio = worldXY / normXY;
+        this._metersPerNormEma = this._metersPerNormEma <= 0
+          ? ratio
+          : this._metersPerNormEma * (1 - EMA_ALPHA) + ratio * EMA_ALPHA;
+      }
     }
 
     // Track performer leg length (hip-to-ankle) for leg IK scaling.
@@ -280,6 +350,20 @@ export class MocapCalibration {
    *  hips      — hip-width ratio.
    *  head      — ear-to-ear ratio (most stable, best for talking-head).
    *  median    — median of all available refs; one bad source doesn't skew. */
+  /**
+   * World-metres per normalized-image-unit (0 until hips have been observed).
+   * Use to convert normalized-landmark translation deltas into metres.
+   */
+  metersPerNorm(): number { return this._metersPerNormEma; }
+
+  /** Performer leg chain length (hip→knee + knee→ankle, metres; 0 until observed). */
+  performerLegChainLength(): number {
+    const chains = [this.performerLeftLegChain, this.performerRightLegChain]
+      .filter((c) => c > 1e-3);
+    if (!chains.length) return 0;
+    return chains.reduce((s, c) => s + c, 0) / chains.length;
+  }
+
   bodyScale(): number {
     if (!this._calibrated) return 1;
     const hipRatio   = (this.performerHipWidth      >= 1e-4 && this.avatarHipWidth      > 1e-4)
@@ -352,9 +436,18 @@ export class MocapCalibration {
    * (e.g. video shows only the upper body).
    */
   legScale(): number {
-    if (this.performerLegLen < 1e-3) return this.bodyScale();
     const avatarLegLen = (this.avatarLeftUpperLeg + this.avatarLeftLowerLeg +
                           this.avatarRightUpperLeg + this.avatarRightLowerLeg) * 0.5;
+    if (this._chainScaleEnabled) {
+      // Mean of the observed per-side segment chains (see field docs).
+      const chains = [this.performerLeftLegChain, this.performerRightLegChain]
+        .filter((c) => c > 1e-3);
+      if (chains.length && avatarLegLen > 1e-4) {
+        const perfChain = chains.reduce((s, c) => s + c, 0) / chains.length;
+        return avatarLegLen / perfChain;
+      }
+    }
+    if (this.performerLegLen < 1e-3) return this.bodyScale();
     return avatarLegLen / this.performerLegLen;
   }
 
@@ -366,21 +459,23 @@ export class MocapCalibration {
    */
   armScale(side: 'left' | 'right'): number {
     const override = side === 'left' ? this._overrideLeftArm : this._overrideRightArm;
-    if (side === 'left') {
-      const perfLen = this._unifyArmMax
-        ? Math.max(this.performerRightArmMax, this.performerLeftArmMax)
-        : this.performerRightArmMax;
-      const avatarLen = this.avatarLeftUpperArm + this.avatarLeftLowerArm;
-      if (perfLen < 1e-3) return this.bodyScale() * override;
-      return (avatarLen / perfLen) * override;
-    } else {
-      const perfLen = this._unifyArmMax
-        ? Math.max(this.performerRightArmMax, this.performerLeftArmMax)
-        : this.performerLeftArmMax;
-      const avatarLen = this.avatarRightUpperArm + this.avatarRightLowerArm;
-      if (perfLen < 1e-3) return this.bodyScale() * override;
-      return (avatarLen / perfLen) * override;
+    // Mirror mapping: character LEFT arm ← performer RIGHT, and vice versa.
+    const avatarLen = side === 'left'
+      ? this.avatarLeftUpperArm + this.avatarLeftLowerArm
+      : this.avatarRightUpperArm + this.avatarRightLowerArm;
+
+    if (this._chainScaleEnabled) {
+      const perfChain = side === 'left' ? this.performerRightArmChain : this.performerLeftArmChain;
+      if (perfChain > 1e-3 && avatarLen > 1e-4) {
+        return (avatarLen / perfChain) * override;
+      }
     }
+
+    const perfLen = this._unifyArmMax
+      ? Math.max(this.performerRightArmMax, this.performerLeftArmMax)
+      : side === 'left' ? this.performerRightArmMax : this.performerLeftArmMax;
+    if (perfLen < 1e-3) return this.bodyScale() * override;
+    return (avatarLen / perfLen) * override;
   }
 
   /** If true, both arms share the max observed arm length (fixes asymmetric cal). */

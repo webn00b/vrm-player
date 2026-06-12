@@ -114,7 +114,9 @@ export class ArmIKApplier {
       ? perfMeasurements.rightArmMax
       : perfMeasurements.leftArmMax;
     let effectivePw = pw;
-    if (perfArmLen > 0.05) {
+    // Z recovery rescues noisy webcam depth; trusted (lifted) input already
+    // has the right Z and the heuristic would overwrite it.
+    if (perfArmLen > 0.05 && !settings.trustInputGeometry) {
       const recovered = recoverWristZ({
         shoulder: { x: ps.x, y: ps.y, z: ps.z },
         wrist:    { x: pw.x, y: pw.y, z: pw.z },
@@ -180,6 +182,7 @@ export class ArmIKApplier {
       avatarShoulderWidth: calib.avatarShoulderWidth,
       armZAttenuation: settings.armZAttenuation,
       armPoleZ: settings.armPoleZ,
+      trustInputGeometry: settings.trustInputGeometry,
     });
     const target = targetSolve.target;
 

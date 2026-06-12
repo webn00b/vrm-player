@@ -8,6 +8,8 @@ interface LegLockState {
   smoothedPole: THREE.Vector3;
   stableFrames?: number;
   airborneFrames?: number;
+  /** 0..1 blend toward lockedPosition; ramps so lock/unlock never pops. */
+  lockBlend?: number;
 }
 
 export interface LegTargetSolverInput {
@@ -16,6 +18,13 @@ export interface LegTargetSolverInput {
   knee: Landmark3D;
   ankle: Landmark3D;
   hipWorld: THREE.Vector3;
+  /**
+   * Character's forward direction in world space (unit). When set, the knee
+   * pole is clamped into the forward hemisphere — knees are hinges and can
+   * only bend forward; a noisy knee-landmark depth must never flip the bend
+   * direction backward.
+   */
+  characterForward?: THREE.Vector3;
   legScale: number;
   /** Multiplier on the X-component of the foot offset from hip. 1.0 = no
    *  change. >1 fans feet outward (compensates avatars whose rest hips are
@@ -36,10 +45,21 @@ export interface LegTargetSolverResult {
   locked: boolean;
   stableFrames: number;
   airborneFrames: number;
+  lockBlend: number;
 }
+
+// Lock engages over ~3 frames and releases over ~2 (fast kicks shouldn't be
+// held back). Replaces the previous instant snap, which recorded a visible
+// pop into the BVH every time a foot locked or released.
+const LOCK_BLEND_IN_RATE = 0.34;
+const LOCK_BLEND_OUT_RATE = 0.5;
 
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
+
+// Minimum forward component of the knee pole (unit-vector dot). 0.25 keeps a
+// solid forward bias while letting the knee splay sideways naturally.
+const KNEE_FORWARD_MIN = 0.25;
 
 export function solveLegTarget(input: LegTargetSolverInput): LegTargetSolverResult {
   const {
@@ -84,9 +104,7 @@ export function solveLegTarget(input: LegTargetSolverInput): LegTargetSolverResu
       const shouldUnlock =
         highVelocity ||
         (state.airborneFrames ?? 0) >= 2;
-      if (!shouldUnlock) {
-        target.copy(state.lockedPosition);
-      } else {
+      if (shouldUnlock) {
         state.locked = false;
         state.stableFrames = 0;
       }
@@ -97,6 +115,16 @@ export function solveLegTarget(input: LegTargetSolverInput): LegTargetSolverResu
         state.lockedPosition.copy(target);
       }
     }
+
+    // Ramp the blend toward the lock state and apply it; full lock still pins
+    // the target exactly, but transitions take a few frames instead of one.
+    const goal = state.locked ? 1 : 0;
+    const blend = state.lockBlend ?? 0;
+    const rate = goal > blend ? LOCK_BLEND_IN_RATE : LOCK_BLEND_OUT_RATE;
+    state.lockBlend = blend + Math.sign(goal - blend) * Math.min(rate, Math.abs(goal - blend));
+    if (state.lockBlend > 0) target.lerp(state.lockedPosition, state.lockBlend);
+  } else {
+    state.lockBlend = 0;
   }
 
   mpDeltaToVrm(mirrorX, knee.x - hip.x, knee.y - hip.y, knee.z - hip.z, _v1);
@@ -104,11 +132,24 @@ export function solveLegTarget(input: LegTargetSolverInput): LegTargetSolverResu
   if (state.smoothedPole.lengthSq() < 1e-6) state.smoothedPole.copy(_v1);
   else state.smoothedPole.lerp(_v1, poleAlpha);
 
+  // Anatomical hinge guard: keep the pole's forward component above a floor
+  // so the knee can never be told to bend backward by depth noise.
+  if (input.characterForward) {
+    const fwd = input.characterForward;
+    const fwdComp = state.smoothedPole.dot(fwd);
+    if (fwdComp < KNEE_FORWARD_MIN) {
+      state.smoothedPole.addScaledVector(fwd, KNEE_FORWARD_MIN - fwdComp);
+      if (state.smoothedPole.lengthSq() < 1e-6) state.smoothedPole.copy(fwd);
+      state.smoothedPole.normalize();
+    }
+  }
+
   return {
     target: target.clone(),
     poleDirection: state.smoothedPole.clone(),
     locked: state.locked,
     stableFrames: state.stableFrames ?? 0,
     airborneFrames: state.airborneFrames ?? 0,
+    lockBlend: state.lockBlend ?? 0,
   };
 }
