@@ -18,6 +18,7 @@ function applySceneControls(): void {
   props.skelViz.setShowBody(scene.skelBodyOn);
   props.skelViz.setShowFingers(scene.skelFingersOn);
   props.skelViz.setShowLabels(scene.skelLabelsOn);
+  props.skelViz.setUnclampedVisible(scene.unclampedSkeletonOn);
   props.boneDrag.setEnabled(scene.dragOn);
 }
 
@@ -40,6 +41,11 @@ function toggleLabels(): void {
     scene.skeletonOn = true;
     props.skelViz.setVisible(true);
   }
+}
+
+function toggleUnclampedSkeleton(): void {
+  scene.unclampedSkeletonOn = !scene.unclampedSkeletonOn;
+  props.skelViz.setUnclampedVisible(scene.unclampedSkeletonOn);
 }
 
 function toggleDrag(): void {
@@ -118,6 +124,18 @@ function onVrmFileChange(e: Event): void {
       @click="toggleLabels"
     />
     <Button
+      class="scene-tool scene-tool-red"
+      :class="{ active: scene.unclampedSkeletonOn }"
+      icon="pi pi-sitemap"
+      text
+      rounded
+      size="small"
+      :aria-pressed="scene.unclampedSkeletonOn"
+      aria-label="Show unclamped red skeleton"
+      title="Show unclamped red skeleton"
+      @click="toggleUnclampedSkeleton"
+    />
+    <Button
       class="scene-tool"
       :class="{ active: scene.dragOn }"
       icon="pi pi-arrows-alt"
@@ -180,6 +198,11 @@ function onVrmFileChange(e: Event): void {
 :deep(.scene-tool.p-button.active) {
   background: rgba(30, 188, 196, 0.2);
   color: #b9fbff;
+}
+
+:deep(.scene-tool-red.p-button.active) {
+  background: rgba(255, 51, 68, 0.18);
+  color: #ff8b94;
 }
 
 .scene-tool-divider {

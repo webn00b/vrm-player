@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import { validateClip, clampClip } from '../../src/validation/clipValidator';
-import { DEFAULT_BONE_CONSTRAINTS, mergeConstraints } from '../../src/validation/boneConstraints';
+import { BONE_CONSTRAINT_PROFILES, DEFAULT_BONE_CONSTRAINTS, mergeConstraints } from '../../src/validation/boneConstraints';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -38,8 +38,9 @@ function makeTrack(nodeName, xDeg, yDeg, zDeg, order = 'XYZ') {
 // ── boneConstraints ────────────────────────────────────────────────────────────
 
 test('DEFAULT_BONE_CONSTRAINTS covers major bones', () => {
+  // Hips are deliberately absent: they carry global orientation, not an
+  // anatomical joint angle, and clamping them mangles turns and floor poses.
   const requiredBones = [
-    VRMHumanBoneName.Hips,
     VRMHumanBoneName.Spine,
     VRMHumanBoneName.Neck,
     VRMHumanBoneName.Head,
@@ -57,16 +58,19 @@ test('DEFAULT_BONE_CONSTRAINTS covers major bones', () => {
   }
 });
 
-test('lowerArm constraint allows normal flexion (90°) on X', () => {
+// Normalized humanoid frames are world-aligned in T-pose: the left forearm
+// rests along +X, so elbow flexion (palm-down hinge) is −Y and backward bend
+// (hyperextension) is +Y. X carries pronation/supination twist.
+test('lowerArm constraint allows normal flexion (≥90°) on Y', () => {
   const c = DEFAULT_BONE_CONSTRAINTS[VRMHumanBoneName.LeftLowerArm];
-  const maxDeg = c.max[0] * 180 / Math.PI;
-  assert.ok(maxDeg >= 90, `lowerArm max X should allow ≥90°, got ${maxDeg.toFixed(1)}°`);
+  const flexDeg = -c.min[1] * 180 / Math.PI;
+  assert.ok(flexDeg >= 90, `lowerArm flexion (−minY) should allow ≥90°, got ${flexDeg.toFixed(1)}°`);
 });
 
-test('lowerArm constraint prevents backward bend beyond -10° on X', () => {
+test('lowerArm constraint prevents backward bend beyond +15° on Y', () => {
   const c = DEFAULT_BONE_CONSTRAINTS[VRMHumanBoneName.LeftLowerArm];
-  const minDeg = c.min[0] * 180 / Math.PI;
-  assert.ok(minDeg >= -15, `lowerArm min X should be ≥-15°, got ${minDeg.toFixed(1)}°`);
+  const maxDeg = c.max[1] * 180 / Math.PI;
+  assert.ok(maxDeg <= 15, `lowerArm max Y should be ≤15°, got ${maxDeg.toFixed(1)}°`);
 });
 
 test('lowerLeg constraint prevents forward hyperextension beyond -10° on X', () => {
@@ -75,20 +79,32 @@ test('lowerLeg constraint prevents forward hyperextension beyond -10° on X', ()
   assert.ok(minDeg >= -10, `lowerLeg min X should be ≥-10° (knee locks straight), got ${minDeg.toFixed(1)}°`);
 });
 
-test('left/right arm constraints are symmetric', () => {
+test('right-side constraints mirror left across the sagittal plane in every profile', () => {
+  // Mirrored rotation negates Y and Z Euler components, so right ranges must
+  // be the left ranges with Y/Z bounds negated and swapped; X unchanged.
   const pairs = [
+    [VRMHumanBoneName.LeftShoulder,  VRMHumanBoneName.RightShoulder],
     [VRMHumanBoneName.LeftUpperArm,  VRMHumanBoneName.RightUpperArm],
     [VRMHumanBoneName.LeftLowerArm,  VRMHumanBoneName.RightLowerArm],
     [VRMHumanBoneName.LeftHand,      VRMHumanBoneName.RightHand],
+    [VRMHumanBoneName.LeftUpperLeg,  VRMHumanBoneName.RightUpperLeg],
+    [VRMHumanBoneName.LeftLowerLeg,  VRMHumanBoneName.RightLowerLeg],
+    [VRMHumanBoneName.LeftFoot,      VRMHumanBoneName.RightFoot],
+    [VRMHumanBoneName.LeftToes,      VRMHumanBoneName.RightToes],
   ];
-  for (const [left, right] of pairs) {
-    const L = DEFAULT_BONE_CONSTRAINTS[left];
-    const R = DEFAULT_BONE_CONSTRAINTS[right];
-    for (let i = 0; i < 3; i++) {
-      assert.ok(
-        Math.abs(L.min[i] - R.min[i]) < 1e-6 && Math.abs(L.max[i] - R.max[i]) < 1e-6,
-        `${left}/${right} axis ${i} should be symmetric`,
-      );
+  for (const [profileId, table] of Object.entries(BONE_CONSTRAINT_PROFILES)) {
+    for (const [left, right] of pairs) {
+      const L = table[left];
+      const R = table[right];
+      assert.ok(L && R, `${profileId}: missing constraint for ${left}/${right}`);
+      const expectedMin = [L.min[0], -L.max[1], -L.max[2]];
+      const expectedMax = [L.max[0], -L.min[1], -L.min[2]];
+      for (let i = 0; i < 3; i++) {
+        assert.ok(
+          Math.abs(expectedMin[i] - R.min[i]) < 1e-6 && Math.abs(expectedMax[i] - R.max[i]) < 1e-6,
+          `${profileId}: ${right} axis ${i} should mirror ${left}`,
+        );
+      }
     }
   }
 });
@@ -103,7 +119,7 @@ test('mergeConstraints: override replaces specific bone', () => {
 
 test('mergeConstraints: no override returns defaults', () => {
   const merged = mergeConstraints(undefined);
-  assert.ok(merged === DEFAULT_BONE_CONSTRAINTS || merged[VRMHumanBoneName.Hips] != null);
+  assert.ok(merged === DEFAULT_BONE_CONSTRAINTS || merged[VRMHumanBoneName.Spine] != null);
 });
 
 // ── validateClip ───────────────────────────────────────────────────────────────
@@ -183,6 +199,43 @@ test('clampClip: clamped value stays within constraint bounds', () => {
   const eu = new THREE.Euler().setFromQuaternion(q, 'XYZ');
   const c  = DEFAULT_BONE_CONSTRAINTS[VRMHumanBoneName.LeftLowerArm];
   assert.ok(eu.x <= c.max[0] + 1e-4, `clamped X ${(eu.x * 180 / Math.PI).toFixed(1)}° should be ≤ max`);
+});
+
+test('clampClip: preserves quaternion hemisphere of the stored key', () => {
+  // Retarget normalizes quaternion signs across the clip BEFORE clamping, so
+  // a clamped key flipped to the canonical hemisphere would slerp the long way
+  // around against its unclamped neighbours.
+  const vrm   = makeMockVrm(VRMHumanBoneName.LeftLowerArm);
+  const track = makeTrack(VRMHumanBoneName.LeftLowerArm, 0, 40, 0, 'YZX'); // backward bend, violates
+  // Store the key in the negative hemisphere (−q), as sign normalization may.
+  for (let i = 0; i < 4; i++) track.values[i] = -track.values[i];
+  const stored = [...track.values];
+  const clip = new THREE.AnimationClip('test', 1, [track]);
+
+  clampClip(clip, vrm);
+
+  const dot = stored[0] * track.values[0] + stored[1] * track.values[1]
+    + stored[2] * track.values[2] + stored[3] * track.values[3];
+  assert.ok(dot > 0, `clamped key flipped hemisphere (dot=${dot.toFixed(3)})`);
+});
+
+test('clampClip: uses the selected constraint profile when clamping imported clips', () => {
+  // Backward elbow bend (+Y) of 12°: the default profile allows ≤10°, the
+  // Mixamo Live profile is stricter and clamps to ≤6°.
+  const vrm   = makeMockVrm(VRMHumanBoneName.LeftLowerArm);
+  const track = makeTrack(VRMHumanBoneName.LeftLowerArm, 0, 12, 0, 'YZX');
+  const clip  = new THREE.AnimationClip('test', 1, [track]);
+
+  clampClip(clip, vrm, undefined, 'mixamoLive');
+
+  const qt = track.values;
+  const q  = new THREE.Quaternion(qt[0], qt[1], qt[2], qt[3]);
+  const eu = new THREE.Euler().setFromQuaternion(q, 'YZX');
+  const yDeg = eu.y * 180 / Math.PI;
+  assert.ok(
+    Math.abs(yDeg - 6) < 1e-3,
+    `Mixamo Live import clamp should cap backward elbow bend at 6°, got ${yDeg.toFixed(1)}°`,
+  );
 });
 
 test('worst bone reports the larger violation', () => {

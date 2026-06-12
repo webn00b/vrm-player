@@ -52,6 +52,7 @@ function onShellClick(event: MouseEvent): void {
 
     <div id="center-col">
       <div id="scene-toolbar-root"></div>
+      <div id="validation-controls-root"></div>
       <div id="player-start-root"></div>
     </div>
 
@@ -179,8 +180,13 @@ function onShellClick(event: MouseEvent): void {
 }
 
 #scene-toolbar-root,
+#validation-controls-root,
 #player-start-root {
   pointer-events: auto;
+}
+
+#validation-controls-root {
+  margin-top: 6px;
 }
 
 #bottom-bar {

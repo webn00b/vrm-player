@@ -74,6 +74,14 @@ export function buildMockVRM(meta: { version?: '0' | '1' } = {}): MockVRM {
   const rightLowerArm = makeBone('rightLowerArm', -0.25, 0,    0, rightUpperArm);
   const rightHand     = makeBone('rightHand',     -0.25, 0,    0, rightLowerArm);
 
+  // Index fingers — enough hand detail to exercise finger ROM constraints.
+  const leftIndexProximal = makeBone('leftIndexProximal', 0.09, 0, 0.01, leftHand);
+  const leftIndexIntermediate = makeBone('leftIndexIntermediate', 0.03, 0, 0, leftIndexProximal);
+  makeBone('leftIndexDistal', 0.02, 0, 0, leftIndexIntermediate);
+  const rightIndexProximal = makeBone('rightIndexProximal', -0.09, 0, 0.01, rightHand);
+  const rightIndexIntermediate = makeBone('rightIndexIntermediate', -0.03, 0, 0, rightIndexProximal);
+  makeBone('rightIndexDistal', -0.02, 0, 0, rightIndexIntermediate);
+
   // ── Legs ───────────────────────────────────────────────────────────────
   const leftUpperLeg  = makeBone('leftUpperLeg',   0.1,  0,    0, hips);
   const leftLowerLeg  = makeBone('leftLowerLeg',   0,   -0.4,  0, leftUpperLeg);

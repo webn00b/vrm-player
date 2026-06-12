@@ -9,7 +9,7 @@
 
 import { ref, onMounted, onUnmounted } from 'vue';
 import type { BoneValidator } from '../validation/boneValidator';
-import type { BoneConstraintProfileId } from '../validation/boneConstraints';
+import type { PoseValidator } from '../validation/poseValidator';
 import type { SkeletonLogger } from '../diagnostics/skeletonLogger';
 import type { MotionTraceRecorder } from '../diagnostics/motionTraceRecorder';
 import type { MocapController } from '../mocap/pipeline/mocapController';
@@ -17,16 +17,17 @@ import type { AnimationController } from '../animationController';
 
 const props = defineProps<{
   validator: BoneValidator;
+  poseValidator?: PoseValidator;
   skeletonLogger: SkeletonLogger;
   motionTraceRecorder: MotionTraceRecorder;
   mocap: MocapController;
   getController: () => AnimationController | null;
 }>();
 
-const enabled  = ref(props.validator.enabled);
-const profileId = ref<BoneConstraintProfileId>(props.validator.profileId);
 const valStat  = ref('clamped/frame: 0');
 const valWorst = ref('worst: —');
+const valArms  = ref('arms: —');
+const poseStat = ref('pose: —');
 
 const logActive = ref(false);
 const logStat   = ref('');
@@ -35,8 +36,15 @@ const traceStat   = ref('');
 
 let pollTimer = 0;
 
+function fmtDeg(value: number | null): string {
+  return Number.isFinite(value) ? `${value!.toFixed(0)}°` : '—';
+}
+
+function armFlag(value: number | null): string {
+  return Number.isFinite(value) && value! > 120 ? ' back' : '';
+}
+
 onMounted(() => {
-  enabled.value = props.validator.enabled;
   pollTimer = window.setInterval(() => {
     // Validator stats — always polled, cheap.
     const s = props.validator.getStats();
@@ -44,6 +52,16 @@ onMounted(() => {
     valWorst.value = s.worstBone
       ? `worst: ${s.worstBone} +${(s.worstDelta * 180 / Math.PI).toFixed(1)}°`
       : 'worst: —';
+    const left = s.armPosture.left;
+    const right = s.armPosture.right;
+    valArms.value =
+      `arms: L upper ${fmtDeg(left.upperArmForwardDeg)}${armFlag(left.upperArmForwardDeg)} / fore ${fmtDeg(left.forearmForwardDeg)}${armFlag(left.forearmForwardDeg)}` +
+      ` · R upper ${fmtDeg(right.upperArmForwardDeg)}${armFlag(right.upperArmForwardDeg)} / fore ${fmtDeg(right.forearmForwardDeg)}${armFlag(right.forearmForwardDeg)}`;
+    const pose = props.poseValidator?.getStats();
+    const poseProfile = props.poseValidator?.profileId ?? '—';
+    poseStat.value = pose
+      ? `pose: ${poseProfile} · L ${pose.arms.left.poseClass} / R ${pose.arms.right.poseClass} · clamped ${pose.clampedThisFrame} · ${pose.violations.length ? pose.violations.join(', ') : 'ok'}`
+      : 'pose: —';
     // Skel-log live frame count while recording.
     if (props.skeletonLogger.active) {
       logStat.value = `${props.skeletonLogger.frameCount}fr · recording…`;
@@ -60,17 +78,15 @@ onMounted(() => {
 });
 onUnmounted(() => clearInterval(pollTimer));
 
-function toggleValidator(): void {
-  enabled.value = !enabled.value;
-  props.validator.setEnabled(enabled.value);
-}
 function dumpConstraints(): void {
-  console.log('[validator] default bone constraints:', props.validator.getConstraints());
-}
-function onProfileChange(event: Event): void {
-  const next = (event.target as HTMLSelectElement).value as BoneConstraintProfileId;
-  profileId.value = next;
-  props.validator.setProfile(next);
+  console.log('[validator] active profile:', {
+    enabled: props.validator.enabled,
+    profileId: props.validator.profileId,
+    poseProfileId: props.poseValidator?.profileId ?? null,
+    poseStats: props.poseValidator?.getStats() ?? null,
+    stats: props.validator.getStats(),
+    constraints: props.validator.getConstraints(),
+  });
 }
 
 // ── Skel-log ───────────────────────────────────────────────────────────────
@@ -129,22 +145,10 @@ function downloadTrace(): void {
 </script>
 
 <template>
-  <div class="dbg-row">
-    <span class="dbg-label">🦴 Clamp bone rotations</span>
-    <button class="dbg-toggle" :class="{ off: !enabled }" @click="toggleValidator">
-      {{ enabled ? 'ON' : 'OFF' }}
-    </button>
-  </div>
   <div class="dbg-stat">{{ valStat }}</div>
   <div class="dbg-stat">{{ valWorst }}</div>
-
-  <div class="dbg-row">
-    <span class="dbg-label">ROM profile</span>
-    <select class="dbg-select" :value="profileId" @change="onProfileChange">
-      <option value="default">Default</option>
-      <option value="mixamoLive">Mixamo Live</option>
-    </select>
-  </div>
+  <div class="dbg-stat">{{ valArms }}</div>
+  <div class="dbg-stat">{{ poseStat }}</div>
 
   <div class="dbg-row">
     <span class="dbg-label" style="opacity:.6;font-size:11px">dump active profile to console</span>

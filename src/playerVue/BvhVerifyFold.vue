@@ -26,6 +26,7 @@ import {
 import { runProductionReplay } from '../mocap/bvh/bvhRoundtripProductionReplay';
 import { parseBVH } from '../bvhLoader';
 import { retargetBvhToVrm } from '../retarget';
+import { validationSettings } from '../validation/validationSettings';
 
 const props = defineProps<{
   getMocap: () => MocapController | null;
@@ -143,7 +144,9 @@ Source: ${source.kind === 'live' ? 'live camera (3s)' : `video file "${source.fi
   let clip;
   try {
     const parsed = parseBVH(bvhText);
-    clip = await retargetBvhToVrm(mocap.vrm, parsed, 'verify-roundtrip');
+    clip = await retargetBvhToVrm(mocap.vrm, parsed, 'verify-roundtrip', {
+      profileId: validationSettings.profileId,
+    });
   } catch (e) {
     fail(`retarget failed: ${(e as Error).message}`);
     return;

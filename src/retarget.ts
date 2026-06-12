@@ -7,6 +7,7 @@ import type { ParsedBVH } from './bvhLoader';
 import { convertBVHToVRMAnimation } from './bvh2vrma/convertBVHToVRMAnimation.js';
 import { applyHumanoidRestCorrectionsToClip } from './humanoidRestPose';
 import { validateClip, clampClip } from './validation/clipValidator';
+import type { BoneConstraintProfileId } from './validation/boneConstraints';
 import { normalizeQuaternionSignsAcrossClip } from './animationLoaders/quaternionContinuity';
 
 interface NormalizedRestPoseLike {
@@ -21,6 +22,10 @@ type HumanoidWithNormalizedRestPose = VRM['humanoid'] & {
   normalizedRestPose?: NormalizedRestPoseLike;
 };
 
+type AnimationClipWithUserData = THREE.AnimationClip & {
+  userData?: Record<string, unknown>;
+};
+
 function uniqueTrackTargets(clip: THREE.AnimationClip): number {
   const targets = new Set<string>();
   for (const track of clip.tracks) {
@@ -33,6 +38,8 @@ function uniqueTrackTargets(clip: THREE.AnimationClip): number {
 export interface RetargetOptions {
   /** If true, keyframes outside anatomical ROM are clamped in-place. Default false (log only). */
   clampOutOfRange?: boolean;
+  /** Constraint profile used for import-time validation/clamping. */
+  profileId?: BoneConstraintProfileId;
   /**
    * Skip the rest-pose correction step entirely. Rarely useful; mainly for
    * debugging.
@@ -91,7 +98,9 @@ export async function retargetBvhToVrm(
   }
 
   // Step 3: validate (and optionally clamp) against anatomical ROM
-  const report = opts.clampOutOfRange ? clampClip(clip, vrm) : validateClip(clip, vrm);
+  const report = opts.clampOutOfRange
+    ? clampClip(clip, vrm, undefined, opts.profileId)
+    : validateClip(clip, vrm, undefined, opts.profileId);
   if (report.violationCount > 0) {
     const worst = report.worstBone
       ? `worst ${report.worstBone} (+${(report.worstOverBy * 180 / Math.PI).toFixed(1)}°)`
@@ -102,6 +111,26 @@ export async function retargetBvhToVrm(
     );
   }
 
+  const clipTargets = uniqueTrackTargets(clip);
+  const clipWithUserData = clip as AnimationClipWithUserData;
+  clipWithUserData.userData = {
+    ...clipWithUserData.userData,
+    retargetInfo: {
+      source: 'bvh-vrma',
+      name,
+      sourceBones: bvh.skeleton.bones.length,
+      sourceTracks: bvh.clip.tracks.length,
+      clipTracks: clip.tracks.length,
+      clipTargets,
+      restCorrectionTracks: correctedTracks,
+      signFlips,
+      signFlipTracks,
+      validationViolations: report.violationCount,
+      validationWorstBone: report.worstBone ?? null,
+      profileId: opts.profileId ?? 'default',
+    },
+  };
+
   console.info('[animation:retarget]', {
     name,
     source: 'bvh',
@@ -109,7 +138,7 @@ export async function retargetBvhToVrm(
     sourceTracks: bvh.clip.tracks.length,
     clipDurationSec: Number(clip.duration.toFixed(3)),
     clipTracks: clip.tracks.length,
-    clipTargets: uniqueTrackTargets(clip),
+    clipTargets,
     restCorrectionTracks: correctedTracks,
     signFlips,
     signFlipTracks,

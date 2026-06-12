@@ -8,6 +8,10 @@ import type { ManualFbxBoneMapping } from './animationLoaders/fbxBoneMapping';
 import { channelAnimationJsonToClip, isChannelAnimationJson } from './animationLoaders/channelJsonFile';
 import { parseCanonicalMotionJson } from './mocap/offline/canonicalMotion';
 import { retargetCanonicalMotionToVrm, type OfflineRetargetOptions } from './mocap/offline/motionRetargeter';
+import {
+  shouldClampImportedAnimations,
+  validationSettings,
+} from './validation/validationSettings';
 
 export type ImportFormat = 'bvh' | 'vrma' | 'fbx' | 'motion-json' | 'channel-json';
 
@@ -22,6 +26,10 @@ export interface LoadedAnimation {
    */
   parsedBvh: ParsedBVH | null;
   format: ImportFormat;
+}
+
+export interface AnimationImportOptions {
+  clampOutOfRange?: boolean;
 }
 
 function detectFormat(filename: string): ImportFormat | null {
@@ -70,15 +78,18 @@ export async function loadAnimationFile(
   file: File,
   vrm: VRM,
   manualFbxMapping: ManualFbxBoneMapping = {},
+  options: AnimationImportOptions = {},
 ): Promise<LoadedAnimation> {
   const fmt = detectFormat(file.name);
   if (!fmt) throw new Error(`Unsupported file extension: ${file.name}`);
   const baseName = file.name.replace(SUPPORTED_REGEX, '');
+  const clampOutOfRange = options.clampOutOfRange ?? shouldClampImportedAnimations(validationSettings);
+  const profileId = validationSettings.profileId;
 
   if (fmt === 'bvh') {
     const text = await file.text();
     const bvh  = parseBVH(text);
-    const clip = await retargetBvhToVrm(vrm, bvh, baseName);
+    const clip = await retargetBvhToVrm(vrm, bvh, baseName, { clampOutOfRange, profileId });
     logImportedAnimation({ file, format: 'bvh', name: baseName, clip, parsedBvh: bvh });
     return { name: baseName, clip, parsedBvh: bvh, format: 'bvh' };
   }
@@ -98,7 +109,7 @@ export async function loadAnimationFile(
       return { name: baseName, clip, parsedBvh: null, format: 'channel-json' };
     }
     const motion = parseCanonicalMotionJson(text, baseName);
-    const offlineOpts: OfflineRetargetOptions = { clampOutOfRange: true };
+    const offlineOpts: OfflineRetargetOptions = { clampOutOfRange, profileId };
     if (motion.source === 'gvhmr' || motion.source === 'smpl' || motion.coordinateSpace === 'smpl') {
       offlineOpts.positionSmoothingAlpha = 0.45;
       offlineOpts.rootMotionMode = 'locked';

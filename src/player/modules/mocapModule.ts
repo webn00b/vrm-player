@@ -10,6 +10,7 @@ import { MocapController } from '../../mocap/pipeline/mocapController';
 import type { MocapSystems } from '../../playerSystems';
 import { retargetBvhToVrm } from '../../retarget';
 import { notify, setStatus } from '../../ui';
+import { shouldClampImportedAnimations, validationSettings } from '../../validation/validationSettings';
 import { requireAnimation, requirePlayback, requireScene, requireVrm } from '../assertions';
 import type { PlayerModule } from '../types';
 
@@ -43,14 +44,13 @@ export const mocapModule: PlayerModule = {
     mocap.onBvhReady = async (bvhText, name, options) => {
       try {
         const bvh = parseBVH(bvhText);
-        const clip = await retargetBvhToVrm(vrm, bvh, name);
+        const clampOutOfRange = shouldClampImportedAnimations(validationSettings);
+        const profileId = validationSettings.profileId;
+        const clip = await retargetBvhToVrm(vrm, bvh, name, { clampOutOfRange, profileId });
         if (options?.source === 'video' && options.exportAgentOgiJson) {
-          const agentClip = options.clampAgentOgiOutOfRange
-            ? await retargetBvhToVrm(vrm, bvh, name, { clampOutOfRange: true })
-            : clip;
           const filename = `${name}.agent_ogi.json`;
           downloadAgentOgiJson(
-            clipToAgentOgiJson(agentClip, vrm),
+            clipToAgentOgiJson(clip, vrm),
             filename,
           );
           notify({ severity: 'success', summary: 'Agent OGI JSON saved', detail: filename });

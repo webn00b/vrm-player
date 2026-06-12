@@ -2,7 +2,6 @@
 import Checkbox from 'primevue/checkbox';
 
 const agentOgiEnabled = defineModel<boolean>('agentOgiEnabled', { required: true });
-const validationEnabled = defineModel<boolean>('validationEnabled', { required: true });
 </script>
 
 <template>
@@ -15,15 +14,6 @@ const validationEnabled = defineModel<boolean>('validationEnabled', { required: 
         data-testid="capture-video-agent-ogi-toggle"
       />
       <span>agent_ogi_front JSON</span>
-    </label>
-    <label class="capture-agent-toggle capture-agent-validation-toggle">
-      <Checkbox
-        v-model="validationEnabled"
-        binary
-        input-id="capture-video-agent-ogi-validation"
-        data-testid="capture-video-agent-ogi-validation-toggle"
-      />
-      <span>validation</span>
     </label>
   </div>
 </template>
@@ -52,8 +42,4 @@ const validationEnabled = defineModel<boolean>('validationEnabled', { required: 
   cursor: pointer;
 }
 
-.capture-agent-validation-toggle {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.16);
-}
 </style>

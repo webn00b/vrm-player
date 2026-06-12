@@ -21,7 +21,6 @@ export type MocapState = 'off' | 'live' | 'recording';
 export interface MocapBvhReadyOptions {
   source: 'camera' | 'video';
   exportAgentOgiJson?: boolean;
-  clampAgentOgiOutOfRange?: boolean;
 }
 
 export interface PoseBvhExport {
@@ -116,7 +115,6 @@ export class MocapController {
 
   private _vrm: VRM;
   exportAgentOgiJsonForVideo = false;
-  clampAgentOgiOutOfRangeForVideo = false;
 
   constructor(vrm: VRM, videoEl: HTMLVideoElement) {
     this._vrm         = vrm;
@@ -932,7 +930,6 @@ export class MocapController {
       this.onBvhReady?.(replayBvhText, name, {
         source: 'video',
         exportAgentOgiJson: this.exportAgentOgiJsonForVideo,
-        clampAgentOgiOutOfRange: this.clampAgentOgiOutOfRangeForVideo,
       });
       this._setState('off');
     } catch (err) {

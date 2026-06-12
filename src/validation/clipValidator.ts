@@ -15,6 +15,7 @@ import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import {
   DEFAULT_BONE_CONSTRAINTS,
   mergeConstraints,
+  type BoneConstraintProfileId,
   type RotationConstraint,
 } from './boneConstraints';
 
@@ -70,6 +71,7 @@ function parseTrackTarget(trackName: string): string | null {
 interface ValidateOptions {
   clamp: boolean;
   overrides?: Partial<Record<VRMHumanBoneName, RotationConstraint>>;
+  profileId?: BoneConstraintProfileId;
 }
 
 function validateOrClamp(
@@ -77,7 +79,9 @@ function validateOrClamp(
   vrm: VRM,
   opts: ValidateOptions,
 ): ClipReport {
-  const constraints = opts.overrides ? mergeConstraints(opts.overrides) : DEFAULT_BONE_CONSTRAINTS;
+  const constraints = opts.overrides || opts.profileId
+    ? mergeConstraints(opts.overrides, opts.profileId)
+    : DEFAULT_BONE_CONSTRAINTS;
   const trackTargetToBone = buildTrackTargetToBone(vrm);
 
   const report: ClipReport = {
@@ -144,7 +148,15 @@ function validateOrClamp(
         ey = Math.min(Math.max(ey, minY), maxY);
         ez = Math.min(Math.max(ez, minZ), maxZ);
         _euler.set(ex, ey, ez, c.order);
+        const origX = values[i], origY = values[i + 1], origZ = values[i + 2], origW = values[i + 3];
         _quat.setFromEuler(_euler);
+        // Preserve hemisphere: setFromEuler returns a canonical form that can
+        // be antipodal to the stored key. Retarget normalizes quaternion signs
+        // across the clip BEFORE this clamp, so flipping a key here would
+        // reintroduce slerp glitches against unclamped neighbours.
+        if (_quat.x * origX + _quat.y * origY + _quat.z * origZ + _quat.w * origW < 0) {
+          _quat.set(-_quat.x, -_quat.y, -_quat.z, -_quat.w);
+        }
         values[i]     = _quat.x;
         values[i + 1] = _quat.y;
         values[i + 2] = _quat.z;
@@ -172,8 +184,9 @@ export function validateClip(
   clip: THREE.AnimationClip,
   vrm: VRM,
   overrides?: Partial<Record<VRMHumanBoneName, RotationConstraint>>,
+  profileId?: BoneConstraintProfileId,
 ): ClipReport {
-  return validateOrClamp(clip, vrm, { clamp: false, overrides });
+  return validateOrClamp(clip, vrm, { clamp: false, overrides, profileId });
 }
 
 /** Clamp all keyframes in-place. Returns the pre-clamp violation report. */
@@ -181,6 +194,7 @@ export function clampClip(
   clip: THREE.AnimationClip,
   vrm: VRM,
   overrides?: Partial<Record<VRMHumanBoneName, RotationConstraint>>,
+  profileId?: BoneConstraintProfileId,
 ): ClipReport {
-  return validateOrClamp(clip, vrm, { clamp: true, overrides });
+  return validateOrClamp(clip, vrm, { clamp: true, overrides, profileId });
 }

@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
+import vue from '@vitejs/plugin-vue';
 
 export default defineConfig({
+  plugins: [vue()],
   test: {
     // Co-located tests next to source (`src/**/*.test.ts`) plus the existing
     // cross-cutting suite in `tests/regression/`. The latter survives the

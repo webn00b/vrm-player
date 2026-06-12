@@ -5,12 +5,12 @@ import { clipToAgentOgiJson, downloadAgentOgiJson } from '../../animationToJsonC
 import { parseBVH } from '../../bvhLoader';
 import { retargetBvhToVrm } from '../../retarget';
 import { notify } from '../../ui';
+import { shouldClampImportedAnimations, validationSettings } from '../../validation/validationSettings';
 
 interface CapturePoseExportOptions {
   getMocap: () => MocapController | null;
   mocapVrm: VRM;
   agentOgiEnabled: Ref<boolean>;
-  validationEnabled: Ref<boolean>;
   trackTimeout: (fn: () => void, ms: number) => number;
 }
 
@@ -41,9 +41,10 @@ export function useCapturePoseExport(options: CapturePoseExportOptions) {
       const { name, bvhText } = mocap.exportCurrentPoseBvh();
       if (includeAgentJson) {
         const bvh = parseBVH(bvhText);
-        const clip = options.validationEnabled.value
-          ? await retargetBvhToVrm(options.mocapVrm, bvh, name, { clampOutOfRange: true })
-          : await retargetBvhToVrm(options.mocapVrm, bvh, name);
+        const clip = await retargetBvhToVrm(options.mocapVrm, bvh, name, {
+          clampOutOfRange: shouldClampImportedAnimations(validationSettings),
+          profileId: validationSettings.profileId,
+        });
         downloadAgentOgiJson(clipToAgentOgiJson(clip, options.mocapVrm), `${name}.agent_ogi.json`);
       }
       label.value = 'Saved';

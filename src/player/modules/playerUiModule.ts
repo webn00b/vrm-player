@@ -15,6 +15,7 @@ import PlayerStartPanel from '../../playerVue/PlayerStartPanel.vue';
 import QueuePanel from '../../playerVue/QueuePanel.vue';
 import RetargetLab from '../../playerVue/RetargetLab.vue';
 import SceneToolbar from '../../playerVue/SceneToolbar.vue';
+import ValidationControlsPanel from '../../playerVue/ValidationControlsPanel.vue';
 import { installPrimeVueOn } from '../../playerVue/plugin';
 import { sceneControlsState } from '../../playerVue/sceneControlsState';
 import { exportBvhAsVrma } from '../../retarget';
@@ -167,6 +168,8 @@ export const playerUiModule: PlayerModule = {
       boneDrag,
       hipForce,
       hipBalance,
+      validator,
+      poseValidator,
     } = tooling;
     const cleanupFns: Array<() => void> = [];
     const registerCleanup = (...fns: Array<(() => void) | undefined>): void => {
@@ -226,6 +229,14 @@ export const playerUiModule: PlayerModule = {
     installPrimeVueOn(sceneToolbarApp);
     sceneToolbarApp.mount('#scene-toolbar-root');
     registerCleanup(() => sceneToolbarApp.unmount());
+
+    const validationControlsApp = createApp(ValidationControlsPanel, {
+      validator,
+      poseValidator,
+    });
+    installPrimeVueOn(validationControlsApp);
+    validationControlsApp.mount('#validation-controls-root');
+    registerCleanup(() => validationControlsApp.unmount());
 
     const playerStartApp = createApp(PlayerStartPanel, {
       controller,

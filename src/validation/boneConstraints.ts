@@ -11,9 +11,11 @@
  * (e.g. elbow bent backwards, neck twisted 270°).
  *
  * Axis convention (three-vrm normalized humanoid):
- *   Every humanoid bone is re-oriented so its rest Y-axis points along the bone.
- *   Left/right limbs share the same local-frame orientation after normalization,
- *   so constraints are symmetric between sides.
+ *   Normalized bones have identity rest rotation with world-aligned axes
+ *   (+X avatar left, +Y up, +Z forward). A pose mirrored across the sagittal
+ *   plane negates the Y and Z Euler components, so left/right ranges are NOT
+ *   identical: constraint values below are authored for the LEFT side and
+ *   right-side entries are derived with mirror().
  *
  * To edit: values are in RADIANS. Use THREE.MathUtils.degToRad(deg) in-line and
  * keep the degrees in a trailing comment for human review.
@@ -32,9 +34,23 @@ export interface RotationConstraint {
 
 const d = MathUtils.degToRad;
 
-/** Shallow clone — used for left/right symmetric entries. */
+/** Shallow clone — used for left-side and central entries. */
 function sym(c: RotationConstraint): RotationConstraint {
   return { order: c.order, min: [...c.min], max: [...c.max] };
+}
+
+/**
+ * Sagittal-plane mirror for right-side bones. A mirrored rotation negates the
+ * Y and Z Euler components (M·R·M with M = diag(-1,1,1)), so the right-side
+ * range is the left range with the Y/Z bounds negated and swapped; X is
+ * unchanged. Symmetric-about-zero ranges are unaffected.
+ */
+function mirror(c: RotationConstraint): RotationConstraint {
+  return {
+    order: c.order,
+    min: [c.min[0], -c.max[1], -c.max[2]],
+    max: [c.max[0], -c.min[1], -c.min[2]],
+  };
 }
 
 // ── Shoulder girdle (clavicle) ───────────────────────────────────────────────
@@ -48,42 +64,60 @@ const shoulder: RotationConstraint = {
 // ── Glenohumeral (upperArm) ──────────────────────────────────────────────────
 // AAOS: flexion 0–180°, extension 0–60°, abduction 0–180°, adduction 0–50°,
 //       internal rotation 0–70°, external rotation 0–90°.
-// Values deliberately broad because different VRM rigs distribute shoulder motion
-// differently between shoulder and upperArm joints.
+// Left arm rests along +X (T-pose). X = axial twist; Y = horizontal swing
+// (forward reach = −Y, cross-chest ≈ −130°, behind back = +Y); Z = vertical
+// swing (hanging at side = −90°, raised overhead = +90°, adduction past the
+// body ≈ −110°). Values deliberately broad because different VRM rigs
+// distribute shoulder motion differently between shoulder and upperArm joints.
 const upperArm: RotationConstraint = {
   order: 'YXZ',
-  min: [d(-80), d(-110), d(-60)],   // flexion(−ext) / twist / abduction(−add)
-  max: [d(+110), d(+110), d(+180)],
+  min: [d(-95), d(-135), d(-115)],
+  max: [d(+95), d(+60), d(+100)],
 };
 
 // ── Elbow (lowerArm) ─────────────────────────────────────────────────────────
 // AAOS: flexion 0–150°, hyperextension 0–10° (rare), pronation/supination ±90°.
-// Elbow effectively has 1 DOF for flexion; Y carries forearm twist.
+// Forearm rests along +X (left). X = pronation/supination twist; flexion lives
+// on Y (palm-down hinge: forward bend = −Y) or Z (palm-forward hinge: upward
+// bend = +Z) depending on where the rig puts the twist. Backward (+Y) and
+// downward (−Z) bends are hyperextension and stay clamped near zero.
+// Order YZX keeps Y as the outer axis: Euler decomposition limits the middle
+// axis to ±90°, and flexion (Y) must reach 150°. Known trade-off: a pure
+// upward bend (Z) past 90° with zero twist decomposes into the alternative
+// Euler branch and gets mangled — rigs/solvers here put flexion on Y, so the
+// Z budget only needs to cover the sub-90° range.
 const lowerArm: RotationConstraint = {
-  order: 'XYZ',
-  min: [d(-10), d(-90), d(-10)],
-  max: [d(+150), d(+90), d(+10)],
+  order: 'YZX',
+  min: [d(-95), d(-150), d(-10)],
+  max: [d(+95), d(+10), d(+150)],
 };
 
 // ── Wrist (hand) ─────────────────────────────────────────────────────────────
 // AAOS: flexion 0–80°, extension 0–70°, radial dev 0–20°, ulnar dev 0–30°.
+// Hand rests along +X (left), palm down. X = leaked forearm twist; Y = radial/
+// ulnar deviation (yaw); Z = flexion (−Z, palm toward floor) / extension (+Z).
 const hand: RotationConstraint = {
   order: 'XYZ',
-  min: [d(-80), d(-30), d(-80)],
-  max: [d(+70), d(+20), d(+80)],
+  min: [d(-45), d(-35), d(-85)],
+  max: [d(+45), d(+35), d(+75)],
 };
 
 // ── Hip (upperLeg) ───────────────────────────────────────────────────────────
 // AAOS: flexion 0–120°, extension 0–30°, abduction 0–45°, adduction 0–30°,
 //       rotation ±45°.
+// Thigh rests along −Y. X = pitch (raise forward = −X, extend back = +X);
+// Y = axial twist; Z = roll (left leg outward = +Z, inward = −Z).
+// Order XYZ keeps X as the outer axis: Euler decomposition limits the middle
+// axis to ±90°, and hip flexion (X) must reach 125° for deep squats.
 const upperLeg: RotationConstraint = {
-  order: 'YXZ',
-  min: [d(-30), d(-45), d(-30)],
-  max: [d(+125), d(+45), d(+45)],
+  order: 'XYZ',
+  min: [d(-125), d(-50), d(-35)],
+  max: [d(+35), d(+50), d(+55)],
 };
 
 // ── Knee (lowerLeg) ──────────────────────────────────────────────────────────
 // AAOS: flexion 0–135°, hyperextension <5°. Almost no lateral/rotation motion.
+// Shin rests along −Y; knee bend (heel toward buttock) = +X.
 const lowerLeg: RotationConstraint = {
   order: 'XYZ',
   min: [d(-5), d(-10), d(-5)],
@@ -92,10 +126,12 @@ const lowerLeg: RotationConstraint = {
 
 // ── Ankle (foot) ─────────────────────────────────────────────────────────────
 // AAOS: dorsiflexion 0–20°, plantarflexion 0–50°, inversion 0–35°, eversion 0–15°.
+// Toes point +Z. X = pitch (toes down / plantarflexion = +X, toes up = −X);
+// Y = heel yaw; Z = roll (left-foot inversion, sole inward = +Z).
 const foot: RotationConstraint = {
   order: 'XYZ',
-  min: [d(-50), d(-30), d(-35)],
-  max: [d(+30), d(+30), d(+15)],
+  min: [d(-35), d(-30), d(-20)],
+  max: [d(+55), d(+30), d(+40)],
 };
 
 // ── Toes ─────────────────────────────────────────────────────────────────────
@@ -117,12 +153,10 @@ const spineSegment: RotationConstraint = {
 };
 
 // ── Hips (pelvis) ────────────────────────────────────────────────────────────
-// Pelvic tilt/rotation is mostly bounded by the gameplay (not anatomy); kept loose.
-const hipsConstraint: RotationConstraint = {
-  order: 'YXZ',
-  min: [d(-30), d(-90), d(-30)],
-  max: [d(+30), d(+90), d(+30)],
-};
+// Deliberately unconstrained: hips carry the avatar's GLOBAL orientation
+// (turning around, lying down, dance turns), not an anatomical joint angle.
+// Clamping it mangles legitimate root motion — e.g. import-time clamping has
+// no exclusion mask, so a clip that turns >90° would snap at the yaw bound.
 
 // ── Neck ─────────────────────────────────────────────────────────────────────
 // AAOS: flexion 0–50°, extension 0–60°, lateral ±45°, rotation ±80°.
@@ -159,105 +193,159 @@ const jaw: RotationConstraint = {
 
 // ── Fingers ──────────────────────────────────────────────────────────────────
 // AAOS: MCP flexion 0–90°, PIP 0–100°, DIP 0–80°, MCP abduction ±25°.
+// Left-hand fingers rest along +X, palm down: curl toward the palm = −Z,
+// hyperextension = +Z, spread (abduction) = Y, X = leaked twist.
 const fingerProximal: RotationConstraint = {   // MCP of index/middle/ring/little
   order: 'XYZ',
-  min: [d(-15), d(-30), d(-10)],
-  max: [d(+100), d(+30), d(+10)],
+  min: [d(-10), d(-30), d(-105)],
+  max: [d(+10), d(+30), d(+20)],
 };
 const fingerIntermediate: RotationConstraint = { // PIP
   order: 'XYZ',
-  min: [d(-10), d(-5), d(-5)],
-  max: [d(+110), d(+5), d(+5)],
+  min: [d(-5), d(-5), d(-115)],
+  max: [d(+5), d(+5), d(+10)],
 };
 const fingerDistal: RotationConstraint = {       // DIP
   order: 'XYZ',
-  min: [d(-10), d(-5), d(-5)],
-  max: [d(+90), d(+5), d(+5)],
+  min: [d(-5), d(-5), d(-95)],
+  max: [d(+5), d(+5), d(+10)],
 };
 
 // ── Thumb ────────────────────────────────────────────────────────────────────
 // Thumb has a distinct kinematic chain: CMC (metacarpal) has saddle joint,
-// MCP (proximal) and IP (distal) are hinges.
+// MCP (proximal) and IP (distal) are hinges. The chain sits ~45° off the palm
+// plane, so its hinge axis mixes Y and Z — ranges stay deliberately loose.
 const thumbMetacarpal: RotationConstraint = {
   order: 'XYZ',
-  min: [d(-20), d(-45), d(-10)],
-  max: [d(+60), d(+45), d(+20)],
+  min: [d(-60), d(-60), d(-60)],
+  max: [d(+60), d(+60), d(+60)],
 };
 const thumbProximal: RotationConstraint = {
   order: 'XYZ',
-  min: [d(-10), d(-20), d(-10)],
-  max: [d(+90), d(+20), d(+10)],
+  min: [d(-15), d(-95), d(-95)],
+  max: [d(+15), d(+20), d(+20)],
 };
 const thumbDistal: RotationConstraint = {
   order: 'XYZ',
-  min: [d(-10), d(-5), d(-5)],
-  max: [d(+90), d(+5), d(+5)],
+  min: [d(-5), d(-95), d(-95)],
+  max: [d(+5), d(+10), d(+10)],
 };
 
 // ── Mixamo Live profile ─────────────────────────────────────────────────────
-// Runtime guardrail for live mocap. This is intentionally closer to a standard
-// humanoid animation rig than to permissive anatomical ROM: hinge joints stay
-// hinge-like, while shoulders, hips, and pelvis remain broad enough for lively
-// captured motion.
-const mixamoLiveHips: RotationConstraint = {
+// Data-driven: bounds are the per-axis envelope of a 16-clip Mixamo corpus
+// (idles, walks, dances incl. Samba and breakdance Flair, swimming, jumps,
+// situps, squat stretches — ~2700 frames, both sides folded into the left
+// frame) plus ~10° margin, unioned with the natural-pose floors pinned by
+// boneConstraints.test.ts. Derived with tools/analyze-fbx-rom.mjs.
+// Hinge edges the corpus confirms as hard zeros (knee forward bend, elbow
+// backward/downward bend) keep their tight bounds — they are the garbage
+// detectors. Hips stay unconstrained — see the pelvis note above.
+const mixamoLiveSpine: RotationConstraint = {
   order: 'YXZ',
-  min: [d(-40), d(-120), d(-35)],
-  max: [d(+45), d(+120), d(+35)],
+  min: [d(-30), d(-50), d(-45)],
+  max: [d(+70), d(+45), d(+40)],
 };
 
-const mixamoLiveSpineSegment: RotationConstraint = {
+const mixamoLiveChestSegment: RotationConstraint = {
   order: 'YXZ',
   min: [d(-30), d(-30), d(-25)],
   max: [d(+45), d(+30), d(+25)],
 };
 
+const mixamoLiveHead: RotationConstraint = {
+  order: 'YXZ',
+  min: [d(-60), d(-80), d(-35)],
+  max: [d(+45), d(+60), d(+70)],
+};
+
+const mixamoLiveShoulder: RotationConstraint = {
+  order: 'YXZ',
+  min: [d(-40), d(-75), d(-50)],
+  max: [d(+65), d(+55), d(+55)],
+};
+
+// Dance/swim content sweeps full arm circles: Y/Z stay near-unconstrained and
+// only the axial twist (X) bound carries signal.
 const mixamoLiveUpperArm: RotationConstraint = {
   order: 'YXZ',
-  min: [d(-80), d(-95), d(-70)],
-  max: [d(+130), d(+95), d(+170)],
+  min: [d(-90), d(-155), d(-175)],
+  max: [d(+90), d(+180), d(+160)],
 };
 
 const mixamoLiveLowerArm: RotationConstraint = {
-  order: 'XYZ',
-  min: [d(0), d(-75), d(-6)],
-  max: [d(+150), d(+75), d(+6)],
+  order: 'YZX',
+  min: [d(-80), d(-160), d(-6)],
+  max: [d(+80), d(+6), d(+150)],
 };
 
 const mixamoLiveHand: RotationConstraint = {
   order: 'XYZ',
-  min: [d(-70), d(-25), d(-60)],
-  max: [d(+65), d(+25), d(+60)],
+  min: [d(-125), d(-55), d(-75)],
+  max: [d(+80), d(+65), d(+105)],
 };
 
 const mixamoLiveUpperLeg: RotationConstraint = {
-  order: 'YXZ',
-  min: [d(-35), d(-45), d(-35)],
-  max: [d(+125), d(+45), d(+55)],
+  order: 'XYZ',
+  min: [d(-160), d(-45), d(-40)],
+  max: [d(+45), d(+65), d(+70)],
 };
 
+// Knee: corpus never bends forward (min exactly 0) — keep the hard zero.
+// Bent-knee tibial twist (Y) reaches ±55° in dance content.
 const mixamoLiveLowerLeg: RotationConstraint = {
   order: 'XYZ',
-  min: [d(0), d(-6), d(-6)],
-  max: [d(+140), d(+6), d(+6)],
+  min: [d(0), d(-65), d(-25)],
+  max: [d(+150), d(+25), d(+25)],
 };
 
 const mixamoLiveFoot: RotationConstraint = {
   order: 'XYZ',
-  min: [d(-45), d(-20), d(-25)],
-  max: [d(+30), d(+20), d(+20)],
+  min: [d(-55), d(-40), d(-50)],
+  max: [d(+70), d(+55), d(+35)],
+};
+
+const mixamoLiveToes: RotationConstraint = {
+  order: 'XYZ',
+  min: [d(-70), d(-15), d(-25)],
+  max: [d(+60), d(+35), d(+40)],
+};
+
+const mixamoLiveThumbProximal: RotationConstraint = {
+  order: 'XYZ',
+  min: [d(-15), d(-95), d(-95)],
+  max: [d(+30), d(+65), d(+50)],
+};
+const mixamoLiveThumbDistal: RotationConstraint = {
+  order: 'XYZ',
+  min: [d(-30), d(-95), d(-95)],
+  max: [d(+60), d(+80), d(+75)],
+};
+const mixamoLiveFingerProximal: RotationConstraint = {
+  order: 'XYZ',
+  min: [d(-25), d(-35), d(-105)],
+  max: [d(+35), d(+35), d(+50)],
+};
+const mixamoLiveFingerIntermediate: RotationConstraint = {
+  order: 'XYZ',
+  min: [d(-25), d(-20), d(-120)],
+  max: [d(+20), d(+15), d(+10)],
+};
+const mixamoLiveFingerDistal: RotationConstraint = {
+  order: 'XYZ',
+  min: [d(-10), d(-10), d(-95)],
+  max: [d(+15), d(+15), d(+20)],
 };
 
 // ── Assembled config ─────────────────────────────────────────────────────────
 
 export const DEFAULT_BONE_CONSTRAINTS: Partial<Record<VRMHumanBoneName, RotationConstraint>> = {
-  [VRMHumanBoneName.Hips]:       sym(hipsConstraint),
   [VRMHumanBoneName.Spine]:      sym(spineSegment),
   [VRMHumanBoneName.Chest]:      sym(spineSegment),
   [VRMHumanBoneName.UpperChest]: sym(spineSegment),
   [VRMHumanBoneName.Neck]:       sym(neck),
   [VRMHumanBoneName.Head]:       sym(head),
   [VRMHumanBoneName.LeftEye]:    sym(eye),
-  [VRMHumanBoneName.RightEye]:   sym(eye),
+  [VRMHumanBoneName.RightEye]:   mirror(eye),
   [VRMHumanBoneName.Jaw]:        sym(jaw),
 
   // Arms
@@ -265,20 +353,20 @@ export const DEFAULT_BONE_CONSTRAINTS: Partial<Record<VRMHumanBoneName, Rotation
   [VRMHumanBoneName.LeftUpperArm]:  sym(upperArm),
   [VRMHumanBoneName.LeftLowerArm]:  sym(lowerArm),
   [VRMHumanBoneName.LeftHand]:      sym(hand),
-  [VRMHumanBoneName.RightShoulder]: sym(shoulder),
-  [VRMHumanBoneName.RightUpperArm]: sym(upperArm),
-  [VRMHumanBoneName.RightLowerArm]: sym(lowerArm),
-  [VRMHumanBoneName.RightHand]:     sym(hand),
+  [VRMHumanBoneName.RightShoulder]: mirror(shoulder),
+  [VRMHumanBoneName.RightUpperArm]: mirror(upperArm),
+  [VRMHumanBoneName.RightLowerArm]: mirror(lowerArm),
+  [VRMHumanBoneName.RightHand]:     mirror(hand),
 
   // Legs
   [VRMHumanBoneName.LeftUpperLeg]:  sym(upperLeg),
   [VRMHumanBoneName.LeftLowerLeg]:  sym(lowerLeg),
   [VRMHumanBoneName.LeftFoot]:      sym(foot),
   [VRMHumanBoneName.LeftToes]:      sym(toes),
-  [VRMHumanBoneName.RightUpperLeg]: sym(upperLeg),
-  [VRMHumanBoneName.RightLowerLeg]: sym(lowerLeg),
-  [VRMHumanBoneName.RightFoot]:     sym(foot),
-  [VRMHumanBoneName.RightToes]:     sym(toes),
+  [VRMHumanBoneName.RightUpperLeg]: mirror(upperLeg),
+  [VRMHumanBoneName.RightLowerLeg]: mirror(lowerLeg),
+  [VRMHumanBoneName.RightFoot]:     mirror(foot),
+  [VRMHumanBoneName.RightToes]:     mirror(toes),
 
   // Left fingers
   [VRMHumanBoneName.LeftThumbMetacarpal]:    sym(thumbMetacarpal),
@@ -298,43 +386,79 @@ export const DEFAULT_BONE_CONSTRAINTS: Partial<Record<VRMHumanBoneName, Rotation
   [VRMHumanBoneName.LeftLittleDistal]:       sym(fingerDistal),
 
   // Right fingers
-  [VRMHumanBoneName.RightThumbMetacarpal]:    sym(thumbMetacarpal),
-  [VRMHumanBoneName.RightThumbProximal]:      sym(thumbProximal),
-  [VRMHumanBoneName.RightThumbDistal]:        sym(thumbDistal),
-  [VRMHumanBoneName.RightIndexProximal]:      sym(fingerProximal),
-  [VRMHumanBoneName.RightIndexIntermediate]:  sym(fingerIntermediate),
-  [VRMHumanBoneName.RightIndexDistal]:        sym(fingerDistal),
-  [VRMHumanBoneName.RightMiddleProximal]:     sym(fingerProximal),
-  [VRMHumanBoneName.RightMiddleIntermediate]: sym(fingerIntermediate),
-  [VRMHumanBoneName.RightMiddleDistal]:       sym(fingerDistal),
-  [VRMHumanBoneName.RightRingProximal]:       sym(fingerProximal),
-  [VRMHumanBoneName.RightRingIntermediate]:   sym(fingerIntermediate),
-  [VRMHumanBoneName.RightRingDistal]:         sym(fingerDistal),
-  [VRMHumanBoneName.RightLittleProximal]:     sym(fingerProximal),
-  [VRMHumanBoneName.RightLittleIntermediate]: sym(fingerIntermediate),
-  [VRMHumanBoneName.RightLittleDistal]:       sym(fingerDistal),
+  [VRMHumanBoneName.RightThumbMetacarpal]:    mirror(thumbMetacarpal),
+  [VRMHumanBoneName.RightThumbProximal]:      mirror(thumbProximal),
+  [VRMHumanBoneName.RightThumbDistal]:        mirror(thumbDistal),
+  [VRMHumanBoneName.RightIndexProximal]:      mirror(fingerProximal),
+  [VRMHumanBoneName.RightIndexIntermediate]:  mirror(fingerIntermediate),
+  [VRMHumanBoneName.RightIndexDistal]:        mirror(fingerDistal),
+  [VRMHumanBoneName.RightMiddleProximal]:     mirror(fingerProximal),
+  [VRMHumanBoneName.RightMiddleIntermediate]: mirror(fingerIntermediate),
+  [VRMHumanBoneName.RightMiddleDistal]:       mirror(fingerDistal),
+  [VRMHumanBoneName.RightRingProximal]:       mirror(fingerProximal),
+  [VRMHumanBoneName.RightRingIntermediate]:   mirror(fingerIntermediate),
+  [VRMHumanBoneName.RightRingDistal]:         mirror(fingerDistal),
+  [VRMHumanBoneName.RightLittleProximal]:     mirror(fingerProximal),
+  [VRMHumanBoneName.RightLittleIntermediate]: mirror(fingerIntermediate),
+  [VRMHumanBoneName.RightLittleDistal]:       mirror(fingerDistal),
 };
 
 export const MIXAMO_LIVE_BONE_CONSTRAINTS: Partial<Record<VRMHumanBoneName, RotationConstraint>> = {
   ...DEFAULT_BONE_CONSTRAINTS,
-  [VRMHumanBoneName.Hips]:       sym(mixamoLiveHips),
-  [VRMHumanBoneName.Spine]:      sym(mixamoLiveSpineSegment),
-  [VRMHumanBoneName.Chest]:      sym(mixamoLiveSpineSegment),
-  [VRMHumanBoneName.UpperChest]: sym(mixamoLiveSpineSegment),
+  [VRMHumanBoneName.Spine]:      sym(mixamoLiveSpine),
+  [VRMHumanBoneName.Chest]:      sym(mixamoLiveChestSegment),
+  [VRMHumanBoneName.UpperChest]: sym(mixamoLiveChestSegment),
+  [VRMHumanBoneName.Head]:       sym(mixamoLiveHead),
 
+  [VRMHumanBoneName.LeftShoulder]:  sym(mixamoLiveShoulder),
   [VRMHumanBoneName.LeftUpperArm]:  sym(mixamoLiveUpperArm),
   [VRMHumanBoneName.LeftLowerArm]:  sym(mixamoLiveLowerArm),
   [VRMHumanBoneName.LeftHand]:      sym(mixamoLiveHand),
-  [VRMHumanBoneName.RightUpperArm]: sym(mixamoLiveUpperArm),
-  [VRMHumanBoneName.RightLowerArm]: sym(mixamoLiveLowerArm),
-  [VRMHumanBoneName.RightHand]:     sym(mixamoLiveHand),
+  [VRMHumanBoneName.RightShoulder]: mirror(mixamoLiveShoulder),
+  [VRMHumanBoneName.RightUpperArm]: mirror(mixamoLiveUpperArm),
+  [VRMHumanBoneName.RightLowerArm]: mirror(mixamoLiveLowerArm),
+  [VRMHumanBoneName.RightHand]:     mirror(mixamoLiveHand),
 
   [VRMHumanBoneName.LeftUpperLeg]:  sym(mixamoLiveUpperLeg),
   [VRMHumanBoneName.LeftLowerLeg]:  sym(mixamoLiveLowerLeg),
   [VRMHumanBoneName.LeftFoot]:      sym(mixamoLiveFoot),
-  [VRMHumanBoneName.RightUpperLeg]: sym(mixamoLiveUpperLeg),
-  [VRMHumanBoneName.RightLowerLeg]: sym(mixamoLiveLowerLeg),
-  [VRMHumanBoneName.RightFoot]:     sym(mixamoLiveFoot),
+  [VRMHumanBoneName.LeftToes]:      sym(mixamoLiveToes),
+  [VRMHumanBoneName.RightUpperLeg]: mirror(mixamoLiveUpperLeg),
+  [VRMHumanBoneName.RightLowerLeg]: mirror(mixamoLiveLowerLeg),
+  [VRMHumanBoneName.RightFoot]:     mirror(mixamoLiveFoot),
+  [VRMHumanBoneName.RightToes]:     mirror(mixamoLiveToes),
+
+  // Left fingers
+  [VRMHumanBoneName.LeftThumbProximal]:      sym(mixamoLiveThumbProximal),
+  [VRMHumanBoneName.LeftThumbDistal]:        sym(mixamoLiveThumbDistal),
+  [VRMHumanBoneName.LeftIndexProximal]:      sym(mixamoLiveFingerProximal),
+  [VRMHumanBoneName.LeftIndexIntermediate]:  sym(mixamoLiveFingerIntermediate),
+  [VRMHumanBoneName.LeftIndexDistal]:        sym(mixamoLiveFingerDistal),
+  [VRMHumanBoneName.LeftMiddleProximal]:     sym(mixamoLiveFingerProximal),
+  [VRMHumanBoneName.LeftMiddleIntermediate]: sym(mixamoLiveFingerIntermediate),
+  [VRMHumanBoneName.LeftMiddleDistal]:       sym(mixamoLiveFingerDistal),
+  [VRMHumanBoneName.LeftRingProximal]:       sym(mixamoLiveFingerProximal),
+  [VRMHumanBoneName.LeftRingIntermediate]:   sym(mixamoLiveFingerIntermediate),
+  [VRMHumanBoneName.LeftRingDistal]:         sym(mixamoLiveFingerDistal),
+  [VRMHumanBoneName.LeftLittleProximal]:     sym(mixamoLiveFingerProximal),
+  [VRMHumanBoneName.LeftLittleIntermediate]: sym(mixamoLiveFingerIntermediate),
+  [VRMHumanBoneName.LeftLittleDistal]:       sym(mixamoLiveFingerDistal),
+
+  // Right fingers
+  [VRMHumanBoneName.RightThumbProximal]:      mirror(mixamoLiveThumbProximal),
+  [VRMHumanBoneName.RightThumbDistal]:        mirror(mixamoLiveThumbDistal),
+  [VRMHumanBoneName.RightIndexProximal]:      mirror(mixamoLiveFingerProximal),
+  [VRMHumanBoneName.RightIndexIntermediate]:  mirror(mixamoLiveFingerIntermediate),
+  [VRMHumanBoneName.RightIndexDistal]:        mirror(mixamoLiveFingerDistal),
+  [VRMHumanBoneName.RightMiddleProximal]:     mirror(mixamoLiveFingerProximal),
+  [VRMHumanBoneName.RightMiddleIntermediate]: mirror(mixamoLiveFingerIntermediate),
+  [VRMHumanBoneName.RightMiddleDistal]:       mirror(mixamoLiveFingerDistal),
+  [VRMHumanBoneName.RightRingProximal]:       mirror(mixamoLiveFingerProximal),
+  [VRMHumanBoneName.RightRingIntermediate]:   mirror(mixamoLiveFingerIntermediate),
+  [VRMHumanBoneName.RightRingDistal]:         mirror(mixamoLiveFingerDistal),
+  [VRMHumanBoneName.RightLittleProximal]:     mirror(mixamoLiveFingerProximal),
+  [VRMHumanBoneName.RightLittleIntermediate]: mirror(mixamoLiveFingerIntermediate),
+  [VRMHumanBoneName.RightLittleDistal]:       mirror(mixamoLiveFingerDistal),
 };
 
 export type BoneConstraintProfileId = 'default' | 'mixamoLive';

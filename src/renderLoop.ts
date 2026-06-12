@@ -1,15 +1,14 @@
 import * as THREE from 'three';
 import type { VRMHumanBoneName } from '@pixiv/three-vrm';
-import type { BoneConstraintProfileId } from './validation/boneConstraints';
 import type { createScene } from './scene';
 import type { loadVRM } from './vrmLoader';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 import type { MocapState } from './mocap/pipeline/mocapController';
-import {
-  MOCAP_VALIDATION_EXCLUDED_BONES,
-  CLIP_VALIDATION_EXCLUDED_BONES,
-} from './mocap/diagnostics/mocapValidationBones';
 import { renderLoopHooks } from './renderLoopHooks';
+import {
+  validationSettings,
+  type ValidationSettings,
+} from './validation/validationSettings';
 
 type CleanupFn = () => void;
 type DebugVizCache = {
@@ -27,16 +26,30 @@ type DebugVizCache = {
   };
 };
 
-export function selectValidationExcludedBones(params: {
+export interface ValidationClampPlan {
+  shouldClamp: boolean;
+  /** Soft mode: corrections blend in/out over time instead of snapping. */
+  soft: boolean;
+}
+
+export function selectValidationClampPlan(params: {
   hasBvhActive: boolean;
   mocapState: MocapState;
-  validatorProfileId: BoneConstraintProfileId;
-}): ReadonlySet<VRMHumanBoneName> | undefined {
-  if (params.hasBvhActive) return CLIP_VALIDATION_EXCLUDED_BONES;
-  if (params.mocapState !== 'off' && params.validatorProfileId !== 'mixamoLive') {
-    return MOCAP_VALIDATION_EXCLUDED_BONES;
-  }
-  return undefined;
+  validatorEnabled: boolean;
+  settings: ValidationSettings;
+}): ValidationClampPlan {
+  if (!params.validatorEnabled) return { shouldClamp: false, soft: false };
+
+  // Live capture follows the recording mode; BVH playback and the procedural
+  // idle/manual layers follow the playback mode. All bones are clamped in
+  // both soft and hard modes: soft clamping settles exactly on the ROM bound,
+  // so a clip recorded through the clamp plays back to the same pose without
+  // needing per-source exclusion masks.
+  const mode = params.mocapState !== 'off' && !params.hasBvhActive
+    ? params.settings.recordingClampMode
+    : params.settings.playbackClampMode;
+  if (mode === 'off') return { shouldClamp: false, soft: false };
+  return { shouldClamp: true, soft: mode === 'safe' };
 }
 
 export function startRenderLoop(
@@ -48,7 +61,7 @@ export function startRenderLoop(
 ): CleanupFn {
   const { controller, pa, micro, idle } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
-  const { skelViz, validator, bonePanel, boneDrag, hipForce, hipBalance } = tooling;
+  const { skelViz, validator, poseValidator, bonePanel, boneDrag, hipForce, hipBalance } = tooling;
 
   let stopped = false;
   let rafId = 0;
@@ -100,38 +113,45 @@ export function startRenderLoop(
       mocap.applyTrackedHandsOverlay();
     }
 
-    // 3c. Clamp the final authored pose (BVH / idle / mocap / manual offsets)
+    // 3c. Capture the authored pose before validation mutates it. The red
+    // skeleton overlay uses this snapshot to show unclamped BVH/mocap motion.
+    skelViz.captureUnclampedPose();
+
+    // 3d. Clamp the final authored pose (BVH / idle / mocap / manual offsets)
     // before debug capture and before micro-animations add their small deltas.
-    // Use the same exclusion mask whenever a mocap source OR a BVH clip is
-    // active — this guarantees record and playback see identical clamp logic
-    // on arms/legs/hands/fingers, so a self-recorded clip plays back to the
-    // same on-screen pose it was captured from.
+    // Recording captures the post-clamp pose, so the BVH file matches what
+    // the user saw; playback re-clamps to the same bounds, which is a no-op
+    // for self-recorded clips and a guardrail for imported ones.
     if (!renderLoopHooks.suspendValidatorClamp) {
-      const excluded = selectValidationExcludedBones({
+      const clampPlan = selectValidationClampPlan({
         hasBvhActive,
         mocapState: mocap.state,
-        validatorProfileId: validator.profileId,
+        validatorEnabled: validator.enabled,
+        settings: validationSettings,
       });
-      validator.clampAll(excluded);
+      if (clampPlan.shouldClamp) {
+        validator.clampAll(undefined, { soft: clampPlan.soft, deltaSeconds: delta });
+        poseValidator.validateAndClamp();
+      }
     }
 
-    // 3c1. Skeleton logger — streaming bone diagnostics (≤1 ms when active,
+    // 3d1. Skeleton logger — streaming bone diagnostics (≤1 ms when active,
     // zero overhead when not). Hooked here so the snapshot is the same final
     // pose that the BVH recorder and the on-screen view see.
     renderLoopHooks.skeletonLoggerTick?.();
 
-    // 3c2. Record the on-screen pose (post-clamp, post-overlays) into the live
+    // 3d2. Record the on-screen pose (post-clamp, post-overlays) into the live
     // recorder. Doing this AFTER clamp ensures the BVH file matches exactly
     // what the user saw during capture.
     mocap.captureRecordedFrame();
 
-    // 3d. Debug recorder — snapshot landmarks + IK targets + final bone quaternions.
+    // 3e. Debug recorder — snapshot landmarks + IK targets + final bone quaternions.
     if (dbgRecorder.active) {
       const frame = mocap.latestFrame;
       if (frame) dbgRecorder.capture(frame, mocap.debugTargets, mocap.calibration);
     }
 
-    // 3e. Debug skeleton — show performer landmarks mapped to avatar world space.
+    // 3f. Debug skeleton — show performer landmarks mapped to avatar world space.
     if (mocapDebugViz.visible) {
       const frame = mocap.latestFrame;
       if (frame) {
