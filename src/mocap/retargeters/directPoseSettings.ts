@@ -1,0 +1,99 @@
+const clamp = (v: number, min: number, max: number): number => Math.max(min, Math.min(max, v));
+
+/**
+ * All user-tunable parameters of the direct pose pipeline, with the same
+ * clamping rules the DirectPoseApplier setters used to apply inline.
+ *
+ * sysAnimOnline uses separate filters per body region:
+ *   head_chest_rot: minCutoff=0.25 → very heavy torso smoothing (stable trunk)
+ *   arm_rot/IK:     minCutoff=0.5, beta=0.5 → responsive arms
+ * We mirror this with separate lerp values: low for spine (stable), high for limbs.
+ */
+export class DirectPoseSettings {
+  /** Hips + spine/chest twist — heavily smoothed. */
+  spineLerp = 0.25;
+  /** Arms + legs IK. */
+  bodyLerp = 0.7;
+  handLerp = 0.55;
+  headLerp = 0.28;
+  /** Hip/root position follows the performer, but less eagerly than rotations.
+   *  This preserves weight shift while reducing the "floating pelvis" look from
+   *  MediaPipe hip-centre jitter. */
+  hipPositionLerp = 0.12;
+
+  handTrackingPriorityEnabled = true;
+  /** Mirror landmarks left↔right (selfie view). */
+  mirrorX = true;
+  /** Default to full 3D depth; the panel can still reduce it if Z gets noisy. */
+  depthScale = 1;
+  /** MediaPipe visibility score below this = skip bone. */
+  visibilityThreshold = 0.3;
+
+  /** Shoulder spread: Z-axis rotation applied to leftShoulder / rightShoulder every
+   *  frame. Positive = shoulders droop outward (broader silhouette). Range ±20°. */
+  shoulderSpreadDeg = 0;
+  legSpreadX = 1.0;
+
+  /** Hip position tracking: performer hip centre delta → avatar hips.position. */
+  hipPositionEnabled = true;
+
+  // Depth (Z) is MediaPipe's least reliable axis. For narrow joints like
+  // elbows this jitter is visible — we attenuate it further inside arm IK.
+  // Legs' Z is less problematic (big, well-separated joints) so we leave it.
+  armZAttenuation = 1;
+  /** EMA alpha on pole smoothing. 1 = no smoothing (use current frame). */
+  poleAlpha = 0.6;
+  /** Z-axis weight applied to the arm pole vector (shoulder→elbow direction).
+   *  Separate from the target Z attenuation: the pole only hints at the bulge
+   *  direction, so more damping here helps stability without shortening reach. */
+  armPoleZ = 0.5;
+
+  /** Fraction of residual torso midpoint lean applied to spine/chest as a
+   *  side-bend after hips orientation has already been solved. */
+  lateralBendScale = 0.35;
+  /** For pronounced bends we boost the lateral gain adaptively, while
+   *  keeping small/noisy leans on the original lower gain. */
+  lateralBendScaleMax = 0.7;
+  /** Residual torso forward bend applied to spine/chest after hips orientation.
+   *  Uses full torso Z (no /3 damping) so pronounced bows still read correctly. */
+  forwardBendScale = 1;
+  /** Cap on how far the pelvis cross-axis may diverge from the shoulder line;
+   *  beyond it we progressively trust shoulders more (noisy hips when a leg lifts). */
+  torsoAxisMaxDivergenceDeg = 20;
+
+  // Foot locking: freezes the ankle IK target when the performer stands still,
+  // removing the foot-sliding artefact caused by MediaPipe landmark jitter.
+  footLockEnabled = true;
+  footVelocityLockThreshold = 0.007;   // m/frame — below this = lock candidate
+  footVelocityUnlockThreshold = 0.018; // m/frame — above this = force unlock
+  footLiftThreshold = 0.05;            // m above groundY — foot is being lifted
+
+  /** A3: opt-in symmetry fallback — an invisible arm/leg chain copies its
+   *  mirror partner's local quaternions while the partner is live. */
+  symmetryFallback = false;
+
+  setShoulderSpread(deg: number): void { this.shoulderSpreadDeg = clamp(deg, -20, 20); }
+  setLegSpreadX(v: number): void { this.legSpreadX = clamp(v, 0.5, 2.0); }
+  setBodySmoothing(v: number): void { this.bodyLerp = clamp(v, 0.01, 1); }
+  setSpineSmoothing(v: number): void { this.spineLerp = clamp(v, 0.01, 1); }
+  setArmZAttenuation(v: number): void { this.armZAttenuation = clamp(v, 0, 1); }
+  setPoleSmoothing(v: number): void { this.poleAlpha = clamp(v, 0.01, 1); }
+  setArmPoleZ(v: number): void { this.armPoleZ = clamp(v, 0, 1); }
+  setDepthScale(v: number): void { this.depthScale = clamp(v, 0, 1); }
+  setVisibilityThreshold(v: number): void { this.visibilityThreshold = clamp(v, 0, 1); }
+  setLateralBendScale(v: number): void { this.lateralBendScale = clamp(v, 0, 1); }
+
+  /** HQ mode: snap to target (no slerp), full amplitude — for BVH recording. */
+  setHighQualityMode(enabled: boolean): void {
+    this.spineLerp = enabled ? 1 : 0.25;
+    this.bodyLerp  = enabled ? 1 : 0.7;
+    this.handLerp  = enabled ? 1 : 0.7;
+    this.headLerp  = enabled ? 1 : 0.28;
+    this.hipPositionLerp = enabled ? 1 : 0.12;
+  }
+
+  isVisible(lm?: { visibility?: number }): boolean {
+    // Missing visibility (e.g. HandLandmarker outputs) treated as visible.
+    return (lm?.visibility ?? 1) >= this.visibilityThreshold;
+  }
+}

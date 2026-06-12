@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
-import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import {
   PoseDetector,
   type PoseModelQuality,
@@ -9,13 +8,21 @@ import {
 } from './poseDetector';
 import { DirectPoseApplier } from '../retargeters/directPoseApplier';
 import { FaceApplier } from '../retargeters/faceApplier';
-import { BvhRecorder, BVH_FRAME_RATE, downloadBvh } from '../bvh/bvhRecorder';
-import { getJointOffset, type BvhRecorderCompatibility } from '../bvh/bvhRecorderFactory';
+import { downloadBvh, BVH_FRAME_RATE } from '../bvh/bvhRecorder';
 import { MocapCalibration, type CalibrationStatus } from '../trackers/mocapCalibration';
 import type { LandmarkStabilizerOptions } from '../trackers/landmarkStabilizer';
-import { getCachedHumanoidRestAxes } from '../../humanoidRestPose';
-import { captureSnapshot, type PoseSnapshot } from '../bvh/bvhRoundtripVerifier';
+import type { PoseSnapshot } from '../bvh/bvhRoundtripVerifier';
 import { shouldRecordAfterPreroll } from './videoFrameTimes';
+import { MocapBvhSession } from './mocapBvhSession';
+import {
+  buildBvhDiagnosticText,
+  dumpSkeleton,
+  getActualBonePositions,
+  getAvatarJointPositions,
+  getReachPercent,
+  type AvatarJointPositionMap,
+  type ReachPercent,
+} from '../diagnostics/mocapInspector';
 
 export type MocapState = 'off' | 'live' | 'recording';
 export interface MocapBvhReadyOptions {
@@ -28,66 +35,26 @@ export interface PoseBvhExport {
   bvhText: string;
 }
 
-type AvatarJointPositionMap = {
-  hips: THREE.Vector3;
-  leftUpperArm: THREE.Vector3;  leftLowerArm: THREE.Vector3;  leftHand: THREE.Vector3;
-  rightUpperArm: THREE.Vector3; rightLowerArm: THREE.Vector3; rightHand: THREE.Vector3;
-  leftUpperLeg: THREE.Vector3;  leftLowerLeg: THREE.Vector3;  leftFoot: THREE.Vector3;
-  rightUpperLeg: THREE.Vector3; rightLowerLeg: THREE.Vector3; rightFoot: THREE.Vector3;
-};
-
 const DEFAULT_FILE_CAPTURE_CALIBRATION_PREROLL_SEC = 1.5;
-
-function textHash(text: string): string {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0).toString(16).padStart(8, '0');
-}
-
-function logRecordedAnimation(params: {
-  name: string;
-  source: 'camera' | 'video';
-  vrmVersion: string;
-  externalFrames: number;
-  internalFrames: number;
-  externalText: string;
-  savedText: string;
-}): void {
-  console.info('[animation:record]', {
-    name: params.name,
-    source: params.source,
-    vrmVersion: params.vrmVersion,
-    savedFrames: params.internalFrames,
-    externalFrames: params.externalFrames,
-    durationSec: Number((params.internalFrames / BVH_FRAME_RATE).toFixed(3)),
-    savedHash: textHash(params.savedText),
-    externalHash: textHash(params.externalText),
-    savedEqualsExternal: params.savedText === params.externalText,
-  });
-}
 
 /**
  * Orchestrates the webcam → pose → VRM → BVH pipeline.
  *
  *   off       – camera closed, VRM unaffected
  *   live      – camera on, pose applied to VRM each frame, no recording
- *   recording – live + every frame written to BvhRecorder
+ *   recording – live + every frame written to the BVH session
+ *
+ * Recorder bookkeeping lives in MocapBvhSession; console diagnostics in
+ * mocapInspector. This class owns the state machine and the detector wiring.
  */
 export class MocapController {
   private detector: PoseDetector;
   private applier: DirectPoseApplier;
   private faceApplier: FaceApplier;
-  private liveRecorder: BvhRecorder;
-  private liveReplayRecorder: BvhRecorder | null = null;
-  private grabRecorder: BvhRecorder;
+  private session: MocapBvhSession;
   private _calibration: MocapCalibration;
 
   private _state: MocapState = 'off';
-  private _recordingIndex = 0;
-  private _poseExportIndex = 0;
   private _fileCaptureActive = false;
   private _fixedFileCaptureActive = false;
   private _fixedFileFramePending = false;
@@ -106,13 +73,6 @@ export class MocapController {
   onBvhReady:             ((bvh: string, name: string, options: MocapBvhReadyOptions) => void) | null = null;
   onCalibrationChange:    ((s: CalibrationStatus) => void) | null = null;
 
-  // ── Round-trip verification (expected-side capture) ─────────────────────────
-  // When non-null, every time the live recorder accepts a new frame we also
-  // snapshot the full normalized-bone state. Pairs with a deterministic replay
-  // in bvhRoundtripVerifier to detect record↔playback divergence.
-  private _verifySnapshots: PoseSnapshot[] | null = null;
-  private _verifyLastFrameCount = 0;
-
   private _vrm: VRM;
   exportAgentOgiJsonForVideo = false;
 
@@ -122,8 +82,7 @@ export class MocapController {
     this._calibration = new MocapCalibration(vrm);
     this.applier      = new DirectPoseApplier(vrm, this._calibration);
     this.faceApplier  = new FaceApplier(vrm);
-    this.liveRecorder = this._createRecorder();
-    this.grabRecorder = this._createRecorder();
+    this.session      = new MocapBvhSession(vrm, (name) => this.applier.getQuaternion(name));
 
     this._calibration.onStatusChange = (s) => this.onCalibrationChange?.(s);
 
@@ -144,9 +103,9 @@ export class MocapController {
   }
 
   get state():              MocapState        { return this._state; }
-  get frameCount():         number            { return this.liveRecorder.frameCount; }
-  get recordingFrameCount(): number           { return this.liveRecorder.frameCount; }
-  get grabbedFrameCount():   number           { return this.grabRecorder.frameCount; }
+  get frameCount():         number            { return this.session.live.frameCount; }
+  get recordingFrameCount(): number           { return this.session.live.frameCount; }
+  get grabbedFrameCount():   number           { return this.session.grab.frameCount; }
   get currentTime():        number            { return this.detector.currentTime; }
   get duration():           number            { return this.detector.duration; }
   get isPaused():           boolean           { return this.detector.isPaused; }
@@ -158,96 +117,8 @@ export class MocapController {
     this.detector.setCanvas(canvas);
   }
 
-  private _createRecorder(compatibility: BvhRecorderCompatibility = 'external'): BvhRecorder {
-    const correctionInvMap = this._buildCorrectionInvMap();
-    // External-tool BVH keeps plain coordinates. Internal round-trip BVH uses
-    // the VRM0 x/z pre-flip so `createVRMAnimationClip` cancels it on import.
-    const flipForVrm0 = compatibility === 'internal-roundtrip' && this._vrm.meta.metaVersion === '0';
-    return new BvhRecorder({
-      getJointOffset: (name) => this._getBvhJointOffset(name),
-      getRestCorrectionInv: (name) => correctionInvMap.get(name) ?? null,
-      flipForVrm0,
-    });
-  }
-
-  private _buildCorrectionInvMap(): Map<string, [number, number, number, number]> {
-    const map = new Map<string, [number, number, number, number]>();
-    // Prime the rest-axes cache while the avatar is in (near-)bind pose so the
-    // loader sees the same snapshot at replay time. See note on
-    // `getCachedHumanoidRestAxes` in humanoidRestPose.ts.
-    const restAxes = getCachedHumanoidRestAxes(this._vrm);
-    const _q = new THREE.Quaternion();
-    for (const [bone, info] of restAxes) {
-      // correction = setFromUnitVectors(rawAxis, normalizedAxis)
-      // correctionInv rotates normalizedAxis back to rawAxis direction;
-      // pre-multiplying by corrInv maps rawAxis-convention q to T-pose-relative q.
-      _q.copy(info.correction).invert();
-      map.set(bone, [_q.x, _q.y, _q.z, _q.w]);
-    }
-    return map;
-  }
-
-  private _getBvhJointOffset(name: string): [number, number, number] | null {
-    return getJointOffset(this._vrm, name);
-  }
-
-  private _getBvhHipsPosition(): [number, number, number] | null {
-    // Write LOCAL position (relative to hips' parent), not world. AnimationMixer
-    // on playback writes back into `bone.position` which is local — so for a
-    // bit-exact round-trip the value we record must be the same field.
-    // Reading world here would silently bake the parent transform into the BVH
-    // and re-apply it on playback, producing a constant offset (~9cm in our
-    // verifier on rigs where the normalized hips has any parent transform).
-    const hips = this._getNormalizedBoneNode(VRMHumanBoneName.Hips);
-    if (!hips) return null;
-    const p = hips.position;
-    return [p.x, p.y, p.z];
-  }
-
-  private _getNormalizedBoneNode(name: string): THREE.Object3D | null {
-    if (!name) return null;
-    return this._vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName);
-  }
-
-  private _getNormBoneWorldPosition(name: VRMHumanBoneName): THREE.Vector3 {
-    const out = new THREE.Vector3();
-    const node = this._getNormalizedBoneNode(name);
-    node?.getWorldPosition(out);
-    return out;
-  }
-
-  private _addCurrentPoseFrame(recorder: BvhRecorder): boolean {
-    const before = recorder.frameCount;
-    recorder.addFrame(
-      (name) => this.applier.getQuaternion(name),
-      () => this._getBvhHipsPosition(),
-    );
-    return recorder.frameCount > before;
-  }
-
-  private _captureCurrentPoseFrame(recorder: BvhRecorder): void {
-    recorder.captureFrame(
-      (name) => this.applier.getQuaternion(name),
-      () => this._getBvhHipsPosition(),
-    );
-  }
-
   private _captureFixedFileFrame(): boolean {
-    const before = this.liveRecorder.frameCount;
-    this._captureCurrentPoseFrame(this.liveRecorder);
-    if (this.liveReplayRecorder) {
-      this._captureCurrentPoseFrame(this.liveReplayRecorder);
-    }
-    this._frameRecorded = this.liveRecorder.frameCount > before;
-
-    if (this._verifySnapshots !== null && this._frameRecorded) {
-      const fc = this.liveRecorder.frameCount;
-      if (fc > this._verifyLastFrameCount) {
-        this._verifySnapshots.push(captureSnapshot(this._vrm, fc - 1));
-        this._verifyLastFrameCount = fc;
-      }
-    }
-
+    this._frameRecorded = this.session.captureFixedFileFrame();
     return this._frameRecorded;
   }
 
@@ -377,47 +248,29 @@ export class MocapController {
       return;
     }
 
-    const accepted = this._addCurrentPoseFrame(this.liveRecorder);
+    const accepted = this.session.addCurrentPoseFrame(this.session.live);
     if (!accepted) return;
 
     // Keep a parallel internal-roundtrip stream whose x/z convention cancels
     // the loader's VRM0 conversion. This is what we auto-replay and save for
     // drag-and-drop back into this player.
-    if (this.liveReplayRecorder) {
-      this._captureCurrentPoseFrame(this.liveReplayRecorder);
+    if (this.session.replay) {
+      this.session.captureCurrentPoseFrame(this.session.replay);
     }
     this._frameRecorded = true;
-
-    // Round-trip verification: snapshot a full pose only when the recorder
-    // actually accepted a new frame (rate-limited to 30 Hz) so expected[i]
-    // aligns 1:1 with the BVH frame i written to file.
-    if (this._verifySnapshots !== null) {
-      const fc = this.liveRecorder.frameCount;
-      if (fc > this._verifyLastFrameCount) {
-        this._verifySnapshots.push(captureSnapshot(this._vrm, fc - 1));
-        this._verifyLastFrameCount = fc;
-      }
-    }
+    this.session.snapshotIfNewFrame();
   }
 
   // ── Round-trip verification API ────────────────────────────────────────────
 
   /** Begin collecting expected-side pose snapshots alongside the live recorder. */
-  startVerifyCapture(): void {
-    this._verifySnapshots = [];
-    this._verifyLastFrameCount = this.liveRecorder.frameCount;
-  }
+  startVerifyCapture(): void { this.session.startVerifyCapture(); }
 
   /** Stop collecting and return the captured snapshots (one per BVH frame). */
-  stopVerifyCapture(): PoseSnapshot[] {
-    const out = this._verifySnapshots ?? [];
-    this._verifySnapshots = null;
-    this._verifyLastFrameCount = 0;
-    return out;
-  }
+  stopVerifyCapture(): PoseSnapshot[] { return this.session.stopVerifyCapture(); }
 
-  get verifyCapturing(): boolean { return this._verifySnapshots !== null; }
-  get verifyCapturedCount(): number { return this._verifySnapshots?.length ?? 0; }
+  get verifyCapturing(): boolean { return this.session.verifyCapturing; }
+  get verifyCapturedCount(): number { return this.session.verifyCapturedCount; }
 
   /** VRM handle — needed by the verifier to run deterministic replay. */
   get vrm(): VRM { return this._vrm; }
@@ -433,16 +286,16 @@ export class MocapController {
    */
   startVerifyRecording(): void {
     if (this._state !== 'live') return;
-    this.liveRecorder = this._createRecorder('internal-roundtrip');
-    this.liveRecorder.start();
+    this.session.resetLive('internal-roundtrip');
+    this.session.live.start();
     this._setState('recording');
   }
 
   /** Stop a verification recording and return the BVH text; no download, no onBvhReady. */
   stopVerifyRecording(): string {
     if (this._state !== 'recording') return '';
-    const bvhText = this.liveRecorder.stop();
-    this.liveRecorder = this._createRecorder();
+    const bvhText = this.session.live.stop();
+    this.session.resetLive();
     this._setState('live');
     return bvhText;
   }
@@ -466,9 +319,9 @@ export class MocapController {
 
     this.applier.setHighQualityMode(true);
     this._fileCaptureActive = true;
-    this.liveRecorder = this._createRecorder('internal-roundtrip');
+    this.session.resetLive('internal-roundtrip');
 
-    this.startVerifyCapture();
+    this.session.startVerifyCapture();
 
     const tickInterval = onProgress
       ? window.setInterval(() => onProgress(this.verifyCapturedCount), 150)
@@ -476,26 +329,26 @@ export class MocapController {
 
     return new Promise<{ bvh: string; expected: PoseSnapshot[] }>((resolve, reject) => {
       this.detector.onEnd = () => {
-        const bvhText = this.liveRecorder.stop();
-        const expected = this.stopVerifyCapture();
+        const bvhText = this.session.live.stop();
+        const expected = this.session.stopVerifyCapture();
         if (tickInterval) clearInterval(tickInterval);
         this._teardownFileCapture();
-        this.liveRecorder = this._createRecorder();
+        this.session.resetLive();
         this._setState('off');
         resolve({ bvh: bvhText, expected });
       };
 
       this.detector.startFromFile(file).then(
         () => {
-          this.liveRecorder.start();
+          this.session.live.start();
           this._setState('recording');
         },
         (err) => {
           if (tickInterval) clearInterval(tickInterval);
-          this.stopVerifyCapture();
+          this.session.stopVerifyCapture();
           this.detector.stop();
           this._teardownFileCapture();
-          this.liveRecorder = this._createRecorder();
+          this.session.resetLive();
           reject(err);
         },
       );
@@ -511,7 +364,7 @@ export class MocapController {
     this.applier.applyTrackedHands(this._latestFrame, true);
   }
 
-  // ── Calibration ────────────────────────────────────────────────────────────
+  // ── Calibration & diagnostics ───────────────────────────────────────────────
 
   get calibration(): MocapCalibration { return this._calibration; }
   get hipsBaseWorld() { return this.applier.hipsBaseWorld; }
@@ -520,200 +373,47 @@ export class MocapController {
   /** Per-chain visibility-loss state (D1-lite). Passthrough from the applier. */
   getTrackingHealth() { return this.applier.getTrackingHealth(); }
 
-  /**
-   * IK target reach as % of avatar limb length, per side.
-   *   < 90%  — comfortable reach, IK bends freely
-   *   ~100%  — near max (straight limb)
-   *   > 100% — unreachable (limb locks, hand/foot short of target)
-   */
-  getReachPercent(): { armL: number; armR: number; legL: number; legR: number } {
-    const h = this._vrm.humanoid;
-    const tmp = new THREE.Vector3();
-    const reach = (boneName: VRMHumanBoneName, target: THREE.Vector3, limbLen: number): number => {
-      const n = h.getNormalizedBoneNode(boneName);
-      if (!n || limbLen <= 0) return 0;
-      n.getWorldPosition(tmp);
-      return (tmp.distanceTo(target) / limbLen) * 100;
-    };
-    const cal = this._calibration;
-    const dt  = this.applier.debugTargets;
-    return {
-      armL: dt.hasArm ? reach(VRMHumanBoneName.LeftUpperArm, dt.leftWristTarget,  cal.avatarLeftUpperArm  + cal.avatarLeftLowerArm)   : 0,
-      armR: dt.hasArm ? reach(VRMHumanBoneName.RightUpperArm, dt.rightWristTarget, cal.avatarRightUpperArm + cal.avatarRightLowerArm)  : 0,
-      legL: dt.hasLeg ? reach(VRMHumanBoneName.LeftUpperLeg, dt.leftAnkleTarget,  cal.avatarLeftUpperLeg  + cal.avatarLeftLowerLeg)   : 0,
-      legR: dt.hasLeg ? reach(VRMHumanBoneName.RightUpperLeg, dt.rightAnkleTarget, cal.avatarRightUpperLeg + cal.avatarRightLowerLeg)  : 0,
-    };
+  /** IK target reach as % of avatar limb length, per side. See mocapInspector. */
+  getReachPercent(): ReachPercent {
+    return getReachPercent(this._vrm, this._calibration, this.applier.debugTargets);
   }
 
-  /**
-   * Dump a full side-by-side comparison of performer landmarks vs avatar
-   * skeleton to the console. Useful for debugging scale / calibration bugs
-   * (e.g. "performer skeleton shoulders look too wide").
-   */
+  /** Console dump: performer landmarks vs avatar skeleton vs calibration. */
   dumpSkeleton(): void {
-    const frame = this._latestFrame;
-    const cal   = this._calibration;
-    const calMe = cal.performerMeasurements();
-
-    console.group('%cSkeleton dump', 'color:#6186ff;font-weight:bold');
-
-    if (!frame) {
-      console.warn('No mocap frame available — start camera first.');
-      console.groupEnd();
-      return;
-    }
-
-    // ── Performer measurements (raw MediaPipe world meters) ────────────────
-    const lms = frame.worldLandmarks;
-    const dist = (a: PoseFrame['worldLandmarks'][number] | undefined, b: PoseFrame['worldLandmarks'][number] | undefined): number => {
-      if (!a || !b) return NaN;
-      const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
-      return Math.sqrt(dx*dx + dy*dy + dz*dz);
-    };
-    const vis = (l: PoseFrame['worldLandmarks'][number] | undefined): string =>
-      l?.visibility != null ? `${(l.visibility*100).toFixed(0)}%` : '?';
-
-    const ls = lms[11], rs = lms[12];           // shoulders
-    const lh = lms[23], rh = lms[24];           // hips
-    const lw = lms[15], rw = lms[16];           // wrists
-    const le = lms[13], re = lms[14];           // elbows
-    const lk = lms[25], rk = lms[26];           // knees
-    const la = lms[27], ra = lms[28];           // ankles
-
-    console.group('%cPerformer (raw MP meters)', 'color:#00ff88');
-    console.table({
-      'Shoulder width':  { value: dist(ls, rs).toFixed(3), vis: `${vis(ls)}/${vis(rs)}` },
-      'Hip width':       { value: dist(lh, rh).toFixed(3), vis: `${vis(lh)}/${vis(rh)}` },
-      'Left upper arm':  { value: dist(ls, le).toFixed(3), vis: `${vis(ls)}/${vis(le)}` },
-      'Left lower arm':  { value: dist(le, lw).toFixed(3), vis: `${vis(le)}/${vis(lw)}` },
-      'Right upper arm': { value: dist(rs, re).toFixed(3), vis: `${vis(rs)}/${vis(re)}` },
-      'Right lower arm': { value: dist(re, rw).toFixed(3), vis: `${vis(re)}/${vis(rw)}` },
-      'Left upper leg':  { value: dist(lh, lk).toFixed(3), vis: `${vis(lh)}/${vis(lk)}` },
-      'Left lower leg':  { value: dist(lk, la).toFixed(3), vis: `${vis(lk)}/${vis(la)}` },
-      'Right upper leg': { value: dist(rh, rk).toFixed(3), vis: `${vis(rh)}/${vis(rk)}` },
-      'Right lower leg': { value: dist(rk, ra).toFixed(3), vis: `${vis(rk)}/${vis(ra)}` },
+    dumpSkeleton({
+      vrm: this._vrm,
+      cal: this._calibration,
+      frame: this._latestFrame,
+      debugTargets: this.applier.debugTargets,
     });
-    const leftWristArmMax = cal.unifyArmMax
-      ? Math.max(calMe.leftArmMax, calMe.rightArmMax)
-      : calMe.rightArmMax;
-    const rightWristArmMax = cal.unifyArmMax
-      ? Math.max(calMe.leftArmMax, calMe.rightArmMax)
-      : calMe.leftArmMax;
-    console.log('Shoulder→Wrist L (max accum):', leftWristArmMax ? leftWristArmMax.toFixed(3) : 'n/a');
-    console.log('Shoulder→Wrist R (max accum):', rightWristArmMax ? rightWristArmMax.toFixed(3) : 'n/a');
-    console.groupEnd();
-
-    // ── Avatar measurements (rest-pose bone lengths) ───────────────────────
-    const boneWorld = (name: VRMHumanBoneName): THREE.Vector3 => this._getNormBoneWorldPosition(name);
-
-    const avatarShoulderW = boneWorld('leftUpperArm').distanceTo(boneWorld('rightUpperArm'));
-    const avatarHipW      = boneWorld('leftUpperLeg').distanceTo(boneWorld('rightUpperLeg'));
-    console.group('%cAvatar (rest-pose world meters)', 'color:#fbbf24');
-    console.table({
-      'Shoulder width':  { value: avatarShoulderW.toFixed(3) },
-      'Hip width':       { value: avatarHipW.toFixed(3) },
-      'L upper arm':     { value: cal.avatarLeftUpperArm.toFixed(3) },
-      'L lower arm':     { value: cal.avatarLeftLowerArm.toFixed(3) },
-      'R upper arm':     { value: cal.avatarRightUpperArm.toFixed(3) },
-      'R lower arm':     { value: cal.avatarRightLowerArm.toFixed(3) },
-      'L upper leg':     { value: cal.avatarLeftUpperLeg.toFixed(3) },
-      'L lower leg':     { value: cal.avatarLeftLowerLeg.toFixed(3) },
-      'R upper leg':     { value: cal.avatarRightUpperLeg.toFixed(3) },
-      'R lower leg':     { value: cal.avatarRightLowerLeg.toFixed(3) },
-    });
-    console.groupEnd();
-
-    // ── Calibration state ──────────────────────────────────────────────────
-    const st = cal.status();
-    console.group('%cCalibration', 'color:#c084fc');
-    console.table({
-      'Calibrated':          { value: st.calibrated },
-      'Body scale':          { value: `${(st.bodyScale*100).toFixed(1)}%` },
-      'Shoulder scale':      { value: `${(st.shoulderWidthScale*100).toFixed(1)}%` },
-      'Arm L scale':         { value: `${(st.leftArmScale*100).toFixed(1)}%` },
-      'Arm R scale':         { value: `${(st.rightArmScale*100).toFixed(1)}%` },
-      'Leg scale':           { value: `${(cal.legScale()*100).toFixed(1)}%` },
-      'Unify arm max':       { value: cal.unifyArmMax },
-      'Hip vis gate':        { value: cal.hipVisGate.toFixed(2) },
-    });
-    console.log('Readiness:', cal.readiness());
-    console.groupEnd();
-
-    // ── Ratios: avatar / performer ─────────────────────────────────────────
-    const refs = cal.refRatios();
-    console.group('%cRatios avatar/performer (all references)', 'color:#f87171');
-    console.table({
-      'Shoulder ratio': { value: refs.shoulder?.toFixed(3) ?? 'n/a' },
-      'Hip ratio':      { value: refs.hip?.toFixed(3)      ?? 'n/a' },
-      'Head ratio':     { value: refs.head?.toFixed(3)     ?? 'n/a' },
-      'Active ref':     { value: cal.scaleRef },
-      'bodyScale used': { value: (cal.bodyScale() * 100).toFixed(1) + '%' },
-    });
-    console.groupEnd();
-
-    // ── IK target vs actual bone ───────────────────────────────────────────
-    const dt = this.applier.debugTargets;
-    const actual = this.getActualBonePositions();
-    const reach  = this.getReachPercent();
-    console.group('%cIK targets & reach', 'color:#93b4ff');
-    console.table({
-      'L wrist target':  { pos: dt.leftWristTarget.toArray().map((v) => v.toFixed(3)).join(', '), reach: `${reach.armL.toFixed(0)}%` },
-      'L hand actual':   { pos: actual.leftHand.toArray().map((v) => v.toFixed(3)).join(', '), reach: '' },
-      'R wrist target':  { pos: dt.rightWristTarget.toArray().map((v) => v.toFixed(3)).join(', '), reach: `${reach.armR.toFixed(0)}%` },
-      'R hand actual':   { pos: actual.rightHand.toArray().map((v) => v.toFixed(3)).join(', '), reach: '' },
-      'L ankle target':  { pos: dt.leftAnkleTarget.toArray().map((v) => v.toFixed(3)).join(', '), reach: `${reach.legL.toFixed(0)}%` },
-      'L foot actual':   { pos: actual.leftFoot.toArray().map((v) => v.toFixed(3)).join(', '), reach: '' },
-      'R ankle target':  { pos: dt.rightAnkleTarget.toArray().map((v) => v.toFixed(3)).join(', '), reach: `${reach.legR.toFixed(0)}%` },
-      'R foot actual':   { pos: actual.rightFoot.toArray().map((v) => v.toFixed(3)).join(', '), reach: '' },
-    });
-    console.groupEnd();
-
-    console.groupEnd();
   }
 
   /** World positions of the avatar's hand / foot bones — used to compare against
    *  IK targets for fit statistics. */
-  getActualBonePositions(): {
-    leftHand: THREE.Vector3; rightHand: THREE.Vector3;
-    leftFoot: THREE.Vector3; rightFoot: THREE.Vector3;
-  } {
-    const get = (name: VRMHumanBoneName): THREE.Vector3 => this._getNormBoneWorldPosition(name);
-    return {
-      leftHand:  get(VRMHumanBoneName.LeftHand),
-      rightHand: get(VRMHumanBoneName.RightHand),
-      leftFoot:  get(VRMHumanBoneName.LeftFoot),
-      rightFoot: get(VRMHumanBoneName.RightFoot),
-    };
+  getActualBonePositions(): ReturnType<typeof getActualBonePositions> {
+    return getActualBonePositions(this._vrm);
   }
 
   /** World positions of key avatar joints for side-by-side pose diagnostics. */
-  getAvatarJointPositions(): AvatarJointPositionMap;
-  getAvatarJointPositions(kind: 'normalized' | 'raw'): AvatarJointPositionMap;
   getAvatarJointPositions(kind: 'normalized' | 'raw' = 'normalized'): AvatarJointPositionMap {
-    const get = (name: VRMHumanBoneName): THREE.Vector3 => {
-      const node = kind === 'raw'
-        ? this._vrm.humanoid.getRawBoneNode(name) ?? this._getNormalizedBoneNode(name)
-        : this._getNormalizedBoneNode(name);
-      const out  = new THREE.Vector3();
-      node?.getWorldPosition(out);
-      return out;
-    };
-    return {
-      hips:          get(VRMHumanBoneName.Hips),
-      leftUpperArm:  get(VRMHumanBoneName.LeftUpperArm),
-      leftLowerArm:  get(VRMHumanBoneName.LeftLowerArm),
-      leftHand:      get(VRMHumanBoneName.LeftHand),
-      rightUpperArm: get(VRMHumanBoneName.RightUpperArm),
-      rightLowerArm: get(VRMHumanBoneName.RightLowerArm),
-      rightHand:     get(VRMHumanBoneName.RightHand),
-      leftUpperLeg:  get(VRMHumanBoneName.LeftUpperLeg),
-      leftLowerLeg:  get(VRMHumanBoneName.LeftLowerLeg),
-      leftFoot:      get(VRMHumanBoneName.LeftFoot),
-      rightUpperLeg: get(VRMHumanBoneName.RightUpperLeg),
-      rightLowerLeg: get(VRMHumanBoneName.RightLowerLeg),
-      rightFoot:     get(VRMHumanBoneName.RightFoot),
-    };
+    return getAvatarJointPositions(this._vrm, kind);
   }
+
+  /** Multi-section BVH diagnostic text for the debug modal. */
+  getBvhDiagnosticText(): string {
+    return buildBvhDiagnosticText({
+      vrm: this._vrm,
+      state: this._state,
+      getJointOffset: (name) => this.session.getBvhJointOffset(name),
+      getApplierRestAxis: (name) => this.applier.getRestAxis(name),
+      captureCurrentPoseBvh: () => {
+        const recorder = this.session.createRecorder();
+        this.session.captureCurrentPoseFrame(recorder);
+        return recorder.stop();
+      },
+    });
+  }
+
   /** Clear calibration samples — next high-visibility frames re-calibrate. */
   recalibrate(): void {
     this._calibration.recalibrate();
@@ -743,7 +443,7 @@ export class MocapController {
    * independent of the live "recording" auto-append.
    */
   grabFrame(): void {
-    this._captureCurrentPoseFrame(this.grabRecorder);
+    this.session.captureCurrentPoseFrame(this.session.grab);
   }
 
   /**
@@ -751,9 +451,9 @@ export class MocapController {
    * Used to finalise a frame-by-frame session without needing state transitions.
    */
   flushGrabbed(): void {
-    if (this.grabRecorder.frameCount === 0) return;
-    const bvhText = this.grabRecorder.stop();
-    const name    = `mocap_${++this._recordingIndex}`;
+    if (this.session.grab.frameCount === 0) return;
+    const bvhText = this.session.grab.stop();
+    const name    = this.session.nextRecordingName();
     downloadBvh(bvhText, `${name}.bvh`);
     this.onBvhReady?.(bvhText, name, { source: 'camera' });
   }
@@ -763,64 +463,12 @@ export class MocapController {
    * live recorder buffer. Safe to call during live preview or active recording.
    */
   exportCurrentPoseBvh(): PoseBvhExport {
-    const poseRecorder = this._createRecorder();
-    this._captureCurrentPoseFrame(poseRecorder);
+    const poseRecorder = this.session.createRecorder();
+    this.session.captureCurrentPoseFrame(poseRecorder);
     const bvhText = poseRecorder.stop();
-    const name = `pose_${++this._poseExportIndex}`;
+    const name = this.session.nextPoseExportName();
     downloadBvh(bvhText, `${name}.bvh`);
     return { name, bvhText };
-  }
-
-  /**
-   * Returns a multi-section diagnostic string covering:
-   * - VRM normalized bone offsets (used as BVH OFFSET values)
-   * - Humanoid rest-axis corrections (rawAxis vs normalizedAxis per bone)
-   * - Current-pose 1-frame BVH text
-   * Intended for the debug diagnostic modal.
-   */
-  getBvhDiagnosticText(): string {
-    const lines: string[] = ['=== BVH Diagnostic ===', `Timestamp: ${new Date().toISOString()}`, ''];
-
-    // ── Joint offsets ────────────────────────────────────────────────────────
-    lines.push('--- Joint offsets (BVH HIERARCHY OFFSET, metres) ---');
-    const boneNames = Object.keys(this._vrm.humanoid.humanBones);
-    for (const name of boneNames) {
-      const offset = this._getBvhJointOffset(name);
-      if (offset) {
-        lines.push(`  ${name.padEnd(30)} [${offset.map((v) => v.toFixed(5)).join(', ')}]`);
-      } else {
-        lines.push(`  ${name.padEnd(30)} (not in humanoid)`);
-      }
-    }
-
-    // ── Applier rest axes (what the mocap pipeline actually uses) ────────────
-    lines.push('', '--- Applier restLocalAxis + per-bone BVH correction ---');
-    lines.push('  applier uses rawAxis; BVH export pre-multiplies by corrInv to produce T-pose-relative output');
-    const axes = getCachedHumanoidRestAxes(this._vrm);
-    for (const [bone, info] of axes) {
-      const corrAngleDeg = THREE.MathUtils.radToDeg(2 * Math.acos(Math.min(1, Math.abs(info.correction.w))));
-      const na = info.normalizedAxis;
-      const ra = info.rawAxis;
-      const applierAxis = this.applier.getRestAxis(bone);
-      const matchesRaw = applierAxis
-        ? Math.abs(applierAxis.dot(ra) - 1) < 0.001
-        : false;
-      lines.push(`  ${bone.padEnd(20)} restAxis=[${(applierAxis?.x ?? NaN).toFixed(4)}, ${(applierAxis?.y ?? NaN).toFixed(4)}, ${(applierAxis?.z ?? NaN).toFixed(4)}]  normAxis=[${na.x.toFixed(4)}, ${na.y.toFixed(4)}, ${na.z.toFixed(4)}]  rawAxis=[${ra.x.toFixed(4)}, ${ra.y.toFixed(4)}, ${ra.z.toFixed(4)}]  corrAngle=${corrAngleDeg.toFixed(1)}°  useRaw=${matchesRaw}`);
-    }
-
-    // ── Current pose BVH (1 frame) ───────────────────────────────────────────
-    lines.push('', `--- Current pose BVH (1 frame) [mocap state: ${this._state}] ---`);
-    lines.push('  NOTE: bone values here reflect CURRENT node.quaternion (idle anim when camera off).');
-    lines.push('  To verify BVH fix: enable camera, stand in T-pose, then re-open this modal.');
-    try {
-      const recorder = this._createRecorder();
-      this._captureCurrentPoseFrame(recorder);
-      lines.push(recorder.stop());
-    } catch (e) {
-      lines.push(`ERROR: ${(e as Error).message}`);
-    }
-
-    return lines.join('\n');
   }
 
   private _teardownFileCapture(): void {
@@ -848,9 +496,8 @@ export class MocapController {
   /** Begin recording (must be in 'live' state first). */
   startRecording(): void {
     if (this._state !== 'live') return;
-    this.liveReplayRecorder = this._createRecorder('internal-roundtrip');
-    this.liveRecorder.start();
-    this.liveReplayRecorder.start();
+    this.session.live.start();
+    this.session.startReplay();
     this._setState('recording');
   }
 
@@ -864,23 +511,9 @@ export class MocapController {
       this.stop();
       return;
     }
-    const externalFrames = this.liveRecorder.frameCount;
-    const internalFrames = this.liveReplayRecorder?.frameCount ?? externalFrames;
-    const bvhText = this.liveRecorder.stop();
-    const replayBvhText = this.liveReplayRecorder?.stop() ?? bvhText;
-    this.liveReplayRecorder = null;
-    const name    = `mocap_${++this._recordingIndex}`;
-    logRecordedAnimation({
-      name,
-      source: 'camera',
-      vrmVersion: this._vrm.meta.metaVersion,
-      externalFrames,
-      internalFrames,
-      externalText: bvhText,
-      savedText: replayBvhText,
-    });
-    downloadBvh(replayBvhText, `${name}.bvh`);
-    this.onBvhReady?.(replayBvhText, name, { source: 'camera' });
+    const { name, replayText } = this.session.finishRecording('camera');
+    downloadBvh(replayText, `${name}.bvh`);
+    this.onBvhReady?.(replayText, name, { source: 'camera' });
     this._setState('live');
   }
 
@@ -899,11 +532,10 @@ export class MocapController {
     this.applier.setHighQualityMode(true);
     this._fileCaptureActive = true;
     this._fixedFileCaptureActive = true;
-    this.liveReplayRecorder = this._createRecorder('internal-roundtrip');
 
     try {
-      this.liveRecorder.start();
-      this.liveReplayRecorder?.start();
+      this.session.live.start();
+      this.session.startReplay();
       this._setState('recording');
       const completed = await this.detector.processFileAtFixedFps(file, {
         fps: BVH_FRAME_RATE,
@@ -911,32 +543,17 @@ export class MocapController {
       });
       if (!completed || this.state !== 'recording') return;
 
-      const externalFrames = this.liveRecorder.frameCount;
-      const internalFrames = this.liveReplayRecorder?.frameCount ?? externalFrames;
-      const bvhText = this.liveRecorder.stop();
-      const replayBvhText = this.liveReplayRecorder?.stop() ?? bvhText;
-      this.liveReplayRecorder = null;
-      const name    = `mocap_${++this._recordingIndex}`;
-      logRecordedAnimation({
-        name,
-        source: 'video',
-        vrmVersion: this._vrm.meta.metaVersion,
-        externalFrames,
-        internalFrames,
-        externalText: bvhText,
-        savedText: replayBvhText,
-      });
-      downloadBvh(replayBvhText, `${name}.bvh`);
-      this.onBvhReady?.(replayBvhText, name, {
+      const { name, replayText } = this.session.finishRecording('video');
+      downloadBvh(replayText, `${name}.bvh`);
+      this.onBvhReady?.(replayText, name, {
         source: 'video',
         exportAgentOgiJson: this.exportAgentOgiJsonForVideo,
       });
       this._setState('off');
     } catch (err) {
       this.detector.stop();
-      if (this.liveRecorder.recording) this.liveRecorder.stop();
-      if (this.liveReplayRecorder?.recording) this.liveReplayRecorder.stop();
-      this.liveReplayRecorder = null;
+      if (this.session.live.recording) this.session.live.stop();
+      this.session.discardReplay();
       throw err;
     } finally {
       this._teardownFileCapture();
@@ -945,9 +562,8 @@ export class MocapController {
 
   /** Stop everything, close camera. */
   stop(): void {
-    if (this._state === 'recording' && this.liveRecorder.recording) this.liveRecorder.stop(); // discard
-    if (this.liveReplayRecorder?.recording) this.liveReplayRecorder.stop(); // discard
-    this.liveReplayRecorder = null;
+    if (this._state === 'recording' && this.session.live.recording) this.session.live.stop(); // discard
+    this.session.discardReplay();
     this._fixedFileFramePending = false;
     this.detector.stop();
     this._teardownFileCapture();
