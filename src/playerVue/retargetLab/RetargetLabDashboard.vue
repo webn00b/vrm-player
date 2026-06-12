@@ -157,5 +157,12 @@ defineEmits<RetargetLabDashboardEmits>();
   .retarget-lab {
     grid-template-columns: 1fr;
   }
+
+  /* Single-column order follows the workflow: load source, map bones, tune
+     and import. Skeleton previews are reference material and go last. */
+  .retarget-lab :deep(.lab-source)  { order: 1; }
+  .retarget-lab :deep(.lab-mapping) { order: 2; }
+  .retarget-lab :deep(.lab-target)  { order: 3; }
+  .retarget-lab :deep(.lab-preview) { order: 4; }
 }
 </style>

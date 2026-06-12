@@ -31,14 +31,15 @@ function onDrop(event: DragEvent): void {
   <button
     type="button"
     class="drop-zone"
-    :class="{ active: dragActive }"
+    :class="{ active: dragActive, compact: currentFileName }"
+    :title="currentFileName ? 'Drop or choose another .bvh / .fbx / .vrma file to replace the source' : undefined"
     @click="fileInput?.click()"
     @dragover.prevent="dragActive = true"
     @dragleave="dragActive = false"
     @drop.prevent="onDrop"
   >
     <i class="pi pi-upload" />
-    <span>{{ currentFileName ?? 'Drop or choose .bvh / .fbx / .vrma' }}</span>
+    <span>{{ currentFileName ? 'Replace source file' : 'Drop or choose .bvh / .fbx / .vrma' }}</span>
   </button>
   <input
     ref="fileInput"
@@ -69,6 +70,26 @@ function onDrop(event: DragEvent): void {
 .drop-zone.active {
   border-color: #93b4ff;
   background: rgba(59, 91, 219, 0.28);
+}
+
+/* Once a file is loaded its name lives in the context card above; the zone
+   shrinks to a slim "replace" strip instead of a 116px billboard. */
+.drop-zone.compact {
+  flex-direction: row;
+  gap: 8px;
+  min-height: 0;
+  margin-top: 10px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: rgba(220, 231, 255, 0.75);
+  background: rgba(42, 53, 80, 0.16);
+  border-color: rgba(147, 180, 255, 0.3);
+}
+
+.drop-zone.compact:hover,
+.drop-zone.compact.active {
+  color: #dce7ff;
+  border-color: #93b4ff;
 }
 
 .hidden-input {

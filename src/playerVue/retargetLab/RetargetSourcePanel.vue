@@ -41,18 +41,21 @@ const emit = defineEmits<{
 <template>
   <section class="lab-pane lab-source">
     <div class="lab-heading">
-      <h1>Retarget Lab</h1>
+      <div class="lab-heading-row">
+        <h1>Retarget Lab</h1>
+        <Button
+          class="info-btn"
+          label="Info"
+          icon="pi pi-info-circle"
+          size="small"
+          severity="secondary"
+          outlined
+          title="Show the full retarget report"
+          @click="emit('openInfo')"
+        />
+      </div>
       <p>Inspect a source animation, tune its humanoid mapping, then add the retargeted clip to the player queue.</p>
     </div>
-    <Button
-      class="info-btn"
-      label="Retarget info"
-      icon="pi pi-info-circle"
-      size="small"
-      severity="secondary"
-      outlined
-      @click="emit('openInfo')"
-    />
 
     <RetargetSourceContextCard
       v-if="currentFile"
@@ -108,8 +111,16 @@ const emit = defineEmits<{
   grid-column: 1;
 }
 
+.lab-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
 .lab-heading h1 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 16px;
   letter-spacing: 0;
 }
@@ -121,9 +132,11 @@ const emit = defineEmits<{
   color: rgba(255, 255, 255, 0.58);
 }
 
-.info-btn {
-  width: 100%;
-  margin-top: 12px;
+:deep(.info-btn.p-button) {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
 }
 
 @media (max-width: 1080px) {

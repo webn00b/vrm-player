@@ -37,10 +37,14 @@ defineProps<{
     </div>
 
     <RetargetSkeletonCompareBlock
+      v-if="activeCorrectionCount > 0"
       :original-preview="originalComparePreview"
       :corrected-preview="correctedComparePreview"
       :active-correction-count="activeCorrectionCount"
     />
+    <p v-else class="compare-hint">
+      Add a clip correction to compare the original and corrected targets here.
+    </p>
   </section>
 </template>
 
@@ -53,8 +57,19 @@ defineProps<{
   padding: 14px;
 }
 
+/* Lives in the left column under the source panel, so the skeletons stay
+   near the viewport while the (tall) mapping table is being edited. */
 .lab-preview {
-  grid-column: 1 / span 2;
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+}
+
+.compare-hint {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.42);
 }
 
 .section-title {

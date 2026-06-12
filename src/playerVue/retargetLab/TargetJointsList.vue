@@ -7,13 +7,11 @@ defineProps<{
 </script>
 
 <template>
-  <div>
-    <div class="section-title">
-      <div>
-        <h2>Current Target VRM</h2>
-        <p>{{ targetJoints.length }} humanoid bones available</p>
-      </div>
-    </div>
+  <details class="joints-fold">
+    <summary>
+      <span>Current Target VRM</span>
+      <small>{{ targetJoints.length }} humanoid bones</small>
+    </summary>
 
     <div class="target-list">
       <div v-for="joint in targetJoints" :key="joint.id">
@@ -21,36 +19,57 @@ defineProps<{
         <small>{{ joint.parentId || 'root' }}</small>
       </div>
     </div>
-  </div>
+  </details>
 </template>
 
 <style scoped>
-.section-title {
+.joints-fold {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.joints-fold > summary {
+  list-style: none;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.section-title h2 {
-  margin: 0 0 4px;
-  font-size: 16px;
-  letter-spacing: 0;
-}
-
-.section-title p {
-  margin: 0;
+  gap: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+  user-select: none;
   font-size: 12px;
-  line-height: 1.45;
-  color: rgba(255, 255, 255, 0.58);
+  font-weight: 700;
+}
+
+.joints-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.joints-fold > summary::after {
+  content: '▾';
+  font-size: 10px;
+  opacity: 0.55;
+  transform: rotate(-90deg);
+  transition: transform 160ms ease;
+}
+
+.joints-fold[open] > summary::after {
+  transform: rotate(0deg);
+}
+
+.joints-fold > summary small {
+  flex: 1;
+  text-align: right;
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.48);
 }
 
 .target-list {
-  max-height: 420px;
+  max-height: 320px;
   overflow: auto;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .target-list div {
@@ -58,8 +77,8 @@ defineProps<{
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 6px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 12px;
 }
 

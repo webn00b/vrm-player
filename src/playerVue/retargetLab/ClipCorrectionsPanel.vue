@@ -2,30 +2,20 @@
 import Button from 'primevue/button';
 import SelectButton from 'primevue/selectbutton';
 import type { QuaternionCorrection, QuaternionCorrectionMode } from '../../retargetCorrections';
-import RetargetPreviewControls from './RetargetPreviewControls.vue';
 
 defineProps<{
   correctionModeOptions: Array<{ label: string; value: QuaternionCorrectionMode }>;
   corrections: QuaternionCorrection[];
   activeCorrectionCount: number;
-  previewMode: 'original' | 'corrected' | '';
-  previewing: boolean;
-  canPreview: boolean;
-  previewName: string;
-  previewDuration: number;
 }>();
 
 const correctionMode = defineModel<QuaternionCorrectionMode>('correctionMode', { required: true });
-const previewTime = defineModel<number>('previewTime', { required: true });
 
 const emit = defineEmits<{
   addCorrection: [];
   clearCorrections: [];
   toggleCorrection: [id: string];
   removeCorrection: [id: string];
-  preview: [corrected: boolean];
-  seekPreview: [];
-  stopPreview: [];
 }>();
 </script>
 
@@ -54,18 +44,6 @@ const emit = defineEmits<{
         @click="emit('clearCorrections')"
       />
     </div>
-
-    <RetargetPreviewControls
-      v-model:preview-time="previewTime"
-      :preview-mode="previewMode"
-      :previewing="previewing"
-      :can-preview="canPreview"
-      :preview-name="previewName"
-      :preview-duration="previewDuration"
-      @preview="emit('preview', $event)"
-      @seek="emit('seekPreview')"
-      @stop="emit('stopPreview')"
-    />
 
     <div v-if="corrections.length" class="correction-list">
       <div v-for="correction in corrections" :key="correction.id" class="correction-item" :class="{ disabled: !correction.enabled }">

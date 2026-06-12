@@ -7,6 +7,7 @@ import TargetJointsList from './TargetJointsList.vue';
 import QuaternionEditorFields from './QuaternionEditorFields.vue';
 import ClipCorrectionsPanel from './ClipCorrectionsPanel.vue';
 import QuaternionPresetsPanel from './QuaternionPresetsPanel.vue';
+import RetargetPreviewControls from './RetargetPreviewControls.vue';
 import type { QuaternionEditorMode } from './retargetQuaternionTypes';
 import type { RetargetTargetPanelEmits, RetargetTargetPanelProps } from './retargetTargetPanelTypes';
 
@@ -24,7 +25,27 @@ defineEmits<RetargetTargetPanelEmits>();
 
 <template>
   <section class="lab-pane lab-target">
-    <TargetJointsList :target-joints="targetJoints" />
+    <Button
+      class="import-btn"
+      :label="importing ? 'Retargeting…' : `Add ${currentFile ? baseAnimationName(currentFile.name) : 'clip'} to queue`"
+      icon="pi pi-plus"
+      :loading="importing"
+      :disabled="!canImport"
+      :title="canImport ? 'Retarget with the current mapping and corrections, then queue the clip' : 'Load and map a source animation first'"
+      @click="$emit('importCurrent')"
+    />
+
+    <RetargetPreviewControls
+      v-model:preview-time="previewTime"
+      :preview-mode="previewMode"
+      :previewing="previewing"
+      :can-preview="canPreview"
+      :preview-name="previewName"
+      :preview-duration="previewDuration"
+      @preview="$emit('preview', $event)"
+      @seek="$emit('seekPreview')"
+      @stop="$emit('stopPreview')"
+    />
 
     <div class="quat-editor">
       <QuaternionEditorFields
@@ -50,22 +71,13 @@ defineEmits<RetargetTargetPanelEmits>();
 
       <ClipCorrectionsPanel
         v-model:correction-mode="correctionMode"
-        v-model:preview-time="previewTime"
         :correction-mode-options="correctionModeOptions"
         :corrections="corrections"
         :active-correction-count="activeCorrectionCount"
-        :preview-mode="previewMode"
-        :previewing="previewing"
-        :can-preview="canPreview"
-        :preview-name="previewName"
-        :preview-duration="previewDuration"
         @add-correction="$emit('addCorrection')"
         @clear-corrections="$emit('clearCorrections')"
         @toggle-correction="$emit('toggleCorrection', $event)"
         @remove-correction="$emit('removeCorrection', $event)"
-        @preview="$emit('preview', $event)"
-        @seek-preview="$emit('seekPreview')"
-        @stop-preview="$emit('stopPreview')"
       />
 
       <QuaternionPresetsPanel
@@ -79,14 +91,7 @@ defineEmits<RetargetTargetPanelEmits>();
       />
     </div>
 
-    <Button
-      class="import-btn"
-      :label="importing ? 'Retargeting…' : `Add ${currentFile ? baseAnimationName(currentFile.name) : 'clip'} to queue`"
-      icon="pi pi-plus"
-      :loading="importing"
-      :disabled="!canImport"
-      @click="$emit('importCurrent')"
-    />
+    <TargetJointsList class="joints-ref" :target-joints="targetJoints" />
   </section>
 </template>
 
@@ -114,6 +119,9 @@ defineEmits<RetargetTargetPanelEmits>();
 
 .import-btn {
   width: 100%;
+}
+
+.joints-ref {
   margin-top: 12px;
 }
 

@@ -86,7 +86,7 @@ withDefaults(defineProps<{
 .skeleton-svg {
   display: block;
   width: 100%;
-  height: clamp(300px, 28vw, 460px);
+  height: clamp(170px, 13vw, 230px);
   background:
     linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
@@ -129,7 +129,7 @@ withDefaults(defineProps<{
 
 @media (max-width: 1080px) {
   .skeleton-svg {
-    height: 320px;
+    height: 240px;
   }
 }
 </style>

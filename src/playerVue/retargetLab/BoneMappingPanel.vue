@@ -60,7 +60,12 @@ const emit = defineEmits<{
         <span>VRM slot</span>
         <span>Source bone</span>
       </div>
-      <div v-for="slot in visibleSlots" :key="slot.name" class="mapping-row">
+      <div
+        v-for="slot in visibleSlots"
+        :key="slot.name"
+        class="mapping-row"
+        :class="{ 'missing-required': slot.required && !mapping[slot.name] }"
+      >
         <div class="slot-label">
           <strong>{{ slot.label }}</strong>
           <span :class="{ missing: slot.required && !mapping[slot.name] }">
@@ -93,7 +98,7 @@ const emit = defineEmits<{
 
 .lab-mapping {
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 1 / span 2;
 }
 
 .section-title {
@@ -157,7 +162,7 @@ const emit = defineEmits<{
   grid-template-columns: minmax(150px, 0.9fr) minmax(180px, 1.1fr);
   gap: 10px;
   align-items: center;
-  padding: 8px 10px;
+  padding: 5px 10px;
 }
 
 .mapping-head {
@@ -170,6 +175,17 @@ const emit = defineEmits<{
 
 .mapping-row {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 2px solid transparent;
+  transition: background 100ms;
+}
+
+.mapping-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mapping-row.missing-required {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
 }
 
 .slot-label strong {
@@ -194,7 +210,7 @@ select {
   border-radius: 6px;
   background: #0d0d0f;
   color: #e6e6e6;
-  padding: 7px 8px;
+  padding: 5px 8px;
   font-size: 12px;
 }
 
