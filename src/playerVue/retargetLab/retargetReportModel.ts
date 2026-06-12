@@ -2,7 +2,7 @@ import type { VRMHumanBoneName } from '@pixiv/three-vrm';
 import type { ManualFbxBoneMapping } from '../../animationLoaders/fbxBoneMapping';
 import type { QuaternionCorrection } from '../../retargetCorrections';
 import type { RetargetLabAnalysis, SkeletonJointMeta } from '../../retargetLabModel';
-import { isFingerSlot } from './retargetMappingModel';
+import { isFingerSlot, type RetargetSlot } from './retargetMappingModel';
 import type { QuaternionPreset } from './retargetPresetStore';
 
 export interface SummaryRow {
@@ -19,11 +19,7 @@ export interface MappingReportRow {
   kind: 'Body' | 'Finger';
 }
 
-export interface RetargetSlot {
-  name: VRMHumanBoneName;
-  label: string;
-  required: boolean;
-}
+export type { RetargetSlot } from './retargetMappingModel';
 
 export interface QuaternionEditorReportState {
   selectedBone: VRMHumanBoneName;
