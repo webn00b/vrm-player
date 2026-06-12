@@ -169,8 +169,11 @@ export function solveArmTarget(input: ArmTargetSolverInput): ArmTargetSolverResu
   if (hasBothHandsDetected && otherWrist) {
     const wristDx = perfWrist.x - otherWrist.x;
     const wristDy = perfWrist.y - otherWrist.y;
-    const wristDz = perfWrist.z - otherWrist.z;
-    const wristGap = Math.hypot(wristDx, wristDy, wristDz);
+    // Gap is measured in the IMAGE PLANE (xy) only: wrist depth is the
+    // noisiest signal in the chain, and its error routinely squashes a
+    // 25 cm horizontal spread into a near-touch 3D distance — gluing freely
+    // gesturing hands. xy separation is detection-accurate.
+    const wristGap = Math.hypot(wristDx, wristDy);
 
     if (shoulderSpan > 1e-4) {
       handsTogetherBlend = computeHandsTogetherBlend(shoulderSpan, wristGap, perfWrist.y - otherWrist.y);
