@@ -5,6 +5,8 @@ import { BvhRecorder, BVH_FRAME_RATE } from '../bvh/bvhRecorder';
 import { getJointOffset, type BvhRecorderCompatibility } from '../bvh/bvhRecorderFactory';
 import { getCachedHumanoidRestAxes } from '../../humanoidRestPose';
 import { captureSnapshot, type PoseSnapshot } from '../bvh/bvhRoundtripVerifier';
+import { computeBvhQuality, formatBvhQualitySummary } from '../bvh/bvhQualityMetrics';
+import { smoothRecordedFrames } from '../bvh/bvhRotationSmoother';
 
 function textHash(text: string): string {
   let h = 2166136261;
@@ -178,6 +180,17 @@ export class MocapBvhSession {
   get verifyCapturing(): boolean { return this._verifySnapshots !== null; }
   get verifyCapturedCount(): number { return this._verifySnapshots?.length ?? 0; }
 
+  /**
+   * Quaternion-space smoothing over the captured frame buffers (live +
+   * replay). Used by the two-pass file pipeline AFTER the last frame and
+   * BEFORE finishRecording. Not used on verify paths — the round-trip
+   * verifier expects the BVH to match its captured snapshots exactly.
+   */
+  smoothRecordedRotations(): void {
+    this.live.applyFrameTransform(smoothRecordedFrames);
+    this.replay?.applyFrameTransform(smoothRecordedFrames);
+  }
+
   nextRecordingName(): string { return `mocap_${++this._recordingIndex}`; }
   nextPoseExportName(): string { return `pose_${++this._poseExportIndex}`; }
 
@@ -203,6 +216,15 @@ export class MocapBvhSession {
       externalHash: textHash(externalText),
       savedEqualsExternal: replayText === externalText,
     });
+    const quality = computeBvhQuality(externalText);
+    if (quality) console.info(`[animation:quality] ${formatBvhQualitySummary(quality)}`);
+    // Diagnostic handle for headless tools: the DOWNLOADED file is the
+    // internal-roundtrip variant (VRM0 x/z pre-flip, cancelled by OUR loader
+    // on import). External tools — including the GT benchmark's stock
+    // BVHLoader — must read the plain-coordinate external text instead.
+    if (typeof window !== 'undefined') {
+      (window as unknown as Record<string, unknown>).__mocapLastExternalBvh = externalText;
+    }
     return { name, externalText, replayText };
   }
 }

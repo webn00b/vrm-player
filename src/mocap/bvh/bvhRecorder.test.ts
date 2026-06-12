@@ -17,7 +17,7 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { BVHLoader } from 'three/examples/jsm/loaders/BVHLoader.js';
-import { BvhRecorder, BVH_JOINTS, BVH_FRAME_TIME, downloadBvh } from './bvhRecorder';
+import { BvhRecorder, BVH_JOINTS, BVH_FRAME_TIME, downloadBvh, unwrapEulerZYX } from './bvhRecorder';
 import { createBvhRecorderForVrm, getJointOffset } from './bvhRecorderFactory';
 import { buildMockVRM } from '../../../tests/fixtures/mockVrm';
 
@@ -290,6 +290,63 @@ test('BVH_JOINTS: contains all major humanoid bones', () => {
   ]) {
     assert.ok(names.includes(required), `BVH_JOINTS missing required bone: ${required}`);
   }
+});
+
+// ── Euler unwrap ────────────────────────────────────────────────────────
+
+test('unwrapEulerZYX: preserves the rotation (dual representation is exact)', () => {
+  // The flipped candidate (z+π, π−y, x+π) must encode the same rotation.
+  const prev: [number, number, number] = [3.0, 0.4, 2.9];
+  const curr: [number, number, number] = [-3.1, 0.5, -3.0];
+  const unwrapped = unwrapEulerZYX(curr, prev);
+  const qa = new THREE.Quaternion().setFromEuler(new THREE.Euler(curr[2], curr[1], curr[0], 'ZYX'));
+  const qb = new THREE.Quaternion().setFromEuler(new THREE.Euler(unwrapped[2], unwrapped[1], unwrapped[0], 'ZYX'));
+  const dot = Math.abs(qa.dot(qb));
+  const errDeg = THREE.MathUtils.radToDeg(2 * Math.acos(Math.min(1, dot)));
+  assert.ok(errDeg < 1e-6, `unwrapped Euler must encode same rotation; error ${errDeg}°`);
+});
+
+test('unwrapEulerZYX: ±180° sign flip stays continuous', () => {
+  const prev: [number, number, number] = [THREE.MathUtils.degToRad(179), 0.1, 0.2];
+  const curr: [number, number, number] = [THREE.MathUtils.degToRad(-179), 0.1, 0.2];
+  const unwrapped = unwrapEulerZYX(curr, prev);
+  // -179° should become 181° (close to 179°), not jump by 358°.
+  const jumpDeg = Math.abs(THREE.MathUtils.radToDeg(unwrapped[0] - prev[0]));
+  assert.ok(jumpDeg < 5, `expected continuous curve; got ${jumpDeg}° jump`);
+});
+
+test('export: Euler curves have no ±180° frame-to-frame jumps', () => {
+  // Sweep chest rotation through the 180° boundary around Y.
+  const r = new BvhRecorder();
+  r.start();
+  for (let deg = 150; deg <= 210; deg += 10) {
+    const q = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(deg));
+    r.captureFrame((name) => name === 'chest' ? [q.x, q.y, q.z, q.w] : IDENT);
+  }
+  const text = r.stop();
+
+  const motion = text.slice(text.indexOf('Frame Time:'));
+  const rows = motion.split('\n').slice(1).filter((l) => l.trim().length)
+    .map((l) => l.split(/\s+/).map(Number));
+  for (let i = 1; i < rows.length; i++) {
+    for (let c = 3; c < rows[i].length; c++) {
+      const d = Math.abs(rows[i][c] - rows[i - 1][c]);
+      assert.ok(d < 90, `channel ${c} jumps ${d.toFixed(1)}° between frames ${i - 1}→${i}`);
+    }
+  }
+
+  // And it still parses back to the right rotations.
+  const loader = new BVHLoader();
+  const parsed = loader.parse(text);
+  const track = parsed.clip.tracks.find((t: any) => t.name === 'chest.quaternion')!;
+  const v = track.values;
+  const last = new THREE.Quaternion(v[v.length - 4], v[v.length - 3], v[v.length - 2], v[v.length - 1]);
+  const expected = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(210));
+  const dot = Math.abs(last.dot(expected));
+  const errDeg = THREE.MathUtils.radToDeg(2 * Math.acos(Math.min(1, dot)));
+  assert.ok(errDeg < 0.5, `last frame should still be 210° about Y; error ${errDeg.toFixed(3)}°`);
 });
 
 test('BVH_FRAME_TIME: ~30 fps (1/30 s)', () => {

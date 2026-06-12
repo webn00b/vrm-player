@@ -77,7 +77,7 @@ const FRAME_TIME = 1 / FRAME_RATE;
 export const BVH_FRAME_RATE = FRAME_RATE;
 export const BVH_FRAME_TIME = FRAME_TIME;
 
-interface Frame {
+export interface RecordedFrame {
   time:    number;
   bones:   Record<string, [number, number, number, number]>; // quat [x,y,z,w]
   hipsPos?: [number, number, number];
@@ -127,7 +127,7 @@ interface BvhRecorderOptions {
  * and index/middle/ring/little (proximal → intermediate → distal).
  */
 export class BvhRecorder {
-  private frames:    Frame[] = [];
+  private frames:    RecordedFrame[] = [];
   private startTime  = 0;
   private _recording = false;
   private _lastFrameTime = -1;
@@ -195,6 +195,15 @@ export class BvhRecorder {
     this.frames.push({ time, bones, hipsPos: getHipsPosition?.() ?? undefined });
   }
 
+  /**
+   * Run an in-place transform over the recorded frame buffer (e.g. the
+   * quaternion-space smoothing pass in bvhRotationSmoother). Call between the
+   * last captured frame and stop().
+   */
+  applyFrameTransform(transform: (frames: RecordedFrame[]) => void): void {
+    transform(this.frames);
+  }
+
   /** Stop and return the BVH text. */
   stop(): string {
     this._recording = false;
@@ -212,7 +221,10 @@ export class BvhRecorder {
     lines.push('', 'MOTION');
     lines.push(`Frames: ${this.frames.length}`);
     lines.push(`Frame Time: ${FRAME_TIME.toFixed(6)}`);
-    for (const f of this.frames) lines.push(this._frameRow(f));
+    // Per-joint previous Euler triple, used to keep angle curves continuous
+    // across frames (see unwrapEulerZYX).
+    const prevEuler = new Map<string, [number, number, number]>();
+    for (const f of this.frames) lines.push(this._frameRow(f, prevEuler));
     return lines.join('\n');
   }
 
@@ -248,7 +260,7 @@ export class BvhRecorder {
     lines.push(`${indent}}`);
   }
 
-  private _frameRow(frame: Frame): string {
+  private _frameRow(frame: RecordedFrame, prevEuler?: Map<string, [number, number, number]>): string {
     const parts: number[] = [];
 
     // Root position. For VRM 0.x sources, negate x and z so the on-load flip
@@ -273,8 +285,17 @@ export class BvhRecorder {
       if (this._flipForVrm0) {
         q = [-q[0], q[1], -q[2], q[3]];
       }
-      const [rz, ry, rx] = quatToZYX(q);
-      parts.push(rz * RAD2DEG, ry * RAD2DEG, rx * RAD2DEG);
+      let euler = quatToZYX(q);
+      // Keep each joint's Euler curve continuous across frames. Without this,
+      // setFromQuaternion clamps angles to (-180°, 180°] and frame-to-frame
+      // sign jumps (e.g. 179° → -179°) make DCC tools interpolate the long way
+      // round, producing visible "spin" glitches on import.
+      if (prevEuler) {
+        const prev = prevEuler.get(j.name);
+        if (prev) euler = unwrapEulerZYX(euler, prev);
+        prevEuler.set(j.name, euler);
+      }
+      parts.push(euler[0] * RAD2DEG, euler[1] * RAD2DEG, euler[2] * RAD2DEG);
     }
 
     return parts.map((v) => v.toFixed(4)).join(' ');
@@ -292,6 +313,47 @@ function quatToZYX(arr: [number, number, number, number]): [number, number, numb
   _q.fromArray(arr);
   _e.setFromQuaternion(_q, 'ZYX');
   return [_e.z, _e.y, _e.x];
+}
+
+const TWO_PI = Math.PI * 2;
+
+/** Shift `angle` by multiples of 2π so it lands nearest to `ref`. */
+function nearestAngle(angle: number, ref: number): number {
+  return angle + TWO_PI * Math.round((ref - angle) / TWO_PI);
+}
+
+/**
+ * Pick the Euler representation of the current rotation closest to the
+ * previous frame's angles. Every Tait-Bryan rotation has two representations:
+ * (z, y, x) and (z+π, π−y, x+π). Both are tried, each component is shifted by
+ * multiples of 2π toward `prev`, and the candidate with the smallest total
+ * angular distance wins. Output may exceed ±180° — valid BVH, and parsers
+ * convert through radians where the extra turns are harmless.
+ */
+export function unwrapEulerZYX(
+  curr: [number, number, number],
+  prev: [number, number, number],
+): [number, number, number] {
+  const candidates: [number, number, number][] = [
+    curr,
+    [curr[0] + Math.PI, Math.PI - curr[1], curr[2] + Math.PI],
+  ];
+  let best = curr;
+  let bestDist = Infinity;
+  for (const c of candidates) {
+    const adj: [number, number, number] = [
+      nearestAngle(c[0], prev[0]),
+      nearestAngle(c[1], prev[1]),
+      nearestAngle(c[2], prev[2]),
+    ];
+    const dist =
+      Math.abs(adj[0] - prev[0]) + Math.abs(adj[1] - prev[1]) + Math.abs(adj[2] - prev[2]);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = adj;
+    }
+  }
+  return best;
 }
 
 /** Returns q × corrInv (post-multiply) as a plain array. */
