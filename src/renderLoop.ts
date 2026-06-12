@@ -4,10 +4,6 @@ import type { createScene } from './scene';
 import type { loadVRM } from './vrmLoader';
 import type { PlaybackSystems, MocapSystems, ToolingSystems } from './playerSystems';
 import type { MocapState } from './mocap/pipeline/mocapController';
-import {
-  MOCAP_VALIDATION_EXCLUDED_BONES,
-  CLIP_VALIDATION_EXCLUDED_BONES,
-} from './mocap/diagnostics/mocapValidationBones';
 import { renderLoopHooks } from './renderLoopHooks';
 import {
   validationSettings,
@@ -32,7 +28,8 @@ type DebugVizCache = {
 
 export interface ValidationClampPlan {
   shouldClamp: boolean;
-  excludedBones?: ReadonlySet<VRMHumanBoneName>;
+  /** Soft mode: corrections blend in/out over time instead of snapping. */
+  soft: boolean;
 }
 
 export function selectValidationClampPlan(params: {
@@ -41,29 +38,18 @@ export function selectValidationClampPlan(params: {
   validatorEnabled: boolean;
   settings: ValidationSettings;
 }): ValidationClampPlan {
-  if (!params.validatorEnabled) return { shouldClamp: false };
+  if (!params.validatorEnabled) return { shouldClamp: false, soft: false };
 
-  if (params.hasBvhActive) {
-    if (params.settings.playbackClampMode === 'off') return { shouldClamp: false };
-    return {
-      shouldClamp: true,
-      excludedBones: params.settings.playbackClampMode === 'safe'
-        ? CLIP_VALIDATION_EXCLUDED_BONES
-        : undefined,
-    };
-  }
-
-  if (params.mocapState !== 'off') {
-    if (params.settings.recordingClampMode === 'off') return { shouldClamp: false };
-    return {
-      shouldClamp: true,
-      excludedBones: params.settings.recordingClampMode === 'safe'
-        ? MOCAP_VALIDATION_EXCLUDED_BONES
-        : undefined,
-    };
-  }
-
-  return { shouldClamp: true };
+  // Live capture follows the recording mode; BVH playback and the procedural
+  // idle/manual layers follow the playback mode. All bones are clamped in
+  // both soft and hard modes: soft clamping settles exactly on the ROM bound,
+  // so a clip recorded through the clamp plays back to the same pose without
+  // needing per-source exclusion masks.
+  const mode = params.mocapState !== 'off' && !params.hasBvhActive
+    ? params.settings.recordingClampMode
+    : params.settings.playbackClampMode;
+  if (mode === 'off') return { shouldClamp: false, soft: false };
+  return { shouldClamp: true, soft: mode === 'safe' };
 }
 
 export function startRenderLoop(
@@ -133,10 +119,9 @@ export function startRenderLoop(
 
     // 3d. Clamp the final authored pose (BVH / idle / mocap / manual offsets)
     // before debug capture and before micro-animations add their small deltas.
-    // Use the same exclusion mask whenever a mocap source OR a BVH clip is
-    // active — this guarantees record and playback see identical clamp logic
-    // on arms/legs/hands/fingers, so a self-recorded clip plays back to the
-    // same on-screen pose it was captured from.
+    // Recording captures the post-clamp pose, so the BVH file matches what
+    // the user saw; playback re-clamps to the same bounds, which is a no-op
+    // for self-recorded clips and a guardrail for imported ones.
     if (!renderLoopHooks.suspendValidatorClamp) {
       const clampPlan = selectValidationClampPlan({
         hasBvhActive,
@@ -145,8 +130,8 @@ export function startRenderLoop(
         settings: validationSettings,
       });
       if (clampPlan.shouldClamp) {
-        validator.clampAll(clampPlan.excludedBones);
-        poseValidator.validateAndClamp(clampPlan.excludedBones);
+        validator.clampAll(undefined, { soft: clampPlan.soft, deltaSeconds: delta });
+        poseValidator.validateAndClamp();
       }
     }
 

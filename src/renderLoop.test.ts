@@ -1,100 +1,77 @@
 import { describe, expect, test, vi } from 'vitest';
-import { VRMHumanBoneName } from '@pixiv/three-vrm';
 import { selectValidationClampPlan, startRenderLoop } from './renderLoop';
-import {
-  CLIP_VALIDATION_EXCLUDED_BONES,
-  MOCAP_VALIDATION_EXCLUDED_BONES,
-} from './mocap/diagnostics/mocapValidationBones';
 import { DEFAULT_VALIDATION_SETTINGS } from './validation/validationSettings';
 
 describe('selectValidationClampPlan', () => {
-  test('keeps current live mocap exclusions for safe recording validation', () => {
+  test('safe recording mode clamps all bones softly during live mocap', () => {
     expect(selectValidationClampPlan({
       hasBvhActive: false,
       mocapState: 'live',
       validatorEnabled: true,
       settings: DEFAULT_VALIDATION_SETTINGS,
-    })).toEqual({
-      shouldClamp: true,
-      excludedBones: MOCAP_VALIDATION_EXCLUDED_BONES,
-    });
+    })).toEqual({ shouldClamp: true, soft: true });
   });
 
-  test('does not exclude live mocap limbs for full recording validation', () => {
+  test('full recording mode clamps hard during capture', () => {
     expect(selectValidationClampPlan({
       hasBvhActive: false,
       mocapState: 'recording',
       validatorEnabled: true,
-      settings: {
-        ...DEFAULT_VALIDATION_SETTINGS,
-        recordingClampMode: 'full',
-      },
-    })).toEqual({
-      shouldClamp: true,
-      excludedBones: undefined,
-    });
+      settings: { ...DEFAULT_VALIDATION_SETTINGS, recordingClampMode: 'full' },
+    })).toEqual({ shouldClamp: true, soft: false });
   });
 
-  test('can disable recording validation while leaving runtime validation enabled elsewhere', () => {
+  test('recording validation can be disabled independently', () => {
     expect(selectValidationClampPlan({
       hasBvhActive: false,
       mocapState: 'recording',
       validatorEnabled: true,
-      settings: {
-        ...DEFAULT_VALIDATION_SETTINGS,
-        recordingClampMode: 'off',
-      },
-    })).toEqual({
-      shouldClamp: false,
-      excludedBones: undefined,
-    });
+      settings: { ...DEFAULT_VALIDATION_SETTINGS, recordingClampMode: 'off' },
+    })).toEqual({ shouldClamp: false, soft: false });
   });
 
-  test('preserves clip playback exclusions for safe playback validation', () => {
-    const plan = selectValidationClampPlan({
+  test('active BVH playback follows the playback mode even while mocap is live', () => {
+    expect(selectValidationClampPlan({
       hasBvhActive: true,
       mocapState: 'live',
-      validatorEnabled: true,
-      settings: DEFAULT_VALIDATION_SETTINGS,
-    });
-
-    expect(plan.shouldClamp).toBe(true);
-    expect(plan.excludedBones).toBe(CLIP_VALIDATION_EXCLUDED_BONES);
-    expect(plan.excludedBones?.has(VRMHumanBoneName.Hips)).toBe(true);
-  });
-
-  test('can fully clamp or disable playback validation', () => {
-    expect(selectValidationClampPlan({
-      hasBvhActive: true,
-      mocapState: 'off',
       validatorEnabled: true,
       settings: {
         ...DEFAULT_VALIDATION_SETTINGS,
         playbackClampMode: 'full',
+        recordingClampMode: 'off',
       },
-    })).toEqual({
-      shouldClamp: true,
-      excludedBones: undefined,
-    });
+    })).toEqual({ shouldClamp: true, soft: false });
+  });
 
+  test('playback validation supports soft, hard, and off', () => {
+    const base = { hasBvhActive: true, mocapState: 'off' as const, validatorEnabled: true };
+    expect(selectValidationClampPlan({
+      ...base,
+      settings: { ...DEFAULT_VALIDATION_SETTINGS, playbackClampMode: 'safe' },
+    })).toEqual({ shouldClamp: true, soft: true });
+    expect(selectValidationClampPlan({
+      ...base,
+      settings: { ...DEFAULT_VALIDATION_SETTINGS, playbackClampMode: 'full' },
+    })).toEqual({ shouldClamp: true, soft: false });
+    expect(selectValidationClampPlan({
+      ...base,
+      settings: { ...DEFAULT_VALIDATION_SETTINGS, playbackClampMode: 'off' },
+    })).toEqual({ shouldClamp: false, soft: false });
+  });
+
+  test('disabled validator short-circuits the plan', () => {
     expect(selectValidationClampPlan({
       hasBvhActive: true,
-      mocapState: 'off',
-      validatorEnabled: true,
-      settings: {
-        ...DEFAULT_VALIDATION_SETTINGS,
-        playbackClampMode: 'off',
-      },
-    })).toEqual({
-      shouldClamp: false,
-      excludedBones: undefined,
-    });
+      mocapState: 'recording',
+      validatorEnabled: false,
+      settings: DEFAULT_VALIDATION_SETTINGS,
+    })).toEqual({ shouldClamp: false, soft: false });
   });
 });
 
 test('render loop captures the red skeleton pose before validation clamps the frame', () => {
   const order: string[] = [];
-  const poseClampMasks: Array<ReadonlySet<VRMHumanBoneName> | undefined> = [];
+  const clampArgs: unknown[][] = [];
   vi.stubGlobal('requestAnimationFrame', vi.fn(() => 7));
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
 
@@ -137,13 +114,15 @@ test('render loop captures the red skeleton pose before validation clamps the fr
       },
       validator: {
         enabled: true,
-        clampAll: () => order.push('validator.clampAll'),
+        clampAll: (...args: unknown[]) => {
+          order.push('validator.clampAll');
+          clampArgs.push(args);
+        },
       },
       poseValidator: {
         enabled: true,
-        validateAndClamp: (excludedBones?: ReadonlySet<VRMHumanBoneName>) => {
+        validateAndClamp: () => {
           order.push('poseValidator.validateAndClamp');
-          poseClampMasks.push(excludedBones);
         },
       },
       bonePanel: { apply: () => order.push('bonePanel.apply') },
@@ -162,12 +141,13 @@ test('render loop captures the red skeleton pose before validation clamps the fr
   expect(order.indexOf('boneDrag.apply')).toBeLessThan(order.indexOf('skelViz.captureUnclampedPose'));
   expect(order.indexOf('skelViz.captureUnclampedPose')).toBeLessThan(order.indexOf('validator.clampAll'));
   expect(order.indexOf('validator.clampAll')).toBeLessThan(order.indexOf('poseValidator.validateAndClamp'));
-  expect(poseClampMasks).toEqual([CLIP_VALIDATION_EXCLUDED_BONES]);
+  // Default playback mode is 'safe' → soft clamp of all bones, no mask.
+  expect(clampArgs).toEqual([[undefined, { soft: true, deltaSeconds: 1 / 60 }]]);
 });
 
-test('render loop passes mocap recording exclusions to pose validation', () => {
-  const boneClampMasks: Array<ReadonlySet<VRMHumanBoneName> | undefined> = [];
-  const poseClampMasks: Array<ReadonlySet<VRMHumanBoneName> | undefined> = [];
+test('render loop soft-clamps all bones while recording mocap', () => {
+  const boneClampArgs: unknown[][] = [];
+  const poseClampArgs: unknown[][] = [];
   vi.stubGlobal('requestAnimationFrame', vi.fn(() => 7));
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
 
@@ -210,14 +190,14 @@ test('render loop passes mocap recording exclusions to pose validation', () => {
       },
       validator: {
         enabled: true,
-        clampAll: (excludedBones?: ReadonlySet<VRMHumanBoneName>) => {
-          boneClampMasks.push(excludedBones);
+        clampAll: (...args: unknown[]) => {
+          boneClampArgs.push(args);
         },
       },
       poseValidator: {
         enabled: true,
-        validateAndClamp: (excludedBones?: ReadonlySet<VRMHumanBoneName>) => {
-          poseClampMasks.push(excludedBones);
+        validateAndClamp: (...args: unknown[]) => {
+          poseClampArgs.push(args);
         },
       },
       bonePanel: { apply: () => undefined },
@@ -232,6 +212,6 @@ test('render loop passes mocap recording exclusions to pose validation', () => {
 
   cleanup();
 
-  expect(boneClampMasks).toEqual([MOCAP_VALIDATION_EXCLUDED_BONES]);
-  expect(poseClampMasks).toEqual([MOCAP_VALIDATION_EXCLUDED_BONES]);
+  expect(boneClampArgs).toEqual([[undefined, { soft: true, deltaSeconds: 1 / 60 }]]);
+  expect(poseClampArgs).toEqual([[]]);
 });

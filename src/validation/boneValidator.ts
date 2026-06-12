@@ -45,10 +45,30 @@ export interface ValidationArmPostureStats {
   right: ArmPostureStats;
 }
 
+export interface ClampAllOptions {
+  /**
+   * Soft mode: the clamp target is still the hard ROM bound, but the
+   * correction blends in/out over time (attack/release envelope) instead of
+   * snapping. Steady-state output sits exactly on the bound, so re-clamping
+   * a recorded clip on playback is a no-op (idempotent round-trip).
+   */
+  soft?: boolean;
+  /** Frame delta in seconds — drives the soft envelope. Defaults to 1/60. */
+  deltaSeconds?: number;
+}
+
+// Soft-clamp envelope time constants (seconds). Attack is fast so impossible
+// poses never linger; release is slower so corrections fade out gently.
+const SOFT_ATTACK_TAU = 0.06;
+const SOFT_RELEASE_TAU = 0.18;
+const SOFT_STRENGTH_EPSILON = 1e-3;
+
 // Reusable scratch — the validator is called every frame on every bone, so we
 // avoid allocating Euler / Quaternion objects per call.
 const _euler = new THREE.Euler();
 const _quat = new THREE.Quaternion();
+const _rawQuat = new THREE.Quaternion();
+const _clampedQuat = new THREE.Quaternion();
 const _hipsPos = new THREE.Vector3();
 const _neckPos = new THREE.Vector3();
 const _leftShoulderPos = new THREE.Vector3();
@@ -90,6 +110,8 @@ export class BoneValidator {
   private overrides?: Partial<Record<VRMHumanBoneName, RotationConstraint>>;
   private nodeCache = new Map<VRMHumanBoneName, THREE.Object3D>();
   private stats: ValidationStats = makeInitialStats();
+  /** Per-bone soft-clamp correction strength, 0..1. */
+  private softStrength = new Map<VRMHumanBoneName, number>();
 
   enabled = true;
   profileId: BoneConstraintProfileId = 'default';
@@ -151,7 +173,7 @@ export class BoneValidator {
   }
 
   /** Apply clampQuaternion to every known bone. Called once per frame. */
-  clampAll(excludedBones?: ReadonlySet<VRMHumanBoneName>): ValidationStats {
+  clampAll(excludedBones?: ReadonlySet<VRMHumanBoneName>, opts?: ClampAllOptions): ValidationStats {
     if (!this.enabled) {
       this.stats.clampedThisFrame = 0;
       this.stats.worstBone = null;
@@ -159,16 +181,38 @@ export class BoneValidator {
       return this.stats;
     }
 
+    const soft = opts?.soft === true;
+    const dt = Math.max(1e-4, opts?.deltaSeconds ?? 1 / 60);
+    const attack = 1 - Math.exp(-dt / SOFT_ATTACK_TAU);
+    const release = 1 - Math.exp(-dt / SOFT_RELEASE_TAU);
+
     let clamped = 0;
     let worstBone: VRMHumanBoneName | null = null;
     let worstDelta = 0;
 
     for (const [bone, node] of this.nodeCache) {
       if (excludedBones?.has(bone)) continue;
+      if (soft) _rawQuat.copy(node.quaternion);
       const overshoot = this.clampQuaternion(bone, node.quaternion);
       if (overshoot > 0) {
         clamped++;
         if (overshoot > worstDelta) { worstDelta = overshoot; worstBone = bone; }
+      }
+      if (soft) {
+        const prev = this.softStrength.get(bone) ?? 0;
+        const target = overshoot > 0 ? 1 : 0;
+        const strength = prev + (target - prev) * (target > prev ? attack : release);
+        if (strength > SOFT_STRENGTH_EPSILON) {
+          this.softStrength.set(bone, strength);
+          // node.quaternion currently holds the hard-clamped target; blend
+          // back toward the raw input by the inverse of the envelope.
+          if (overshoot > 0 && strength < 1 - SOFT_STRENGTH_EPSILON) {
+            _clampedQuat.copy(node.quaternion);
+            node.quaternion.copy(_rawQuat).slerp(_clampedQuat, strength);
+          }
+        } else {
+          this.softStrength.delete(bone);
+        }
       }
     }
 

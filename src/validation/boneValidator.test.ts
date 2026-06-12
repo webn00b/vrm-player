@@ -30,14 +30,83 @@ describe('BoneValidator constraint profiles', () => {
     expect(THREE.MathUtils.radToDeg(clampedEuler.y)).toBeCloseTo(6, 4);
   });
 
-  test('Mixamo Live profile clamps excessive upper-arm axial twist', () => {
+  test('soft clamp blends the correction in over time and settles on the bound', () => {
     const vrm = buildMockVRM();
     const validator = new BoneValidator(vrm);
-    const upperArm = vrm.bones.get('leftUpperArm');
-    expect(upperArm).toBeTruthy();
+    const elbow = vrm.bones.get('leftLowerArm');
+    expect(elbow).toBeTruthy();
 
+    // Backward elbow bend 40° — hard bound is +10° (default profile).
+    const raw = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+      0, THREE.MathUtils.degToRad(40), 0, 'YZX',
+    ));
+    const dt = 1 / 60;
+
+    elbow!.quaternion.copy(raw);
+    validator.clampAll(undefined, { soft: true, deltaSeconds: dt });
+    const firstDrift = THREE.MathUtils.radToDeg(raw.angleTo(elbow!.quaternion));
+    expect(firstDrift).toBeGreaterThan(0);
+    expect(firstDrift).toBeLessThan(15); // partial correction, no snap
+
+    // Keep feeding the same violating pose: correction must converge to the
+    // hard bound within ~0.5 s.
+    for (let i = 0; i < 30; i++) {
+      elbow!.quaternion.copy(raw);
+      validator.clampAll(undefined, { soft: true, deltaSeconds: dt });
+    }
+    const settled = new THREE.Euler().setFromQuaternion(elbow!.quaternion, 'YZX');
+    expect(THREE.MathUtils.radToDeg(settled.y)).toBeCloseTo(10, 0);
+  });
+
+  test('soft clamp is a no-op for poses already inside the bounds', () => {
+    const vrm = buildMockVRM();
+    const validator = new BoneValidator(vrm);
+    const elbow = vrm.bones.get('leftLowerArm');
+    const raw = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+      0, THREE.MathUtils.degToRad(-90), 0, 'YZX', // normal forward flexion
+    ));
+    elbow!.quaternion.copy(raw);
+
+    validator.clampAll(undefined, { soft: true, deltaSeconds: 1 / 60 });
+
+    expect(THREE.MathUtils.radToDeg(raw.angleTo(elbow!.quaternion))).toBeLessThan(1e-4);
+  });
+
+  test('soft clamp round-trip: a pose recorded at the bound replays untouched', () => {
+    const vrm = buildMockVRM();
+    const validator = new BoneValidator(vrm);
+    const elbow = vrm.bones.get('leftLowerArm');
+    const raw = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+      0, THREE.MathUtils.degToRad(40), 0, 'YZX',
+    ));
+
+    // "Recording": converge onto the bound.
+    let recorded = new THREE.Quaternion();
+    for (let i = 0; i < 60; i++) {
+      elbow!.quaternion.copy(raw);
+      validator.clampAll(undefined, { soft: true, deltaSeconds: 1 / 60 });
+    }
+    recorded = elbow!.quaternion.clone();
+
+    // "Playback" through a fresh validator: the recorded pose sits exactly on
+    // the bound, so re-clamping must not move it.
+    const playbackValidator = new BoneValidator(vrm);
+    elbow!.quaternion.copy(recorded);
+    playbackValidator.clampAll(undefined, { soft: true, deltaSeconds: 1 / 60 });
+
+    expect(THREE.MathUtils.radToDeg(recorded.angleTo(elbow!.quaternion))).toBeLessThan(0.1);
+  });
+
+  test('Mixamo Live profile clamps excessive clavicle swing', () => {
+    const vrm = buildMockVRM();
+    const validator = new BoneValidator(vrm);
+    const shoulder = vrm.bones.get('leftShoulder');
+    expect(shoulder).toBeTruthy();
+
+    // Upper-arm Y/Z are near-unconstrained in the data-driven profile (dance
+    // content sweeps full circles), so the clavicle carries the swing bound.
     validator.setProfile('mixamoLive');
-    upperArm!.quaternion.setFromEuler(new THREE.Euler(
+    shoulder!.quaternion.setFromEuler(new THREE.Euler(
       0,
       THREE.MathUtils.degToRad(80),
       0,
@@ -45,10 +114,10 @@ describe('BoneValidator constraint profiles', () => {
     ));
 
     const stats = validator.clampAll();
-    const clampedEuler = new THREE.Euler().setFromQuaternion(upperArm!.quaternion, 'YXZ');
+    const clampedEuler = new THREE.Euler().setFromQuaternion(shoulder!.quaternion, 'YXZ');
 
-    expect(stats.worstBone).toBe(VRMHumanBoneName.LeftUpperArm);
-    expect(THREE.MathUtils.radToDeg(clampedEuler.y)).toBeLessThanOrEqual(65.01);
+    expect(stats.worstBone).toBe(VRMHumanBoneName.LeftShoulder);
+    expect(THREE.MathUtils.radToDeg(clampedEuler.y)).toBeLessThanOrEqual(55.01);
   });
 
   test('reports world-space arm direction after local ROM clamp', () => {

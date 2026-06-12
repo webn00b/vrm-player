@@ -78,20 +78,20 @@ function dumpValidationState(): void {
       </select>
     </label>
 
-    <label class="validation-field">
+    <label class="validation-field" title="Soft blends corrections in smoothly; Hard snaps to the bound instantly">
       <span>Playback</span>
       <select :value="validationSettings.playbackClampMode" @change="setPlaybackMode">
-        <option value="safe">Safe</option>
-        <option value="full">Full</option>
+        <option value="safe">Soft</option>
+        <option value="full">Hard</option>
         <option value="off">Off</option>
       </select>
     </label>
 
-    <label class="validation-field">
+    <label class="validation-field" title="Soft blends corrections in smoothly; Hard snaps to the bound instantly">
       <span>Recording</span>
       <select :value="validationSettings.recordingClampMode" @change="setRecordingMode">
-        <option value="safe">Safe</option>
-        <option value="full">Full</option>
+        <option value="safe">Soft</option>
+        <option value="full">Hard</option>
         <option value="off">Off</option>
       </select>
     </label>
