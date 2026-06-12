@@ -87,7 +87,9 @@ run('ffmpeg', [
   '-ss', String(opts.offset), '-i', video,
   '-i', avatarWebm,
   '-filter_complex',
-  '[0:v]scale=480:-2,fps=30[a];[1:v]scale=480:-2,fps=30[b];[a][b]hstack=inputs=2[v]',
+  // Scale by HEIGHT: hstack needs equal heights and source aspect varies
+  // (portrait phone videos vs the 16:9 avatar render).
+  '[0:v]scale=-2:480,fps=30[a];[1:v]scale=-2:480,fps=30[b];[a][b]hstack=inputs=2[v]',
   '-map', '[v]', '-t', String(avatarDur),
   '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
   compareMp4,
