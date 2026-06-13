@@ -36,7 +36,7 @@ export type JointSmoothingProfile = (jointName: string) => JointSmoothingParams 
  */
 export const DEFAULT_JOINT_SMOOTHING_PROFILE: JointSmoothingProfile = (name) => {
   if (name === 'leftHand' || name === 'rightHand') return { iterations: 3, alpha: 0.6 };
-  if (/Thumb|Index|Middle|Ring|Little/.test(name)) return { iterations: 2, alpha: 0.5 };
+  if (/Thumb|Index|Middle|Ring|Little/.test(name)) return { iterations: 3, alpha: 0.5 };
   return { iterations: 1, alpha: 0.3 };
 };
 
@@ -67,12 +67,35 @@ export function smoothRecordedFrames(
   smoothHipsPosition(frames, HIPS_POSITION_PARAMS);
 }
 
+// Isolated-flip threshold: a frame this far (deg) from BOTH neighbours while
+// the neighbours agree is a detection glitch (e.g. wrist/finger 112° pop), not
+// motion — replace it with the neighbour midpoint. Laplacian only blurs such
+// spikes; this removes them.
+const FLIP_REJECT_DEG = 45;
+
+function angleDeg(a: THREE.Quaternion, b: THREE.Quaternion): number {
+  return 2 * Math.acos(Math.min(1, Math.abs(a.dot(b)))) * 180 / Math.PI;
+}
+
 function smoothJoint(frames: RecordedFrame[], name: string, params: JointSmoothingParams): void {
   const n = frames.length;
   // Double-buffer per iteration so each pass reads consistent neighbours.
   let curr: [number, number, number, number][] = frames.map(
     (f) => f.bones[name] ?? [0, 0, 0, 1],
   );
+
+  // Outlier rejection first: kill isolated flips before the laplacian.
+  for (let i = 1; i < n - 1; i++) {
+    _qa.fromArray(curr[i - 1]);
+    _qb.fromArray(curr[i]);
+    _qc.fromArray(curr[i + 1]);
+    if (angleDeg(_qb, _qa) > FLIP_REJECT_DEG &&
+        angleDeg(_qb, _qc) > FLIP_REJECT_DEG &&
+        angleDeg(_qa, _qc) < FLIP_REJECT_DEG) {
+      _qa.slerp(_qc, 0.5);
+      curr[i] = [_qa.x, _qa.y, _qa.z, _qa.w];
+    }
+  }
 
   for (let it = 0; it < params.iterations; it++) {
     const next = curr.slice();

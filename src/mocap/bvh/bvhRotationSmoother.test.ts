@@ -124,3 +124,20 @@ test('profile returning null leaves a joint untouched', () => {
   const head = computeBvhQuality(text)!.perJoint.find((q) => q.name === 'head')!;
   assert.ok(head.roughnessDeg > 8, `null profile must skip smoothing; got ${head.roughnessDeg}`);
 });
+
+test('isolated flip is rejected, real fast motion preserved', () => {
+  const r = new BvhRecorder();
+  r.start();
+  // 12 frames: chest sweeps smoothly; frame 6 has an isolated 90° flip spike.
+  for (let i = 0; i < 12; i++) {
+    let deg = i * 4;
+    if (i === 6) deg = 94; // spike far from neighbours (20, 28)
+    const q = quatArr(deg);
+    r.captureFrame((name) => name === 'leftHand' ? [q[0], q[1], q[2], q[3]] : IDENT);
+  }
+  r.applyFrameTransform((fs) => smoothRecordedFrames(fs));
+  const text = r.stop();
+  const report = computeBvhQuality(text)!;
+  const hand = report.perJoint.find((q) => q.name === 'leftHand')!;
+  assert.ok(hand.maxRoughnessDeg < 20, `isolated flip removed; maxRough ${hand.maxRoughnessDeg.toFixed(1)}`);
+});
