@@ -7,6 +7,7 @@ import { clipToAgentOgiJson, downloadAgentOgiJson } from '../../animationToJsonC
 import { MocapDebugRecorder } from '../../mocap/diagnostics/mocapDebugRecorder';
 import { MocapDebugViz } from '../../mocap/diagnostics/mocapDebugViz';
 import { MocapController } from '../../mocap/pipeline/mocapController';
+import { FaceTrackPlayer } from '../../mocap/bvh/faceTrack';
 import type { MocapSystems } from '../../playerSystems';
 import { retargetBvhToVrm } from '../../retarget';
 import { notify, setStatus } from '../../ui';
@@ -41,6 +42,7 @@ export const mocapModule: PlayerModule = {
 
     const videoEl = document.getElementById('mocap-video') as HTMLVideoElement;
     const mocap = new MocapController(vrm, videoEl);
+    const faceTrackPlayer = new FaceTrackPlayer(vrm);
     mocap.onBvhReady = async (bvhText, name, options) => {
       try {
         const bvh = parseBVH(bvhText);
@@ -62,6 +64,9 @@ export const mocapModule: PlayerModule = {
           new File([bvhText], `${name}.bvh`, { type: 'text/plain' }),
         );
         controller.jumpTo(queuePos, { immediate: true });
+        // Drive recorded face expressions during this replay (in-memory track
+        // from the capture that just finished).
+        faceTrackPlayer.setTrack(mocap.getLastFaceTrack());
         setStatus(`▶ replaying ${name}`);
         notify({ severity: 'success', summary: 'Mocap BVH ready', detail: name });
       } catch (e) {
@@ -71,7 +76,7 @@ export const mocapModule: PlayerModule = {
       }
     };
 
-    const mocapSys: MocapSystems = { mocap, debugViz, dbgRecorder };
+    const mocapSys: MocapSystems = { mocap, debugViz, dbgRecorder, faceTrackPlayer };
     ctx.mocap = mocapSys;
 
     return () => {

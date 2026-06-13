@@ -5,6 +5,7 @@ import type { IdleLoop } from './idleLoop';
 import type { MocapController } from './mocap/pipeline/mocapController';
 import type { MocapDebugViz } from './mocap/diagnostics/mocapDebugViz';
 import type { MocapDebugRecorder } from './mocap/diagnostics/mocapDebugRecorder';
+import type { FaceTrackPlayer } from './mocap/bvh/faceTrack';
 import type { SkeletonVisualizer } from './skeletonVisualizer';
 import type { BoneValidator } from './validation/boneValidator';
 import type { PoseValidator } from './validation/poseValidator';
@@ -26,6 +27,7 @@ export interface MocapSystems {
   mocap: MocapController;
   debugViz: MocapDebugViz;
   dbgRecorder: MocapDebugRecorder;
+  faceTrackPlayer: FaceTrackPlayer;
 }
 
 export interface ToolingSystems {

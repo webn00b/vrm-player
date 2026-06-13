@@ -60,7 +60,7 @@ export function startRenderLoop(
   tooling: ToolingSystems,
 ): CleanupFn {
   const { controller, pa, micro, idle } = playback;
-  const { mocap, debugViz: mocapDebugViz, dbgRecorder } = mocapSys;
+  const { mocap, debugViz: mocapDebugViz, dbgRecorder, faceTrackPlayer } = mocapSys;
   const { skelViz, validator, poseValidator, bonePanel, boneDrag, hipForce, hipBalance } = tooling;
 
   let stopped = false;
@@ -93,6 +93,13 @@ export function startRenderLoop(
     //    conflict with BVH).
     if (!overlaysSuspended && !hasBvhActive) {
       mocap.applyLatestFrame();
+    }
+
+    // 3a. Face expressions from the recorded sidecar during BVH playback —
+    // blendshapes don't conflict with the mixer's bone tracks. Driven by the
+    // clip's current time so blink/mouth stay in sync with the body.
+    if (hasBvhActive && controller && faceTrackPlayer.hasTrack) {
+      faceTrackPlayer.applyAt(controller.currentTime);
     }
 
     // 3b. Manual bone pose offsets (post-multiplied on top of mocap/animation).

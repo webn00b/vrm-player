@@ -12,6 +12,7 @@ import {
   faceTrackHasMotion,
   serializeFaceTrack,
   type FaceExpressionFrame,
+  type FaceTrack,
 } from '../bvh/faceTrack';
 import { downloadBvh, BVH_FRAME_RATE } from '../bvh/bvhRecorder';
 import { smoothMocapFrames } from './offlineLandmarkSmoother';
@@ -201,14 +202,20 @@ export class MocapController {
     if (this.faceApplier.enabled) this._faceTrack.push(this.faceApplier.currentExpressions());
   }
 
+  /** The just-recorded face track, or null when empty / no expression motion.
+   *  Consumed by the player to drive expressions during BVH replay. */
+  getLastFaceTrack(): FaceTrack | null {
+    const track = { fps: BVH_FRAME_RATE, frames: this._faceTrack };
+    return this._faceTrack.length && faceTrackHasMotion(track) ? track : null;
+  }
+
   /** Publish the captured face track as a sidecar handle (null when empty /
    *  no expression motion). Headless tools read window.__mocapLastFaceTrack. */
   private _publishFaceTrack(): void {
-    const track = { fps: BVH_FRAME_RATE, frames: this._faceTrack };
-    const json = this._faceTrack.length && faceTrackHasMotion(track)
-      ? serializeFaceTrack(track) : null;
+    const track = this.getLastFaceTrack();
     if (typeof window !== 'undefined') {
-      (window as unknown as Record<string, unknown>).__mocapLastFaceTrack = json;
+      (window as unknown as Record<string, unknown>).__mocapLastFaceTrack =
+        track ? serializeFaceTrack(track) : null;
     }
   }
 

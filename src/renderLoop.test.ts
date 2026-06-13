@@ -126,6 +126,7 @@ test('render loop captures the red skeleton pose before validation clamps the fr
       },
       debugViz: { visible: false },
       dbgRecorder: { active: false },
+      faceTrackPlayer: { hasTrack: false, applyAt() {} },
     } as never,
     {
       skelViz: {
@@ -203,6 +204,7 @@ test('render loop soft-clamps all bones while recording mocap', () => {
       },
       debugViz: { visible: false },
       dbgRecorder: { active: false },
+      faceTrackPlayer: { hasTrack: false, applyAt() {} },
     } as never,
     {
       skelViz: {
