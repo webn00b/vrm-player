@@ -25,7 +25,8 @@
     "bvh:quality": "node tools/bvh-quality.mjs",
     "bvh:benchmark": "node tools/bvh-vs-gt.mjs",
     "video:compare": "node tools/compare-video-bvh.mjs",
-    "match:score": "node tools/match-score.mjs"
+    "match:score": "node tools/match-score.mjs",
+    "anatomy:check": "node tools/anatomy-check.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.34",
