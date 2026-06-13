@@ -177,6 +177,11 @@ export class DirectPoseApplier {
     this.settings.setTrustedInputMode(enabled);
   }
 
+  /** Honest torso depth — gate on a successful 3D lift, see settings. */
+  setTorsoDepthTrusted(enabled: boolean): void {
+    this.settings.setTorsoDepthTrusted(enabled);
+  }
+
   /** When enabled, wrist + fingers from hand tracking are treated as a top layer. */
   setHandTrackingPriorityEnabled(v: boolean): void { this.settings.handTrackingPriorityEnabled = v; }
   get handTrackingPriorityEnabled(): boolean { return this.settings.handTrackingPriorityEnabled; }

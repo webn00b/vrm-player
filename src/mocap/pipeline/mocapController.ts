@@ -281,19 +281,26 @@ export class MocapController {
 
     // Temporal 3D lifting: replace MediaPipe's per-frame depth-guessed world
     // landmarks with MotionBERT's trajectory-lifted 3D before smoothing.
+    let lifted = false;
     if (this._liftingEnabled && trusted) {
       this._fileProgress = { phase: 'lift', frameIndex: 0, totalFrames: collected.frames.length };
       if (await this._lifter.init()) {
-        await this._lifter.liftSequence(collected.frames, collected.aspect);
+        lifted = await this._lifter.liftSequence(collected.frames, collected.aspect);
       }
       if (this._state !== 'recording') return false;
     }
+    // Honest torso depth is earned by a successful lift, not by coverage: a
+    // full-body clip whose lift was disabled or failed still carries noisy raw
+    // MediaPipe z, and trusting it over-rotates the torso. Keep it damped unless
+    // the lifter actually replaced the depth signal.
+    this.applier.setTorsoDepthTrusted(lifted);
 
-    // Torso depth de-bias (trusted only): the lifter places shoulders a
+    // Torso depth de-bias (lifted only): the lifter places shoulders a
     // constant ~12 deg behind the hips even for a straight performer, tipping
     // the avatar backward with the arms trailing. Centre the sequence on its
-    // median torso lean. Needs reliable hips, so guarded/half-body skips it.
-    if (trusted) {
+    // median torso lean. This bias is a lifter artefact — on un-lifted raw z the
+    // median lean is the performer's real posture, so only de-bias when lifted.
+    if (lifted) {
       const biasRad = debiasTorsoLean(collected.frames);
       if (biasRad !== 0) {
         console.info(`[mocap:two-pass] torso de-bias ${(biasRad * 180 / Math.PI).toFixed(1)}deg`);

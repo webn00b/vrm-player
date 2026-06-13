@@ -137,14 +137,25 @@ export class DirectPoseSettings {
    */
   setTrustedInputMode(enabled: boolean): void {
     this.trustInputGeometry = enabled;
-    // Damped torso Z keeps a noisy-depth body upright; honest Z lets the
-    // torso lean properly when depth is trustworthy.
-    this.torsoDepthDamping = enabled ? 1 : 3;
+    // Honest torso Z is EARNED by a successful 3D lift, not by body coverage:
+    // raw MediaPipe world z is depth-guessed and noisy even at full coverage,
+    // and trusting it (damping 1) over-rotates the torso ("perekrut"). Default
+    // to damped here; setTorsoDepthTrusted(true) relaxes it once the lifter ran.
+    this.torsoDepthDamping = 3;
     this.hipHeightFromLegs = enabled;
     // Vertical hip translation needs reliable hip/leg geometry. Half-body
     // (untrusted) footage has the hip landmark at the frame edge with garbage
     // Y, drifting the avatar ~0.7 m — hold rest height there.
     this.hipVerticalTracking = enabled;
+  }
+
+  /**
+   * Relax torso-depth damping to honest (1) only when the world landmarks carry
+   * a reliable depth signal — i.e. the MotionBERT lift actually ran. Without it
+   * the torso basis stays on damped raw MediaPipe z (3). Call AFTER the lift.
+   */
+  setTorsoDepthTrusted(enabled: boolean): void {
+    this.torsoDepthDamping = enabled ? 1 : 3;
   }
 
   isVisible(lm?: { visibility?: number }): boolean {
