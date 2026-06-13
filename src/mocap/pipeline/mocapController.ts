@@ -11,6 +11,7 @@ import { FaceApplier } from '../retargeters/faceApplier';
 import { downloadBvh, BVH_FRAME_RATE } from '../bvh/bvhRecorder';
 import { smoothMocapFrames } from './offlineLandmarkSmoother';
 import { debiasTorsoLean } from './torsoDebias';
+import { autoTrimRange } from './autoTrim';
 import { MotionBertLifter, readLiftingEnabled } from './poseLifter';
 import { FULL_BODY_COVERAGE_MIN, fullBodyCoverage } from './bodyCoverage';
 import { MocapCalibration, type CalibrationStatus } from '../trackers/mocapCalibration';
@@ -110,6 +111,8 @@ export class MocapController {
   // measured no 2D improvement on AIST (10 px either way) while doubling
   // pass-A time. Kept as an experimental toggle for extreme cases.
   private _cropRedetectEnabled = readCropRedetectEnabled();
+  // Trim idle/empty head and tail of the captured clip. See autoTrim.
+  private _autoTrimEnabled = readStorageToggle('vrm-player.mocap.autoTrim');
 
   // Latest detected frame — applied each render tick via applyLatestFrame()
   // so mocap overlays on top of the BVH mixer output rather than fighting it.
@@ -275,7 +278,18 @@ export class MocapController {
     };
 
     this._fileProgress = { phase: 'smooth', frameIndex: 0, totalFrames: collected.frames.length };
-    const frames = smoothMocapFrames(collected.frames, { fps: BVH_FRAME_RATE });
+    const smoothed = smoothMocapFrames(collected.frames, { fps: BVH_FRAME_RATE });
+
+    // Auto-trim idle/empty head and tail (performer not yet in frame, settling
+    // into rest, holding still at the end). Only the static bookends go.
+    let frames = smoothed;
+    if (this._autoTrimEnabled) {
+      const range = autoTrimRange(smoothed);
+      if (range.start > 0 || range.end < smoothed.length) {
+        console.info(`[mocap:two-pass] auto-trim ${smoothed.length} → frames [${range.start},${range.end})`);
+        frames = smoothed.slice(range.start, range.end);
+      }
+    }
     console.info('[mocap:two-pass] pass B: replaying smoothed frames');
 
     for (let i = 0; i < frames.length; i++) {
