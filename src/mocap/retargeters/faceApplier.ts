@@ -44,7 +44,9 @@ function earValue(lms: Landmark3D[], idx: readonly [number, number, number, numb
  */
 export class FaceApplier {
   private vrm: VRM;
-  private _enabled = true;
+  // Off by default — face tracking is opt-in via the 😀 toggle in the mocap
+  // params. Blink/mouth from MediaPipe is noisy and not always wanted.
+  private _enabled = false;
   private _alpha   = 0.35; // EMA smoothing for expressions
 
   private _blinkL = 0; // smoothed blink value for avatar LEFT eye
@@ -56,7 +58,10 @@ export class FaceApplier {
   }
 
   get enabled(): boolean { return this._enabled; }
-  setEnabled(v: boolean): void { this._enabled = v; }
+  setEnabled(v: boolean): void {
+    this._enabled = v;
+    if (!v) this.reset(); // clear expressions so they don't freeze at last value
+  }
 
   /** Current smoothed expression values — captured per frame for the face
    *  sidecar track so recordings can replay expressions, not just bones. */
