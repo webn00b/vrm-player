@@ -10,6 +10,7 @@ import { DirectPoseApplier } from '../retargeters/directPoseApplier';
 import { FaceApplier } from '../retargeters/faceApplier';
 import { downloadBvh, BVH_FRAME_RATE } from '../bvh/bvhRecorder';
 import { smoothMocapFrames } from './offlineLandmarkSmoother';
+import { debiasTorsoLean } from './torsoDebias';
 import { MotionBertLifter, readLiftingEnabled } from './poseLifter';
 import { FULL_BODY_COVERAGE_MIN, fullBodyCoverage } from './bodyCoverage';
 import { MocapCalibration, type CalibrationStatus } from '../trackers/mocapCalibration';
@@ -245,6 +246,17 @@ export class MocapController {
         await this._lifter.liftSequence(collected.frames, collected.aspect);
       }
       if (this._state !== 'recording') return false;
+    }
+
+    // Torso depth de-bias (trusted only): the lifter places shoulders a
+    // constant ~12 deg behind the hips even for a straight performer, tipping
+    // the avatar backward with the arms trailing. Centre the sequence on its
+    // median torso lean. Needs reliable hips, so guarded/half-body skips it.
+    if (trusted) {
+      const biasRad = debiasTorsoLean(collected.frames);
+      if (biasRad !== 0) {
+        console.info(`[mocap:two-pass] torso de-bias ${(biasRad * 180 / Math.PI).toFixed(1)}deg`);
+      }
     }
 
     // Diagnostic dump for the offline tools (landmarks-vs-gt, visibility
