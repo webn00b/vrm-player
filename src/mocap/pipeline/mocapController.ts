@@ -16,7 +16,7 @@ import {
 } from '../bvh/faceTrack';
 import { downloadBvh, BVH_FRAME_RATE } from '../bvh/bvhRecorder';
 import { smoothMocapFrames } from './offlineLandmarkSmoother';
-import { debiasTorsoLean } from './torsoDebias';
+import { debiasTorsoLean, debiasLegLean } from './torsoDebias';
 import { autoTrimRange } from './autoTrim';
 import { MotionBertLifter, readLiftingEnabled } from './poseLifter';
 import { FULL_BODY_COVERAGE_MIN, fullBodyCoverage } from './bodyCoverage';
@@ -304,6 +304,12 @@ export class MocapController {
       const biasRad = debiasTorsoLean(collected.frames);
       if (biasRad !== 0) {
         console.info(`[mocap:two-pass] torso de-bias ${(biasRad * 180 / Math.PI).toFixed(1)}deg`);
+      }
+      // Same lifter artefact for the legs: ankles sit a constant distance behind
+      // the hips, swinging the legs back once the torso is straightened.
+      const legBiasRad = debiasLegLean(collected.frames);
+      if (legBiasRad !== 0) {
+        console.info(`[mocap:two-pass] leg de-bias ${(legBiasRad * 180 / Math.PI).toFixed(1)}deg`);
       }
     }
 
