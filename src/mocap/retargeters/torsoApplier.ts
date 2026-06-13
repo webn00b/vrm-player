@@ -60,6 +60,12 @@ export class TorsoApplier {
   // Previous frame's applied torso yaw (radians). Feeds the spine solver's
   // rate limiter so a single bad-depth frame can't teleport the torso 180°.
   private _torsoTwistYaw: number | null = null;
+  // Hips-yaw guard (P7): previous applied yaw (rate limit) + the neutral-facing
+  // baseline (amplitude clamp). A depth-noise basis flip can otherwise spin the
+  // pelvis ~115° for a fraction of a second; these bound the speed and, on
+  // untrusted footage, the magnitude.
+  private _hipsYaw:         number | null = null;
+  private _hipsYawBaseline: number | null = null;
   private _headYawBaseline:   number | null = null;
   private _headPitchBaseline: number | null = null;
   private _headRollBaseline:  number | null = null;
@@ -72,6 +78,7 @@ export class TorsoApplier {
   private _q1 = new THREE.Quaternion();
   private _q2 = new THREE.Quaternion();
   private _qFade = new THREE.Quaternion();
+  private _eHips = new THREE.Euler(0, 0, 0, 'YXZ');
 
   constructor(rig: DirectPoseRig) {
     this.rig = rig;
@@ -89,6 +96,8 @@ export class TorsoApplier {
     this._hipPerfBaseline = null;
     this._torsoForwardBaseline = null;
     this._torsoTwistYaw = null;
+    this._hipsYaw = null;
+    this._hipsYawBaseline = null;
     this._headYawBaseline = null;
     this._headPitchBaseline = null;
     this._headRollBaseline = null;
@@ -224,6 +233,29 @@ export class TorsoApplier {
       torsoDepthDamping: settings.torsoDepthDamping,
     });
     if (!hipsTarget) return;
+
+    // P7 — tame hips-yaw flips. The hips basis Z-forward axis (hipAxis×spineDir)
+    // flips sign under noisy raw depth, spinning the pelvis. Decompose to YXZ
+    // (same order the solver used to strip roll), then on the YAW component:
+    //   • amplitude-clamp relative to the neutral facing baseline — on untrusted
+    //     footage the hips are barely visible so a large turn is almost surely a
+    //     flip artefact; trusted/lifted keeps a wide range for real turns.
+    //   • rate-limit per frame — a genuine pelvis turn is gradual; a 20°/frame
+    //     jump is a depth flip.
+    this._eHips.setFromQuaternion(hipsTarget, 'YXZ');
+    let yaw = this._eHips.y;
+    if (this._hipsYawBaseline == null) this._hipsYawBaseline = yaw;
+    const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+    const maxYaw = THREE.MathUtils.degToRad(settings.hipsYawMaxDeg);
+    yaw = this._hipsYawBaseline +
+      THREE.MathUtils.clamp(wrap(yaw - this._hipsYawBaseline), -maxYaw, maxYaw);
+    if (this._hipsYaw != null) {
+      const maxStep = THREE.MathUtils.degToRad(settings.hipsYawMaxStepDeg);
+      yaw = this._hipsYaw + THREE.MathUtils.clamp(wrap(yaw - this._hipsYaw), -maxStep, maxStep);
+    }
+    this._hipsYaw = yaw;
+    this._eHips.y = yaw;
+    hipsTarget.setFromEuler(this._eHips);
 
     if (settings.spineLerp >= 1) hipsNode.quaternion.copy(hipsTarget);
     else                         hipsNode.quaternion.slerp(hipsTarget, settings.spineLerp);

@@ -93,6 +93,14 @@ export class DirectPoseSettings {
    *  of two depth-noise terms (a few degrees of jitter). Suppress it; real twists
    *  past 2× this keep full amplitude. 0 disables. */
   torsoTwistDeadbandDeg = 4;
+  /** Max per-frame change of the HIPS yaw (pelvis facing). A real turn is
+   *  gradual; a >this jump is a depth-noise basis flip. */
+  hipsYawMaxStepDeg = 9;
+  /** Amplitude cap on the HIPS yaw relative to the neutral facing baseline.
+   *  Widened by setTrustedInputMode: trusted/lifted footage allows real turns,
+   *  untrusted (unreliable hip depth) clamps tight — a large turn there is a
+   *  flip artefact, not a real pelvis rotation. */
+  hipsYawMaxDeg = 35;
 
   // Foot locking: freezes the ankle IK target when the performer stands still,
   // removing the foot-sliding artefact caused by MediaPipe landmark jitter.
@@ -147,6 +155,10 @@ export class DirectPoseSettings {
     // (untrusted) footage has the hip landmark at the frame edge with garbage
     // Y, drifting the avatar ~0.7 m — hold rest height there.
     this.hipVerticalTracking = enabled;
+    // Pelvis facing: trusted/lifted footage can show real turns (allow a wide
+    // yaw range, leaving the rate limiter as the only guard); untrusted footage
+    // has unreliable hip depth, so a large hips yaw is a flip artefact — clamp.
+    this.hipsYawMaxDeg = enabled ? 150 : 35;
   }
 
   /**
