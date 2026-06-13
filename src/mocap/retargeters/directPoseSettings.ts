@@ -44,6 +44,11 @@ export class DirectPoseSettings {
    *  Only sane with REAL ankle landmarks — enabled via setTrustedInputMode. */
   hipHeightFromLegs = false;
 
+  /** Track the hips' vertical (Y) position from the landmarks. Off for
+   *  half-body / untrusted footage where the hip landmark sits at the frame
+   *  edge and its Y jitters wildly; the avatar holds its rest height. */
+  hipVerticalTracking = false;
+
   // Depth (Z) is MediaPipe's least reliable axis. For narrow joints like
   // elbows this jitter is visible — we attenuate it further inside arm IK.
   // Legs' Z is less problematic (big, well-separated joints) so we leave it.
@@ -124,6 +129,10 @@ export class DirectPoseSettings {
     // torso lean properly when depth is trustworthy.
     this.torsoDepthDamping = enabled ? 1 : 3;
     this.hipHeightFromLegs = enabled;
+    // Vertical hip translation needs reliable hip/leg geometry. Half-body
+    // (untrusted) footage has the hip landmark at the frame edge with garbage
+    // Y, drifting the avatar ~0.7 m — hold rest height there.
+    this.hipVerticalTracking = enabled;
   }
 
   isVisible(lm?: { visibility?: number }): boolean {

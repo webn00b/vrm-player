@@ -46,6 +46,10 @@ export class TorsoApplier {
   // Avatar rest ankle height (world Y) — reference floor for the
   // legs-derived absolute hip height. NaN until captured.
   private _groundWorldY = Number.NaN;
+  // Avatar rest hips LOCAL y — held as the vertical position when vertical
+  // hip tracking is disabled (half-body / untrusted: the hip landmark sits
+  // at the frame edge and its Y is garbage, drifting the avatar 0.7 m).
+  private _hipRestLocalY = 0;
   // Smoothed hip-above-ankle height + standing latch. Raw per-frame height
   // jitters (the lowest-ankle max flips between legs, ankle depth wobbles)
   // and feeds straight into knee bend — visible as the avatar "breathing"
@@ -92,6 +96,7 @@ export class TorsoApplier {
     // Make sure the whole VRM world matrix chain is fresh before reading
     this.rig.vrm.scene.updateMatrixWorld(true);
     hipsNode.getWorldQuaternion(this._hipsBaseWorld);
+    this._hipRestLocalY = hipsNode.position.y;
 
     // Rest ankle height — floor reference for the legs-derived hip height.
     const pos = new THREE.Vector3();
@@ -308,6 +313,9 @@ export class TorsoApplier {
         scale,
         absoluteHeight,
       });
+
+      // Untrusted footage: hold rest height, the landmark Y is unusable.
+      if (!settings.hipVerticalTracking) positionTarget.y = this._hipRestLocalY;
 
       if (settings.hipPositionLerp >= 1) hipsNode.position.copy(positionTarget);
       else                               hipsNode.position.lerp(positionTarget, settings.hipPositionLerp);
