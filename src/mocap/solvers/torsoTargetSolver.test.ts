@@ -122,6 +122,10 @@ test('spine: T-pose with all four landmarks → returns finite halfTwist', () =>
     lateralBendScale:           0.35,
     lateralBendScaleMax:        0.7,
     spineNodeCount:             2,
+    torsoTwistMaxDeg:           60,
+    torsoTwistMaxStepDeg:       18,
+    torsoTwistDeadbandDeg:      0,
+    prevTwistYaw:               null,
   });
   assert.ok(result, 'should produce a spine result for valid input');
   // halfTwist is a quaternion.
@@ -145,6 +149,10 @@ test('spine: hips=null (upper body only) → still produces a result via shoulde
     lateralBendScale:           0.35,
     lateralBendScaleMax:        0.7,
     spineNodeCount:             2,
+    torsoTwistMaxDeg:           60,
+    torsoTwistMaxStepDeg:       18,
+    torsoTwistDeadbandDeg:      0,
+    prevTwistYaw:               null,
   });
   assert.ok(result, 'should fall through to shoulder-rest reference');
 });
@@ -164,13 +172,126 @@ test('spine: baseline is captured then re-used (consistent twist across frames)'
     lateralBendScale:           0.35,
     lateralBendScaleMax:        0.7,
     spineNodeCount:             2,
+    torsoTwistMaxDeg:           60,
+    torsoTwistMaxStepDeg:       18,
+    torsoTwistDeadbandDeg:      0,
+    prevTwistYaw:               null as number | null,
   };
   const first = solveSpineTarget(input);
   assert.ok(first);
   // Feed the captured baseline back in — same pose should yield the same twist.
   input.torsoForwardBaseline = first!.nextForwardBaseline;
+  input.prevTwistYaw = first!.nextTwistYaw;
   const second = solveSpineTarget(input);
   assert.ok(second);
   // Quaternions should match (same pose → same twist).
   assert.ok(Math.abs(first!.halfTwist.dot(second!.halfTwist)) > 0.999);
+});
+
+// ── P1 (clamp + rate-limit) and P3 (anti-parallel) ───────────────────────────
+
+test('spine: hard cap bounds the yaw on an extreme shoulder/hip divergence', () => {
+  // Shoulders rotated ~135° in azimuth vs hips (deep depth disagreement).
+  // Raw atan2 yaw would exceed the 60° cap; result must be bounded.
+  const result = solveSpineTarget({
+    mirrorX: false,
+    // shoulders mostly along ±Z (turned to profile), hips along ±X (frontal)
+    leftShoulder:  { x: -0.05, y: 0.2, z: -0.2 },
+    rightShoulder: { x:  0.05, y: 0.2, z:  0.2 },
+    leftHip:       { x: -0.1,  y: 0.9, z: 0 },
+    rightHip:      { x:  0.1,  y: 0.9, z: 0 },
+    hipsWorldQuaternion:        IDENT.clone(),
+    avatarShoulderRestLocal:    new THREE.Vector3(1, 0, 0),
+    torsoAxisMaxDivergenceDeg:  20,
+    torsoForwardBaseline:       0,
+    forwardBendScale:           0,
+    lateralBendScale:           0,
+    lateralBendScaleMax:        0,
+    spineNodeCount:             2,
+    torsoTwistMaxDeg:           60,
+    torsoTwistMaxStepDeg:       180, // disable rate limit for this test
+    torsoTwistDeadbandDeg:      0,
+    prevTwistYaw:               null,
+  });
+  assert.ok(result);
+  // nextTwistYaw must respect the hard cap.
+  assert.ok(
+    Math.abs(result!.nextTwistYaw) <= THREE.MathUtils.degToRad(60) + 1e-6,
+    `yaw ${result!.nextTwistYaw} exceeds 60° cap`,
+  );
+});
+
+test('spine: rate limiter blocks a single-frame yaw teleport', () => {
+  const base = {
+    mirrorX: false,
+    leftShoulder:  { x: -0.05, y: 0.2, z: -0.2 },
+    rightShoulder: { x:  0.05, y: 0.2, z:  0.2 },
+    leftHip:       { x: -0.1,  y: 0.9, z: 0 },
+    rightHip:      { x:  0.1,  y: 0.9, z: 0 },
+    hipsWorldQuaternion:        IDENT.clone(),
+    avatarShoulderRestLocal:    new THREE.Vector3(1, 0, 0),
+    torsoAxisMaxDivergenceDeg:  20,
+    torsoForwardBaseline:       0,
+    forwardBendScale:           0,
+    lateralBendScale:           0,
+    lateralBendScaleMax:        0,
+    spineNodeCount:             2,
+    torsoTwistMaxDeg:           60,
+    torsoTwistMaxStepDeg:       18,
+    torsoTwistDeadbandDeg:      0,
+    prevTwistYaw:               0, // previous frame had zero twist
+  };
+  const result = solveSpineTarget(base);
+  assert.ok(result);
+  // Single-frame change cannot exceed the per-frame step.
+  assert.ok(
+    Math.abs(result!.nextTwistYaw) <= THREE.MathUtils.degToRad(18) + 1e-6,
+    `yaw step ${result!.nextTwistYaw} exceeds 18°/frame`,
+  );
+});
+
+test('spine: soft-deadband suppresses small near-frontal yaw but keeps large twists', () => {
+  // Near-frontal: shoulders along ±X with a tiny depth asymmetry → small yaw.
+  const frontalish = {
+    mirrorX: false,
+    leftShoulder:  { x: -0.2, y: 0.2, z: -0.015 },
+    rightShoulder: { x:  0.2, y: 0.2, z:  0.015 },
+    leftHip:       { x: -0.1, y: 0.9, z: 0 },
+    rightHip:      { x:  0.1, y: 0.9, z: 0 },
+    hipsWorldQuaternion:        IDENT.clone(),
+    avatarShoulderRestLocal:    new THREE.Vector3(1, 0, 0),
+    torsoAxisMaxDivergenceDeg:  90, // don't let stabilizer eat the divergence
+    torsoForwardBaseline:       0,
+    forwardBendScale:           0,
+    lateralBendScale:           0,
+    lateralBendScaleMax:        0,
+    spineNodeCount:             2,
+    torsoTwistMaxDeg:           60,
+    torsoTwistMaxStepDeg:       180,
+    torsoTwistDeadbandDeg:      0,
+    prevTwistYaw:               null as number | null,
+  };
+  const raw = solveSpineTarget({ ...frontalish, torsoTwistDeadbandDeg: 0 });
+  const dead = solveSpineTarget({ ...frontalish, torsoTwistDeadbandDeg: 10 });
+  assert.ok(raw && dead);
+  // The raw yaw must actually be inside the deadband region for this to test it.
+  assert.ok(Math.abs(raw!.nextTwistYaw) < THREE.MathUtils.degToRad(10),
+    `precondition: raw yaw ${raw!.nextTwistYaw} should be small`);
+  // Deadband strictly shrinks it toward zero.
+  assert.ok(Math.abs(dead!.nextTwistYaw) < Math.abs(raw!.nextTwistYaw),
+    `deadband should suppress small yaw (${dead!.nextTwistYaw} vs ${raw!.nextTwistYaw})`);
+
+  // A clearly-large twist (profile shoulders vs frontal hips) passes through.
+  const profile = {
+    ...frontalish,
+    leftShoulder:  { x: -0.05, y: 0.2, z: -0.2 },
+    rightShoulder: { x:  0.05, y: 0.2, z:  0.2 },
+  };
+  const bigRaw = solveSpineTarget({ ...profile, torsoTwistDeadbandDeg: 0 });
+  const bigDead = solveSpineTarget({ ...profile, torsoTwistDeadbandDeg: 10 });
+  assert.ok(bigRaw && bigDead);
+  assert.ok(
+    Math.abs(bigDead!.nextTwistYaw - bigRaw!.nextTwistYaw) < THREE.MathUtils.degToRad(0.5),
+    `large twist must pass through (${bigDead!.nextTwistYaw} vs ${bigRaw!.nextTwistYaw})`,
+  );
 });

@@ -70,11 +70,22 @@ export interface SpineTargetSolverInput {
   spineNodeCount: number;
   /** Z damping of torso directions (see HipsOrientationTargetInput). */
   torsoDepthDamping?: number;
+  /** Hard cap on the absolute torso yaw, degrees. */
+  torsoTwistMaxDeg: number;
+  /** Max per-frame change of the torso yaw, degrees (rate limit). */
+  torsoTwistMaxStepDeg: number;
+  /** Soft-deadband half-width on the torso yaw, degrees. Suppresses near-frontal
+   *  depth-noise jitter; 0 disables. */
+  torsoTwistDeadbandDeg: number;
+  /** Previous frame's applied torso yaw (radians), or null on first frame. */
+  prevTwistYaw: number | null;
 }
 
 export interface SpineTargetSolverResult {
   halfTwist: THREE.Quaternion;
   nextForwardBaseline: number | null;
+  /** This frame's applied torso yaw (radians) — feed back as prevTwistYaw. */
+  nextTwistYaw: number;
   diagnostics: TorsoSolverDiagnostics;
 }
 
@@ -211,6 +222,10 @@ export function solveSpineTarget(
     lateralBendScale,
     lateralBendScaleMax,
     spineNodeCount,
+    torsoTwistMaxDeg,
+    torsoTwistMaxStepDeg,
+    torsoTwistDeadbandDeg,
+    prevTwistYaw,
   } = input;
 
   const diagnostics = createTorsoSolverDiagnostics();
@@ -257,7 +272,33 @@ export function solveSpineTarget(
     hipAxis.copy(avatarShoulderRestLocal);
   }
 
-  const fullTwist = _q1.setFromUnitVectors(hipAxis, shoulderAxis);
+  // Both axes lie in the hips-local XZ plane (y was zeroed), so the twist that
+  // takes hipAxis → shoulderAxis is a pure yaw about +Y. Compute it as a signed
+  // scalar via atan2 instead of setFromUnitVectors: this is well-defined even
+  // when the axes are anti-parallel (P3 — setFromUnitVectors would pick an
+  // arbitrary perpendicular rotation axis there, tipping the torso), and gives
+  // a scalar we can hard-cap and rate-limit (P1 — bounds depth-noise spikes).
+  const crossY = hipAxis.z * shoulderAxis.x - hipAxis.x * shoulderAxis.z;
+  const dotXZ = hipAxis.x * shoulderAxis.x + hipAxis.z * shoulderAxis.z;
+  let twistYaw = Math.atan2(crossY, dotXZ);
+  const maxYaw = THREE.MathUtils.degToRad(torsoTwistMaxDeg);
+  twistYaw = THREE.MathUtils.clamp(twistYaw, -maxYaw, maxYaw);
+  // P5 — frontal soft-deadband. Facing the camera, the projected shoulder/hip
+  // axes are near-parallel and the yaw degenerates to (ε_hip − ε_shoulder), the
+  // difference of two depth-noise terms — a few degrees of pure jitter the rate
+  // limiter can't catch. smoothstep scales the yaw 0→1 across [dead, 2·dead]:
+  // sub-deadband jitter is killed, real twists past 2·dead keep full amplitude,
+  // and the ramp avoids a visible snap at the threshold.
+  if (torsoTwistDeadbandDeg > 1e-4) {
+    const dead = THREE.MathUtils.degToRad(torsoTwistDeadbandDeg);
+    twistYaw *= THREE.MathUtils.smoothstep(Math.abs(twistYaw), dead, dead * 2);
+  }
+  if (prevTwistYaw != null) {
+    const maxStep = THREE.MathUtils.degToRad(torsoTwistMaxStepDeg);
+    const step = THREE.MathUtils.clamp(twistYaw - prevTwistYaw, -maxStep, maxStep);
+    twistYaw = prevTwistYaw + step;
+  }
+  const fullTwist = _q1.setFromAxisAngle(_v3.set(0, 1, 0), twistYaw);
 
   let forwardLeanRaw = 0;
   let forwardLean = 0;
@@ -315,6 +356,7 @@ export function solveSpineTarget(
   return {
     halfTwist: halfTwist.clone(),
     nextForwardBaseline,
+    nextTwistYaw: twistYaw,
     diagnostics,
   };
 }

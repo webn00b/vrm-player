@@ -57,6 +57,9 @@ export class TorsoApplier {
   private _hipHeightEma = 0;
   private _standing = false;
   private _torsoForwardBaseline: number | null = null;
+  // Previous frame's applied torso yaw (radians). Feeds the spine solver's
+  // rate limiter so a single bad-depth frame can't teleport the torso 180°.
+  private _torsoTwistYaw: number | null = null;
   private _headYawBaseline:   number | null = null;
   private _headPitchBaseline: number | null = null;
   private _headRollBaseline:  number | null = null;
@@ -85,6 +88,7 @@ export class TorsoApplier {
     this._standing = false;
     this._hipPerfBaseline = null;
     this._torsoForwardBaseline = null;
+    this._torsoTwistYaw = null;
     this._headYawBaseline = null;
     this._headPitchBaseline = null;
     this._headRollBaseline = null;
@@ -459,10 +463,15 @@ export class TorsoApplier {
       lateralBendScale: settings.lateralBendScale,
       lateralBendScaleMax: settings.lateralBendScaleMax,
       spineNodeCount: count,
+      torsoTwistMaxDeg: settings.torsoTwistMaxDeg,
+      torsoTwistMaxStepDeg: settings.torsoTwistMaxStepDeg,
+      torsoTwistDeadbandDeg: settings.torsoTwistDeadbandDeg,
+      prevTwistYaw: this._torsoTwistYaw,
     });
     if (!spineTarget) return;
 
     this._torsoForwardBaseline = spineTarget.nextForwardBaseline;
+    this._torsoTwistYaw = spineTarget.nextTwistYaw;
     Object.assign(debugTargets.torsoSolver, spineTarget.diagnostics);
     const halfTwist = spineTarget.halfTwist;
 

@@ -81,6 +81,18 @@ export class DirectPoseSettings {
   /** Cap on how far the pelvis cross-axis may diverge from the shoulder line;
    *  beyond it we progressively trust shoulders more (noisy hips when a leg lifts). */
   torsoAxisMaxDivergenceDeg = 20;
+  /** Hard cap on the spine/chest yaw (shoulder-vs-hip twist). MediaPipe depth
+   *  error can swing the projected torso axes by ~180°; a real human torso
+   *  twist rarely exceeds this. Bounds the worst-case "perekrut". */
+  torsoTwistMaxDeg = 60;
+  /** Max per-frame change of the torso yaw. A genuine z-noise flip is a single-
+   *  frame teleport; real twist is gradual. 18°/frame ≈ 540°/s at 30fps — faster
+   *  than any human torso turn, but blocks single-frame 180° spikes. */
+  torsoTwistMaxStepDeg = 18;
+  /** Soft-deadband on the torso yaw. Facing the camera the yaw is the difference
+   *  of two depth-noise terms (a few degrees of jitter). Suppress it; real twists
+   *  past 2× this keep full amplitude. 0 disables. */
+  torsoTwistDeadbandDeg = 4;
 
   // Foot locking: freezes the ankle IK target when the performer stands still,
   // removing the foot-sliding artefact caused by MediaPipe landmark jitter.
