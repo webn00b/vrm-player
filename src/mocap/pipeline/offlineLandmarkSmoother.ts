@@ -37,12 +37,16 @@ export interface OfflineSmoothOptions {
   faceCutoffHz?: number;
   /** Max dropout length (frames) to bridge by interpolation. Default 10 (~0.33s @30fps). */
   maxGapFrames?: number;
+  /** Body landmark visibility below which a sample is treated as a noisy guess
+   *  and interpolated from confident neighbours. Default 0.5; 0 disables. */
+  bodyConfidenceGate?: number;
 }
 
 const DEFAULT_BODY_CUTOFF_HZ = 6;
 const DEFAULT_HAND_CUTOFF_HZ = 3;
 const DEFAULT_FACE_CUTOFF_HZ = 3.5;
 const DEFAULT_MAX_GAP_FRAMES = 10;
+const DEFAULT_BODY_CONFIDENCE_GATE = 0.5;
 
 /** Segments shorter than this are left unfiltered (not enough support). */
 const MIN_FILTER_SEGMENT = 9;
@@ -63,6 +67,7 @@ export function smoothMocapFrames(
   const handCutoff = options.handCutoffHz ?? DEFAULT_HAND_CUTOFF_HZ;
   const faceCutoff = options.faceCutoffHz ?? DEFAULT_FACE_CUTOFF_HZ;
   const maxGap = options.maxGapFrames ?? DEFAULT_MAX_GAP_FRAMES;
+  const bodyGate = options.bodyConfidenceGate ?? DEFAULT_BODY_CONFIDENCE_GATE;
 
   const pick = <T>(get: (f: PoseFrame) => T[] | undefined): LandmarkSeries =>
     frames.map((f) => {
@@ -70,8 +75,8 @@ export function smoothMocapFrames(
       return arr && arr.length ? (arr as Landmark3D[]) : null;
     });
 
-  const bodyNorm  = smoothSeries(pick((f) => f.landmarks),      fps, bodyCutoff, maxGap);
-  const bodyWorld = smoothSeries(pick((f) => f.worldLandmarks), fps, bodyCutoff, maxGap);
+  const bodyNorm  = smoothSeries(pick((f) => f.landmarks),      fps, bodyCutoff, maxGap, bodyGate);
+  const bodyWorld = smoothSeries(pick((f) => f.worldLandmarks), fps, bodyCutoff, maxGap, bodyGate);
   const face      = smoothSeries(pick((f) => f.faceLandmarks),  fps, faceCutoff, maxGap);
 
   const hand = (side: 'Left' | 'Right') => ({
@@ -122,6 +127,7 @@ export function smoothSeries(
   fps: number,
   cutoffHz: number,
   maxGapFrames: number,
+  confidenceGate = 0,
 ): LandmarkSeries {
   const n = series.length;
   if (n === 0) return [];
@@ -132,6 +138,7 @@ export function smoothSeries(
   );
 
   fillGaps(work, maxGapFrames);
+  repairLowConfidence(work, confidenceGate, maxGapFrames);
 
   // Filter each contiguous valid run independently.
   let runStart = -1;
@@ -144,6 +151,47 @@ export function smoothSeries(
     }
   }
   return work;
+}
+
+/**
+ * Per-landmark confidence repair: a present-but-low-visibility sample is a
+ * noisy guess, not data. For each landmark, overwrite its xyz on frames where
+ * visibility < gate by linearly interpolating from the nearest CONFIDENT
+ * frames (within maxGapFrames), so uncertain detections don't feed the filter.
+ * Runs of low confidence longer than the gap are left as-is. gate 0 = off.
+ */
+function repairLowConfidence(work: LandmarkSeries, gate: number, maxGapFrames: number): void {
+  if (gate <= 0) return;
+  const n = work.length;
+  // Landmark count from the first present frame.
+  const sample = work.find((f) => f !== null);
+  if (!sample) return;
+  const k = sample.length;
+  const confident = (lm: Landmark3D | undefined): boolean =>
+    !!lm && (lm.visibility === undefined || lm.visibility >= gate);
+
+  for (let j = 0; j < k; j++) {
+    let prevConf = -1;
+    for (let i = 0; i < n; i++) {
+      const f = work[i];
+      if (!f) { prevConf = -1; continue; } // missing frame breaks the run
+      if (confident(f[j])) {
+        const gap = i - prevConf - 1;
+        if (prevConf >= 0 && gap > 0 && gap <= maxGapFrames) {
+          const a = work[prevConf]![j], b = f[j];
+          for (let g = 1; g <= gap; g++) {
+            const mid = work[prevConf + g];
+            if (!mid) continue;
+            const t = g / (gap + 1);
+            mid[j].x = a.x + (b.x - a.x) * t;
+            mid[j].y = a.y + (b.y - a.y) * t;
+            mid[j].z = a.z + (b.z - a.z) * t;
+          }
+        }
+        prevConf = i;
+      }
+    }
+  }
 }
 
 /** Linearly interpolate dropouts of ≤ maxGapFrames between valid neighbours. */

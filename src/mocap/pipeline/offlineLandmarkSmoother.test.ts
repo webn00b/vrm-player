@@ -176,3 +176,24 @@ test('smoothMocapFrames: smooths jittery body landmarks', () => {
     assert.ok(Math.abs(x - 0.5) < 0.005, `frame ${i}: jitter must be attenuated; got ${x}`);
   }
 });
+
+test('confidence repair: sustained low-visibility run interpolated from confident neighbours', () => {
+  const mk = (x: number, vis: number): Landmark3D[] => [{ x, y: 0, z: 0, visibility: vis }];
+  // 2-frame low-vis deviation (median-of-3 can't clean a 2-wide block, so this
+  // isolates the confidence-repair path). 4 frames < filter minimum, no filtfilt.
+  const series: (Landmark3D[] | null)[] = [
+    mk(0.50, 1), mk(0.90, 0.2), mk(0.90, 0.2), mk(0.50, 1),
+  ];
+  const out = smoothSeries(series, FPS, 6, 10, 0.5);
+  assert.ok(Math.abs(out[1]![0].x - 0.5) < 0.05, `low-vis run repaired to ~0.5; got ${out[1]![0].x}`);
+  assert.ok(Math.abs(out[2]![0].x - 0.5) < 0.05, `low-vis run repaired to ~0.5; got ${out[2]![0].x}`);
+});
+
+test('confidence repair: gate 0 leaves a low-vis run untouched', () => {
+  const mk = (x: number, vis: number): Landmark3D[] => [{ x, y: 0, z: 0, visibility: vis }];
+  const series: (Landmark3D[] | null)[] = [
+    mk(0.50, 1), mk(0.90, 0.2), mk(0.90, 0.2), mk(0.50, 1),
+  ];
+  const out = smoothSeries(series, FPS, 6, 10, 0);
+  assert.ok(Math.abs(out[1]![0].x - 0.9) < 1e-9, 'gate 0 keeps the raw low-vis sample');
+});
