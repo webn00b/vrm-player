@@ -55,6 +55,8 @@ const DEFAULT_FILE_CAPTURE_CALIBRATION_PREROLL_SEC = 1.5;
 const OFFLINE_SMOOTHING_STORAGE_KEY = 'vrm-player.mocap.offlineSmoothing';
 const CROP_REDETECT_STORAGE_KEY = 'vrm-player.mocap.cropRedetect';
 const CHAIN_SCALE_STORAGE_KEY = 'vrm-player.mocap.chainScale';
+const LIFTING_STORAGE_KEY = 'vrm-player.mocap.lifting';
+const AUTO_TRIM_STORAGE_KEY = 'vrm-player.mocap.autoTrim';
 
 function readStorageToggle(key: string): boolean {
   try {
@@ -62,6 +64,10 @@ function readStorageToggle(key: string): boolean {
   } catch {
     return true;
   }
+}
+
+function persistToggle(key: string, on: boolean): void {
+  try { localStorage.setItem(key, on ? 'on' : 'off'); } catch { /* private mode */ }
 }
 
 function readOfflineSmoothingDefault(): boolean {
@@ -112,7 +118,7 @@ export class MocapController {
   // pass-A time. Kept as an experimental toggle for extreme cases.
   private _cropRedetectEnabled = readCropRedetectEnabled();
   // Trim idle/empty head and tail of the captured clip. See autoTrim.
-  private _autoTrimEnabled = readStorageToggle('vrm-player.mocap.autoTrim');
+  private _autoTrimEnabled = readStorageToggle(AUTO_TRIM_STORAGE_KEY);
 
   // Latest detected frame — applied each render tick via applyLatestFrame()
   // so mocap overlays on top of the BVH mixer output rather than fighting it.
@@ -322,8 +328,27 @@ export class MocapController {
   setFilterEnabled(v: boolean): void { this.detector.setFilterEnabled(v); }
   get filterEnabled(): boolean { return this.detector.filterEnabled; }
 
-  setOfflineSmoothingEnabled(v: boolean): void { this._offlineSmoothingEnabled = v; }
+  setOfflineSmoothingEnabled(v: boolean): void {
+    this._offlineSmoothingEnabled = v; persistToggle(OFFLINE_SMOOTHING_STORAGE_KEY, v);
+  }
   get offlineSmoothingEnabled(): boolean { return this._offlineSmoothingEnabled; }
+
+  // Two-pass pipeline stage toggles. Each updates the live field AND persists,
+  // so a change applies to the next conversion without a reload. See the
+  // Pipeline rows in the capture UI.
+  setLiftingEnabled(v: boolean): void { this._liftingEnabled = v; persistToggle(LIFTING_STORAGE_KEY, v); }
+  get liftingEnabled(): boolean { return this._liftingEnabled; }
+
+  setCropRedetectEnabled(v: boolean): void { this._cropRedetectEnabled = v; persistToggle(CROP_REDETECT_STORAGE_KEY, v); }
+  get cropRedetectEnabled(): boolean { return this._cropRedetectEnabled; }
+
+  setAutoTrimEnabled(v: boolean): void { this._autoTrimEnabled = v; persistToggle(AUTO_TRIM_STORAGE_KEY, v); }
+  get autoTrimEnabled(): boolean { return this._autoTrimEnabled; }
+
+  setChainScaleEnabled(v: boolean): void {
+    this._calibration.setChainScaleEnabled(v); persistToggle(CHAIN_SCALE_STORAGE_KEY, v);
+  }
+  get chainScaleEnabled(): boolean { return this._calibration.chainScaleEnabled; }
 
   setFileCaptureCalibrationPrerollSec(sec: number): void {
     this._fileCaptureCalibrationPrerollSec = Number.isFinite(sec)
