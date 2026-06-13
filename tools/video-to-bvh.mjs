@@ -393,6 +393,15 @@ export async function runVideoToBvh(options) {
       console.log(`[video-to-bvh] external-coordinates BVH: ${externalPath}`);
     }
 
+    // Face-expression sidecar (blink + mouth), one sample per BVH frame, when
+    // face tracking produced motion. Null when disabled / no expression.
+    const faceTrack = await page.evaluate(() => window.__mocapLastFaceTrack ?? null);
+    if (faceTrack) {
+      const facePath = `${options.output}.face.json`;
+      writeFileSync(facePath, faceTrack);
+      console.log(`[video-to-bvh] face track sidecar: ${facePath}`);
+    }
+
     return {
       output: options.output,
       suggestedFilename: download.suggestedFilename(),

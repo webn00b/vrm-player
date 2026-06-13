@@ -8,6 +8,11 @@ import {
 } from './poseDetector';
 import { DirectPoseApplier } from '../retargeters/directPoseApplier';
 import { FaceApplier } from '../retargeters/faceApplier';
+import {
+  faceTrackHasMotion,
+  serializeFaceTrack,
+  type FaceExpressionFrame,
+} from '../bvh/faceTrack';
 import { downloadBvh, BVH_FRAME_RATE } from '../bvh/bvhRecorder';
 import { smoothMocapFrames } from './offlineLandmarkSmoother';
 import { debiasTorsoLean } from './torsoDebias';
@@ -119,6 +124,8 @@ export class MocapController {
   private _cropRedetectEnabled = readCropRedetectEnabled();
   // Trim idle/empty head and tail of the captured clip. See autoTrim.
   private _autoTrimEnabled = readStorageToggle(AUTO_TRIM_STORAGE_KEY);
+  // One expression sample per recorded BVH frame → face sidecar. See faceTrack.
+  private _faceTrack: FaceExpressionFrame[] = [];
 
   // Latest detected frame — applied each render tick via applyLatestFrame()
   // so mocap overlays on top of the BVH mixer output rather than fighting it.
@@ -184,7 +191,25 @@ export class MocapController {
 
   private _captureFixedFileFrame(): boolean {
     this._frameRecorded = this.session.captureFixedFileFrame();
+    if (this._frameRecorded) this._captureFaceFrame();
     return this._frameRecorded;
+  }
+
+  /** Sample the current expression values for the face sidecar, 1:1 with the
+   *  BVH frame just recorded. */
+  private _captureFaceFrame(): void {
+    if (this.faceApplier.enabled) this._faceTrack.push(this.faceApplier.currentExpressions());
+  }
+
+  /** Publish the captured face track as a sidecar handle (null when empty /
+   *  no expression motion). Headless tools read window.__mocapLastFaceTrack. */
+  private _publishFaceTrack(): void {
+    const track = { fps: BVH_FRAME_RATE, frames: this._faceTrack };
+    const json = this._faceTrack.length && faceTrackHasMotion(track)
+      ? serializeFaceTrack(track) : null;
+    if (typeof window !== 'undefined') {
+      (window as unknown as Record<string, unknown>).__mocapLastFaceTrack = json;
+    }
   }
 
   private _nextAnimationFrame(): Promise<void> {
@@ -459,6 +484,7 @@ export class MocapController {
       this.session.captureCurrentPoseFrame(this.session.replay);
     }
     this._frameRecorded = true;
+    this._captureFaceFrame();
     this.session.snapshotIfNewFrame();
   }
 
@@ -699,6 +725,7 @@ export class MocapController {
   /** Begin recording (must be in 'live' state first). */
   startRecording(): void {
     if (this._state !== 'live') return;
+    this._faceTrack = [];
     this.session.live.start();
     this.session.startReplay();
     this._setState('recording');
@@ -715,6 +742,7 @@ export class MocapController {
       return;
     }
     const { name, replayText } = this.session.finishRecording('camera');
+    this._publishFaceTrack();
     downloadBvh(replayText, `${name}.bvh`);
     this.onBvhReady?.(replayText, name, { source: 'camera' });
     this._setState('live');
@@ -728,6 +756,7 @@ export class MocapController {
     if (this._state !== 'off') return;
     this._latestFrame = null;
     this._frameRecorded = false;
+    this._faceTrack = [];
     this._teardownFileCapture();
 
     // Recording from file: snap directly to detected pose, no torso dampening,
@@ -749,6 +778,7 @@ export class MocapController {
       if (!completed || this.state !== 'recording') return;
 
       const { name, replayText } = this.session.finishRecording('video');
+      this._publishFaceTrack();
       downloadBvh(replayText, `${name}.bvh`);
       this.onBvhReady?.(replayText, name, {
         source: 'video',

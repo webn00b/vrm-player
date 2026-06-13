@@ -58,6 +58,12 @@ export class FaceApplier {
   get enabled(): boolean { return this._enabled; }
   setEnabled(v: boolean): void { this._enabled = v; }
 
+  /** Current smoothed expression values — captured per frame for the face
+   *  sidecar track so recordings can replay expressions, not just bones. */
+  currentExpressions(): { blinkLeft: number; blinkRight: number; aa: number } {
+    return { blinkLeft: this._blinkL, blinkRight: this._blinkR, aa: this._mouth };
+  }
+
   apply(faceLandmarks: Landmark3D[]): void {
     if (!this._enabled || faceLandmarks.length < 478) return;
     const em = this.vrm.expressionManager;
