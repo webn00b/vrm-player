@@ -21,6 +21,11 @@ const HIP_HEIGHT_EMA_ALPHA = 0.25;
 const STAND_ENTER_RATIO = 0.94;
 const STAND_EXIT_RATIO = 0.92;
 const STAND_HEIGHT_RATIO = 0.985;
+// Pin ratio for the avatar's own straight-leg stand height. Higher than
+// STAND_HEIGHT_RATIO: 0.985 of full leg leaves a ~20° knee bend (asin(0.985)≈80°
+// per segment → 160° knee), which reads as a permanent crouch. 0.997 → ~171°
+// knee — visually straight, still shy of the singular full lock that jitters.
+const STAND_STRAIGHT_RATIO = 0.997;
 
 export class TorsoApplier {
   private rig: DirectPoseRig;
@@ -46,6 +51,13 @@ export class TorsoApplier {
   // Avatar rest ankle height (world Y) — reference floor for the
   // legs-derived absolute hip height. NaN until captured.
   private _groundWorldY = Number.NaN;
+  // Avatar's OWN straight-leg hip world Y (rest-pose hips height, scaled by
+  // STAND_HEIGHT_RATIO to avoid singular full extension). When the standing
+  // latch fires we pin the pelvis here so the avatar's legs straighten —
+  // performer-derived hip height under-shoots when proportions differ
+  // (avatar legs longer than the performer's projected leg), leaving the
+  // avatar in a permanent crouch. NaN until captured.
+  private _standHipWorldY = Number.NaN;
   // Avatar rest hips LOCAL y — held as the vertical position when vertical
   // hip tracking is disabled (half-body / untrusted: the hip landmark sits
   // at the frame edge and its Y is garbage, drifting the avatar 0.7 m).
@@ -119,6 +131,16 @@ export class TorsoApplier {
       if (node) { node.getWorldPosition(pos); if (pos.y < minY) minY = pos.y; }
     }
     if (minY < Infinity) this._groundWorldY = minY;
+
+    // Avatar's straight-leg hip height: the rest-pose hips world Y (legs are
+    // straight at rest) pulled down to STAND_HEIGHT_RATIO of its height above
+    // the floor, so standing pins to nearly-straight legs without the singular
+    // full lock. Independent of performer proportions.
+    if (Number.isFinite(this._groundWorldY)) {
+      const restHipWorldY = hipsNode.getWorldPosition(pos).y;
+      this._standHipWorldY =
+        this._groundWorldY + (restHipWorldY - this._groundWorldY) * STAND_STRAIGHT_RATIO;
+    }
 
     // Capture the avatar's shoulder line in hips-local (XZ projected). Used
     // as a twist reference when performer hips aren't visible.
@@ -298,7 +320,7 @@ export class TorsoApplier {
       // ground-clamped ankle targets means leg IK can never bend the knees.
       // Hip height above the lowest ankle in WORLD landmark space is metric
       // and pose-true (especially when lifted) — use it as an absolute Y.
-      let absoluteHeight: { hipHeightM: number; legScale: number; groundWorldY: number } | undefined;
+      let absoluteHeight: { worldY: number } | undefined;
       if (settings.hipHeightFromLegs && Number.isFinite(this._groundWorldY)) {
         const la = lms[LM.LEFT_ANKLE], ra = lms[LM.RIGHT_ANKLE];
         const anklesVisible =
@@ -314,22 +336,23 @@ export class TorsoApplier {
             this._hipHeightEma = this._hipHeightEma <= 0
               ? hipHeightRaw
               : this._hipHeightEma * (1 - HIP_HEIGHT_EMA_ALPHA) + hipHeightRaw * HIP_HEIGHT_EMA_ALPHA;
-            let hipHeightM = this._hipHeightEma;
+            const hipHeightM = this._hipHeightEma;
             const perfChain = calibration?.performerLegChainLength() ?? 0;
+            const legScale = calibration?.legScale() ?? 1;
+            let standing = this._standing;
             if (perfChain > 1e-3) {
               const ratio = hipHeightM / perfChain;
-              if (this._standing ? ratio > STAND_EXIT_RATIO : ratio > STAND_ENTER_RATIO) {
-                this._standing = true;
-                hipHeightM = perfChain * STAND_HEIGHT_RATIO;
-              } else {
-                this._standing = false;
-              }
+              standing = this._standing ? ratio > STAND_EXIT_RATIO : ratio > STAND_ENTER_RATIO;
             }
-            absoluteHeight = {
-              hipHeightM,
-              legScale: calibration?.legScale() ?? 1,
-              groundWorldY: this._groundWorldY,
-            };
+            this._standing = standing;
+            // Standing → pin to the AVATAR's own straight-leg height (proportion-
+            // independent), so legs straighten regardless of how the performer's
+            // projected leg compares. Otherwise (crouch/squat) track the
+            // performer's metric hip-above-ankle, scaled to avatar metres.
+            const worldY = (standing && Number.isFinite(this._standHipWorldY))
+              ? this._standHipWorldY
+              : this._groundWorldY + hipHeightM * legScale;
+            absoluteHeight = { worldY };
           }
         }
       }

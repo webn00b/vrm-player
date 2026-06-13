@@ -37,20 +37,16 @@ export interface HipPositionTargetInput {
   hipsParentWorldQuaternion: THREE.Quaternion;
   scale: number;
   /**
-   * When set, the WORLD Y of the target is replaced by an absolute height
-   * derived from the legs: `groundWorldY + hipHeightM · legScale`. The
-   * image-based Y delta tracks lateral motion well but underestimates
-   * vertical amplitude (crouches barely lower the pelvis, so leg IK can't
-   * bend the knees). Hip-above-lowest-ankle height from the (lifted) world
-   * landmarks is metrically reliable.
+   * When set, the WORLD Y of the target is replaced by this absolute height
+   * (already in avatar metres). The image-based Y delta tracks lateral motion
+   * well but underestimates vertical amplitude (crouches barely lower the
+   * pelvis); the caller supplies a metric height — the avatar's own straight-leg
+   * height when standing, or performer hip-above-ankle scaled to avatar metres
+   * when crouching.
    */
   absoluteHeight?: {
-    /** Performer hip height above their lowest ankle, metres. */
-    hipHeightM: number;
-    /** Performer→avatar leg scale. */
-    legScale: number;
-    /** Avatar's rest ankle height (world Y of the feet at rest). */
-    groundWorldY: number;
+    /** Absolute world Y to pin the hips to (avatar metres). */
+    worldY: number;
   };
 }
 
@@ -197,8 +193,7 @@ export function solveHipPositionTarget(
 
   _v2.copy(avatarBaselineWorld).add(_v1);
   if (input.absoluteHeight) {
-    const { hipHeightM, legScale, groundWorldY } = input.absoluteHeight;
-    _v2.y = groundWorldY + hipHeightM * legScale;
+    _v2.y = input.absoluteHeight.worldY;
   }
   _q1.copy(hipsParentWorldQuaternion).invert();
   _v3.subVectors(_v2, hipsParentWorldPosition).applyQuaternion(_q1);
