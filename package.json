@@ -28,7 +28,8 @@
     "match:score": "node tools/match-score.mjs",
     "anatomy:check": "node tools/anatomy-check.mjs",
     "ab:sweep": "node tools/ab-sweep.mjs",
-    "regression:check": "node tools/regression-check.mjs"
+    "regression:check": "node tools/regression-check.mjs",
+    "skeleton:overlay": "node tools/skeleton-overlay.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.34",
