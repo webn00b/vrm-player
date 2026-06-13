@@ -27,7 +27,8 @@
     "video:compare": "node tools/compare-video-bvh.mjs",
     "match:score": "node tools/match-score.mjs",
     "anatomy:check": "node tools/anatomy-check.mjs",
-    "ab:sweep": "node tools/ab-sweep.mjs"
+    "ab:sweep": "node tools/ab-sweep.mjs",
+    "regression:check": "node tools/regression-check.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.34",

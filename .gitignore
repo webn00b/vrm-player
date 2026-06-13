@@ -21,3 +21,6 @@ exports/
 
 # Vitest coverage reports
 coverage/
+
+# regression-check temp BVH artifacts (golden JSON in tools/ is committed)
+data/.regression-*
