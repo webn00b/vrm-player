@@ -7,6 +7,7 @@ import { animationClipToBvhText } from '../../animationClipBvhExport';
 import { clipToAgentOgiJson, downloadAgentOgiJson } from '../../animationToJsonConverter';
 import { trimAnimationClip } from '../../animationTrim';
 import { exportClipAsBvh } from '../../bvhExportRecorder';
+import { parseFaceTrack } from '../../mocap/bvh/faceTrack';
 import type { ParsedBVH } from '../../bvhLoader';
 import { saveBlobWithPicker } from '../../fileSave';
 import { exportClipAsGlb } from '../../gltfExportRecorder';
@@ -30,6 +31,9 @@ declare global {
       getPlaybackInfo(): { active: boolean; duration: number; time: number; name: string; queueLength: number };
       restartPlayback(): void;
       setPaused(paused: boolean): void;
+      /** Drive recorded face expressions for the active clip (headless QA /
+       *  sidecar replay). Pass a serialized face track or null to clear. */
+      setFaceTrack(json: string | null): boolean;
     };
   }
 }
@@ -267,6 +271,12 @@ export const playerUiModule: PlayerModule = {
       },
       setPaused: (paused: boolean) => {
         controller.setPaused(paused);
+      },
+      setFaceTrack: (json: string | null) => {
+        const player = ctx.mocap?.faceTrackPlayer;
+        if (!player) return false;
+        player.setTrack(json ? parseFaceTrack(json) : null);
+        return true;
       },
     };
     window.__vrmPlayerCli = cliBridge;

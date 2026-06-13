@@ -106,6 +106,9 @@ export function parseCliArgs(argv) {
     } else if (arg === '--vrm') {
       parsed.vrm = readFlagValue(argv, i, arg);
       i += 1;
+    } else if (arg === '--face') {
+      parsed.face = readFlagValue(argv, i, arg);
+      i += 1;
     } else if (arg === '--url') {
       parsed.url = readFlagValue(argv, i, arg);
       i += 1;
@@ -212,10 +215,17 @@ export function resolveCliOptions(parsed, cwd = process.cwd()) {
     if (extname(vrm).toLowerCase() !== '.vrm') throw new Error(`VRM file must end with .vrm: ${vrm}`);
   }
 
+  let face;
+  if (parsed.face) {
+    face = resolvePath(cwd, parsed.face);
+    assertReadableFile(face, 'Face track');
+  }
+
   return {
     input,
     output,
     ...(vrm ? { vrm } : {}),
+    ...(face ? { face } : {}),
     ...(parsed.url ? { url: parsed.url } : {}),
     port: parsed.port,
     headed: parsed.headed,
@@ -341,6 +351,13 @@ export async function runBvhToVideo(options) {
       const info = window.__vrmPlayerCli?.getPlaybackInfo();
       return !!info?.active && info.duration > 0;
     }, undefined, { timeout: options.timeoutMs });
+
+    // Optional face-expression sidecar: drive blink/mouth during playback.
+    if (options.face) {
+      const faceJson = readFileSync(options.face, 'utf8');
+      const ok = await page.evaluate((json) => window.__vrmPlayerCli?.setFaceTrack(json) ?? false, faceJson);
+      console.log(`[bvh-to-video] face track ${ok ? 'applied' : 'NOT applied (no player)'}: ${options.face}`);
+    }
 
     mkdirSync(dirname(options.output), { recursive: true });
     const download = await recordCanvasToWebm(page, {
