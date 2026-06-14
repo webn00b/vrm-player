@@ -72,6 +72,13 @@ export class DirectPoseSettings {
    *  forearms get closer than this, they are nudged apart in depth. 0 = off.
    *  ~0.07 ≈ a forearm's diameter (two ~3.5cm radii). */
   forearmClearance = 0.07;
+  /** When the two wrists land within this distance (m) the pose is treated as a
+   *  hands-together clasp/prayer: both wrists are merged to their midpoint so the
+   *  forearms make a clean V instead of the direction retarget's crossed X. */
+  handMergeThreshold = 0.12;
+  /** Lateral gap (m) kept between the two hands in a merged clasp, so the palms
+   *  meet without interpenetrating. */
+  handContactGap = 0.04;
   /** Max per-frame change (deg) of a leg bone's world rotation. Half-body
    *  footage has no real leg signal — MediaPipe hallucinates the hidden legs,
    *  and a landmark that momentarily crosses the visibility gate fires a

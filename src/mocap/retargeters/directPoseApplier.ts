@@ -279,21 +279,26 @@ export class DirectPoseApplier {
       this._applyLimb(bone, frame, pIdx, cIdx);
     }
 
-    if (this.settings.forearmClearance > 0) this._depenetrateForearms();
+    if (this.settings.forearmClearance > 0) this._resolveForearmContact();
 
     this.applyTrackedHands(frame, this.settings.handTrackingPriorityEnabled);
   }
 
   /**
-   * Push the two forearms apart when they get closer than `forearmClearance`.
-   * Folding the arms collapses both forearms onto one depth plane (MediaPipe
-   * can't separate two overlapping limbs in Z), so the meshes pass through each
-   * other. We nudge each wrist target along the segments' nearest-points axis
-   * (half the deficit each) and re-aim the lower-arm bone at it — only the
-   * already-overlapping frames move, the rest are untouched.
+   * Resolve forearm contact. Two regimes:
+   *
+   *  - Hands together (wrists within `handMergeThreshold`): a prayer/clasp. The
+   *    independent direction retarget over-rotates each forearm past centre, so
+   *    the wrists CROSS into an X and the hands interpenetrate. Pull both wrists
+   *    to their shared midpoint, split by a small gap along the elbow-to-elbow
+   *    axis — left stays left, right stays right — so the forearms make a clean
+   *    V and the palms meet without crossing.
+   *
+   *  - Forearms folded but hands apart (segments closer than `forearmClearance`,
+   *    wrists not together): one forearm should pass in front of the other.
+   *    Separate them in depth so the meshes don't pass through.
    */
-  private _depenetrateForearms(): void {
-    const clearance = this.settings.forearmClearance;
+  private _resolveForearmContact(): void {
     const lE = this.nodeCache.get('leftLowerArm');
     const lW = this.nodeCache.get('leftHand');
     const rE = this.nodeCache.get('rightLowerArm');
@@ -302,25 +307,49 @@ export class DirectPoseApplier {
     // Elbows are fixed by the upper-arm pose; only the wrists move as we re-aim.
     lE.getWorldPosition(this._pLE);
     rE.getWorldPosition(this._pRE);
+    lW.getWorldPosition(this._pLW);
+    rW.getWorldPosition(this._pRW);
 
-    // Re-aiming the lower arm at a pushed wrist target only partly closes the
-    // gap (the nearest point is mid-segment, the bone length is fixed), so a
-    // single pass undershoots the clearance. Iterate until the gap is met.
+    if (this._pLW.distanceTo(this._pRW) < this.settings.handMergeThreshold) {
+      this._mergeWristsToMidpoint(lE, rE);
+    } else {
+      this._depthSeparateForearms(lE, rE, lW, rW);
+    }
+  }
+
+  /** Prayer/clasp: aim both forearms at the shared wrist midpoint, split by a
+   *  small gap along the elbow-to-elbow axis so the hands meet without crossing. */
+  private _mergeWristsToMidpoint(lE: THREE.Object3D, rE: THREE.Object3D): void {
+    // Elbow-to-elbow axis (right→left): keeps the left hand on the left side.
+    this._depAxis.copy(this._pLE).sub(this._pRE);
+    if (this._depAxis.lengthSq() < 1e-8) this._depAxis.set(1, 0, 0);
+    else this._depAxis.normalize();
+    const half = this.settings.handContactGap * 0.5;
+    // Midpoint of the two wrists.
+    this._depDir.copy(this._pLW).add(this._pRW).multiplyScalar(0.5);
+    this._pLW.copy(this._depDir).addScaledVector(this._depAxis,  half); // left target
+    this._pRW.copy(this._depDir).addScaledVector(this._depAxis, -half); // right target
+    this._reaimLowerArm('leftLowerArm', lE, this._pLE, this._pLW);
+    this._reaimLowerArm('rightLowerArm', rE, this._pRE, this._pRW);
+  }
+
+  /** Folded arms: push the forearms apart in depth until they clear. */
+  private _depthSeparateForearms(
+    lE: THREE.Object3D, rE: THREE.Object3D, lW: THREE.Object3D, rW: THREE.Object3D,
+  ): void {
+    const clearance = this.settings.forearmClearance;
+    // Separate ONLY in depth (world Z) so the hands keep meeting in the image
+    // plane — one forearm passes in front of the other, like the video, instead
+    // of spreading sideways. Left to the front (VRM faces -Z), right to the back.
+    this._depAxis.set(0, 0, -1);
     for (let iter = 0; iter < 4; iter++) {
       lW.getWorldPosition(this._pLW);
       rW.getWorldPosition(this._pRW);
-      const dist = this._segNearest(this._pLE, this._pLW, this._pRE, this._pRW, this._depAxis);
+      const dist = this._segNearest(this._pLE, this._pLW, this._pRE, this._pRW, this._depDir);
       if (dist >= clearance) break;
-
-      if (this._depAxis.lengthSq() < 1e-8) {
-        // Segments coincide — split along world depth, keeping any existing order.
-        this._depAxis.set(0, 0, this._pLW.z - this._pRW.z >= 0 ? 1 : -1);
-      } else {
-        this._depAxis.normalize();
-      }
       const push = (clearance - dist) * 0.5;
-      this._pLW.addScaledVector(this._depAxis,  push); // left wrist target
-      this._pRW.addScaledVector(this._depAxis, -push); // right wrist target
+      this._pLW.addScaledVector(this._depAxis,  push);
+      this._pRW.addScaledVector(this._depAxis, -push);
       this._reaimLowerArm('leftLowerArm', lE, this._pLE, this._pLW);
       this._reaimLowerArm('rightLowerArm', rE, this._pRE, this._pRW);
     }
