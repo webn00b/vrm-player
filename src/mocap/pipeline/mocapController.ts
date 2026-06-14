@@ -341,6 +341,17 @@ export class MocapController {
         frames = smoothed.slice(range.start, range.end);
       }
     }
+    // Offline calibration: measure the performer ONCE over the whole (smoothed,
+    // trimmed) clip — the exact frames pass B replays — as a robust median
+    // instead of a converging per-frame EMA. Locks the size so the replay loop's
+    // feed() calls can't re-drift it. Makes the body size deterministic per clip
+    // (no noisy warm-up), so limb position targets are consistent run to run.
+    this._calibration.calibrateFromClip(frames);
+    console.info(
+      `[mocap:two-pass] offline calibration: bodyScale=${this._calibration.bodyScale().toFixed(3)} ` +
+      `legScale=${this._calibration.legScale().toFixed(3)}`,
+    );
+
     console.info('[mocap:two-pass] pass B: replaying smoothed frames');
 
     for (let i = 0; i < frames.length; i++) {

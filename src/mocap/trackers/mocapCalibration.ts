@@ -136,6 +136,11 @@ export class MocapCalibration {
   // landmarks themselves are hip-centred and carry no global translation.
   private _metersPerNormEma = 0;
   private _calibrated = false;
+  // When the offline two-pass pipeline has measured the performer once over the
+  // WHOLE clip (median, not a converging EMA), the per-frame measurements are
+  // locked: feed() becomes a no-op so a noisy late frame can't drift the size.
+  // Cleared by recalibrate(). See calibrateFromClip().
+  private _locked = false;
 
   // User slider multipliers — 1 = neutral.
   private _overrideShoulder = 1;
@@ -211,6 +216,81 @@ export class MocapCalibration {
     this.performerRightLegChain = 0;
     this._metersPerNormEma      = 0;
     this._calibrated = false;
+    this._locked = false;
+    this._emit();
+  }
+
+  /**
+   * Offline calibration for the two-pass file pipeline: measure the performer
+   * ONCE over the whole clip (robust median per metric, max for arm reach)
+   * instead of a converging per-frame EMA. Kills the noisy early-frame warm-up
+   * and mid-clip drift, and locks feed() so pass-B replay can't re-drift the
+   * size. Call AFTER pass A (detection + lift), BEFORE pass B.
+   */
+  calibrateFromClip(frames: (PoseFrame | null)[]): void {
+    const med = (arr: number[]): number => {
+      if (!arr.length) return 0;
+      arr.sort((a, b) => a - b);
+      return arr[arr.length >> 1];
+    };
+    const headW: number[] = [], shW: number[] = [], hipW: number[] = [];
+    const legLen: number[] = [], mpn: number[] = [];
+    const lArmC: number[] = [], rArmC: number[] = [], lLegC: number[] = [], rLegC: number[] = [];
+    let rArmMax = 0, lArmMax = 0;
+    const hg = this._hipVisGate;
+    const vg = WRIST_VIS_GATE;
+    const vis = (p: Landmark3D | undefined, gate: number): boolean =>
+      !!p && (p.visibility ?? 1) >= gate;
+
+    for (const f of frames) {
+      if (!f) continue;
+      const w = f.worldLandmarks, n = f.landmarks;
+      const lh = w[LM.LEFT_HIP], rh = w[LM.RIGHT_HIP];
+      const la = w[LM.LEFT_ANKLE], ra = w[LM.RIGHT_ANKLE];
+      const ls = w[LM.LEFT_SHOULDER], rs = w[LM.RIGHT_SHOULDER];
+      const lE = w[LM.LEFT_EAR], rE = w[LM.RIGHT_EAR];
+      const lw = w[LM.LEFT_WRIST], rw = w[LM.RIGHT_WRIST];
+      const le = w[LM.LEFT_ELBOW], re = w[LM.RIGHT_ELBOW];
+      const lk = w[LM.LEFT_KNEE], rk = w[LM.RIGHT_KNEE];
+
+      if (vis(lE, vg) && vis(rE, vg)) { const d = distance(lE!, rE!); if (d > 1e-3) headW.push(d); }
+      if (vis(ls, vg) && vis(rs, vg)) { const d = distance(ls!, rs!); if (d > 1e-3) shW.push(d); }
+      if (vis(rs, vg) && vis(rw, vg)) { const d = distance(rs!, rw!); if (d > 1e-3) rArmMax = Math.max(rArmMax, d); }
+      if (vis(ls, vg) && vis(lw, vg)) { const d = distance(ls!, lw!); if (d > 1e-3) lArmMax = Math.max(lArmMax, d); }
+      if (vis(ls, vg) && vis(le, vg) && vis(lw, vg)) { const d = distance(ls!, le!) + distance(le!, lw!); if (d > 1e-3) lArmC.push(d); }
+      if (vis(rs, vg) && vis(re, vg) && vis(rw, vg)) { const d = distance(rs!, re!) + distance(re!, rw!); if (d > 1e-3) rArmC.push(d); }
+      if (vis(lh, hg) && vis(lk, hg) && vis(la, hg)) { const d = distance(lh!, lk!) + distance(lk!, la!); if (d > 1e-3) lLegC.push(d); }
+      if (vis(rh, hg) && vis(rk, hg) && vis(ra, hg)) { const d = distance(rh!, rk!) + distance(rk!, ra!); if (d > 1e-3) rLegC.push(d); }
+
+      if (vis(lh, hg) && vis(rh, hg)) {
+        const d = distance(lh!, rh!); if (d > 1e-3) hipW.push(d);
+        let leg = 0;
+        if (vis(la, hg)) leg = Math.max(leg, distance(lh!, la!));
+        if (vis(ra, hg)) leg = Math.max(leg, distance(rh!, ra!));
+        if (leg > 1e-3) legLen.push(leg);
+        const nlh = n[LM.LEFT_HIP], nrh = n[LM.RIGHT_HIP];
+        if (nlh && nrh) {
+          const worldXY = Math.hypot(lh!.x - rh!.x, lh!.y - rh!.y);
+          const normXY = Math.hypot(nlh.x - nrh.x, nlh.y - nrh.y);
+          if (normXY > 1e-3 && worldXY > 1e-3) mpn.push(worldXY / normXY);
+        }
+      }
+    }
+
+    if (headW.length) this.performerHeadWidth = med(headW);
+    if (shW.length) this.performerShoulderWidth = med(shW);
+    if (hipW.length) this.performerHipWidth = med(hipW);
+    if (legLen.length) this.performerLegLen = med(legLen);
+    if (mpn.length) this._metersPerNormEma = med(mpn);
+    if (lArmC.length) this.performerLeftArmChain = med(lArmC);
+    if (rArmC.length) this.performerRightArmChain = med(rArmC);
+    if (lLegC.length) this.performerLeftLegChain = med(lLegC);
+    if (rLegC.length) this.performerRightLegChain = med(rLegC);
+    if (rArmMax > 0) this.performerRightArmMax = rArmMax;
+    if (lArmMax > 0) this.performerLeftArmMax = lArmMax;
+
+    this._calibrated = headW.length > 0 || shW.length > 0 || hipW.length > 0;
+    this._locked = true;
     this._emit();
   }
 
@@ -222,6 +302,8 @@ export class MocapCalibration {
    * width whenever both hip landmarks are sufficiently visible.
    */
   feed(frame: PoseFrame): void {
+    // Offline-calibrated: size is fixed for the whole clip, ignore per-frame.
+    if (this._locked) return;
     const lms = frame.worldLandmarks;
     const lh = lms[LM.LEFT_HIP],  rh = lms[LM.RIGHT_HIP];
     const la = lms[LM.LEFT_ANKLE], ra = lms[LM.RIGHT_ANKLE];
