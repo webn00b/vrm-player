@@ -92,6 +92,11 @@ export class DirectPoseApplier {
   private _pRW = new THREE.Vector3();
   private _depAxis = new THREE.Vector3();
   private _depDir  = new THREE.Vector3();
+  // Rest-pose local quaternions of the hand + finger bones, captured once, used
+  // to flatten the hands on a clasp (the occluded finger tracking crosses them).
+  private _restHand = new Map<string, THREE.Quaternion>();
+  private _restHandCaptured = false;
+  private _clasped = false;
   private _m2 = new THREE.Matrix4();
   /** Previous-frame world quaternion per leg bone, for the guarded-mode
    *  per-frame step limit. Cleared at each session boundary. */
@@ -232,6 +237,16 @@ export class DirectPoseApplier {
     // etc.) don't drift across the loop.
     this.rig.now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
 
+    // Capture the rest local rotations of the hand subtree once, while the rig
+    // is still in its bind pose (nothing applied yet) — used to flatten a clasp.
+    if (!this._restHandCaptured) {
+      this._restHandCaptured = true;
+      for (const name of ['leftHand', 'rightHand', ...FINGER_VRM_NAMES]) {
+        const node = this.nodeCache.get(name);
+        if (node) this._restHand.set(name, node.quaternion.clone());
+      }
+    }
+
     // Debug target flags are frame-local; reset them before solving this frame
     // so stale arm/leg IK markers do not survive when tracking drops out.
     resetMocapDebugTargets(this.debugTargets);
@@ -279,9 +294,14 @@ export class DirectPoseApplier {
       this._applyLimb(bone, frame, pIdx, cIdx);
     }
 
+    this._clasped = false;
     if (this.settings.forearmClearance > 0) this._resolveForearmContact();
 
     this.applyTrackedHands(frame, this.settings.handTrackingPriorityEnabled);
+
+    // Clasp detected → flatten hands so the occluded finger tracking doesn't
+    // cross the fingers. Runs after hand tracking so it overrides it.
+    this._alignClaspHands();
   }
 
   /**
@@ -310,11 +330,63 @@ export class DirectPoseApplier {
     lW.getWorldPosition(this._pLW);
     rW.getWorldPosition(this._pRW);
 
-    if (this._pLW.distanceTo(this._pRW) < this.settings.handMergeThreshold) {
+    this._clasped = this._pLW.distanceTo(this._pRW) < this.settings.handMergeThreshold;
+    if (this._clasped) {
       this._mergeWristsToMidpoint(lE, rE);
     } else {
       this._depthSeparateForearms(lE, rE, lW, rW);
     }
+  }
+
+  /** Make a clasp read as palms-together. The two hands occlude each other, so
+   *  the finger tracking is unreliable and splays the fingers into a crossed X.
+   *  We (1) reset the fingers to a flat rest pose, then (2) aim BOTH hands along
+   *  the bisector of the two forearms, so the fingers point the same way (up)
+   *  and run parallel instead of crossing. */
+  private _alignClaspHands(): void {
+    if (!this._clasped) return;
+    const lH = this.nodeCache.get('leftHand');
+    const rH = this.nodeCache.get('rightHand');
+    const lE = this.nodeCache.get('leftLowerArm');
+    const rE = this.nodeCache.get('rightLowerArm');
+    if (!lH || !rH || !lE || !rE) return;
+
+    // 1) Flatten fingers + restore each hand to its rest rotation.
+    for (const [name, rest] of this._restHand) {
+      this.nodeCache.get(name)?.quaternion.copy(rest);
+    }
+    lH.updateWorldMatrix(false, true);
+    rH.updateWorldMatrix(false, true);
+
+    // 2) TRUE finger axes: hand → its middle-finger knuckle (not the forearm —
+    //    the VRM hand's rest orientation doesn't simply continue the forearm).
+    const lF = this.nodeCache.get('leftMiddleProximal');
+    const rF = this.nodeCache.get('rightMiddleProximal');
+    if (!lF || !rF) return;
+    lH.getWorldPosition(this._pLW); lF.getWorldPosition(this._pLE);
+    rH.getWorldPosition(this._pRW); rF.getWorldPosition(this._pRE);
+    const fL = this._depAxis.copy(this._pLE).sub(this._pLW);
+    const fR = this._depDir.copy(this._pRE).sub(this._pRW);
+    if (fL.lengthSq() < 1e-8 || fR.lengthSq() < 1e-8) return;
+    fL.normalize(); fR.normalize();
+    const bis = this._vFwd.copy(fL).add(fR);
+    if (bis.lengthSq() < 1e-8) return;
+    bis.normalize();
+
+    // 3) Aim each hand's finger axis at the shared bisector → fingers parallel.
+    this._reorientHandToAxis(lH, fL, bis);
+    this._reorientHandToAxis(rH, fR, bis);
+  }
+
+  /** Rotate a hand (currently continuing its forearm along `from`) so its finger
+   *  axis points along world `to`; writes the result back as a local rotation. */
+  private _reorientHandToAxis(node: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3): void {
+    this._qBack.setFromUnitVectors(from, to);          // world-space correction
+    node.getWorldQuaternion(this._qLeg);               // current (continues forearm)
+    this._qLeg.premultiply(this._qBack);               // target world rotation
+    node.parent!.getWorldQuaternion(this._q1).invert();
+    node.quaternion.copy(this._q1).multiply(this._qLeg);
+    node.updateWorldMatrix(false, true);
   }
 
   /** Prayer/clasp: aim both forearms at the shared wrist midpoint, split by a
