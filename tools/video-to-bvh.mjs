@@ -114,6 +114,9 @@ export function parseCliArgs(argv) {
       if (value !== 'on' && value !== 'off') throw new Error(`${arg} must be on or off`);
       parsed.chainScale = value;
       i += 1;
+    } else if (arg === '--arm-back-limit') {
+      parsed.armBackLimit = parsePositiveInt(readFlagValue(argv, i, arg), arg);
+      i += 1;
     } else if (arg.startsWith('-')) {
       throw new Error(`Unknown option: ${arg}`);
     } else if (!parsed.video) {
@@ -237,6 +240,7 @@ export function resolveCliOptions(parsed, cwd = process.cwd()) {
     lifting: parsed.lifting,
     cropRedetect: parsed.cropRedetect,
     chainScale: parsed.chainScale,
+    ...(parsed.armBackLimit ? { armBackLimit: parsed.armBackLimit } : {}),
   };
 }
 
@@ -312,6 +316,13 @@ export async function installChainScaleSetting(context, mode) {
   );
 }
 
+export async function installArmBackLimitSetting(context, deg) {
+  await context.addInitScript(
+    ({ key, value }) => { localStorage.setItem(key, value); },
+    { key: 'vrm-player.mocap.armBackLimitDeg', value: String(deg) },
+  );
+}
+
 export async function installValidationSettings(context, recordingClampMode) {
   await context.addInitScript(
     ({ key, mode }) => {
@@ -352,6 +363,7 @@ export async function runVideoToBvh(options) {
     await installLiftingSetting(context, options.lifting ?? 'on');
     await installCropRedetectSetting(context, options.cropRedetect ?? 'off');
     await installChainScaleSetting(context, options.chainScale ?? 'on');
+    if (options.armBackLimit) await installArmBackLimitSetting(context, options.armBackLimit);
     const page = await context.newPage();
     page.setDefaultTimeout(options.timeoutMs);
     page.setDefaultNavigationTimeout(options.timeoutMs);
@@ -440,6 +452,7 @@ export async function runMotionJsonToBvh(options) {
     await installLiftingSetting(context, options.lifting ?? 'on');
     await installCropRedetectSetting(context, options.cropRedetect ?? 'off');
     await installChainScaleSetting(context, options.chainScale ?? 'on');
+    if (options.armBackLimit) await installArmBackLimitSetting(context, options.armBackLimit);
     const page = await context.newPage();
     page.setDefaultTimeout(options.timeoutMs);
     page.setDefaultNavigationTimeout(options.timeoutMs);

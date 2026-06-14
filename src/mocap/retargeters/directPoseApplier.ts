@@ -82,6 +82,8 @@ export class DirectPoseApplier {
   private _v3 = new THREE.Vector3();
   private _q1 = new THREE.Quaternion();
   private _qFade = new THREE.Quaternion();
+  private _qBack = new THREE.Quaternion();
+  private _vFwd = new THREE.Vector3();
   private _m2 = new THREE.Matrix4();
 
   // IK debug targets — updated each frame, read by MocapDebugViz
@@ -134,6 +136,9 @@ export class DirectPoseApplier {
   /** How much MediaPipe Z depth affects arm IK target (0 = flat 2D, 1 = full 3D). */
   setArmZAttenuation(v: number): void { this.settings.setArmZAttenuation(v); }
   get armZAttenuation(): number { return this.settings.armZAttenuation; }
+
+  setArmBackLimitDeg(v: number): void { this.settings.setArmBackLimitDeg(v); }
+  get armBackLimitDeg(): number { return this.settings.armBackLimitDeg; }
 
   /** Pole vector EMA alpha for arm/leg IK (0 = frozen, 1 = instant, no smoothing). */
   setPoleSmoothing(v: number): void { this.settings.setPoleSmoothing(v); }
@@ -426,6 +431,27 @@ export class DirectPoseApplier {
     return wristGap < shoulderSpan * 0.6;
   }
 
+  /** Pull a world-space bone direction forward so it sits no more than
+   *  `armBackLimitDeg` behind the hips' coronal plane (VRM faces -Z).
+   *  Mutates `dir` in place; magnitude is preserved by the consumer's
+   *  re-normalize, so we only adjust the backward component. */
+  private _clampDirectionBack(dir: THREE.Vector3): void {
+    const hips = this.nodeCache.get('hips');
+    if (!hips) return;
+    hips.getWorldQuaternion(this._qBack);
+    this._vFwd.set(0, 0, -1).applyQuaternion(this._qBack); // hips forward
+    this._vFwd.y = 0;
+    if (this._vFwd.lengthSq() < 1e-6) return;
+    this._vFwd.normalize();
+    const len = dir.length();
+    if (len < 1e-6) return;
+    const back = -dir.dot(this._vFwd); // >0 = behind the coronal plane
+    if (back <= 0) return;
+    const maxBack = Math.sin((this.settings.armBackLimitDeg * Math.PI) / 180) * len;
+    if (back <= maxBack) return;
+    dir.addScaledVector(this._vFwd, back - maxBack); // remove excess backward
+  }
+
   /** Pre-calibration / non-IK bones: angle-based direction retargeting. */
   private _applyLimb(
     boneName: string,
@@ -450,6 +476,14 @@ export class DirectPoseApplier {
     if (visible) {
       this._mpDeltaToVrm(c.x - p.x, c.y - p.y, c.z - p.z, this._v1);
       if (this._v1.lengthSq() < 1e-6) return;
+      // Depth/foreshortening ambiguity can fling an arm segment behind the
+      // body. Clamp the backward reach of arm bone directions to the user
+      // limit (90 = off). Legs/spine are unaffected.
+      if (this.settings.armBackLimitDeg < 90
+        && (boneName === 'leftUpperArm' || boneName === 'rightUpperArm'
+          || boneName === 'leftLowerArm' || boneName === 'rightLowerArm')) {
+        this._clampDirectionBack(this._v1);
+      }
       applyWorldDirectionToBone({
         node,
         restAxis,

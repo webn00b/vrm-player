@@ -53,6 +53,10 @@ export class DirectPoseSettings {
   // elbows this jitter is visible — we attenuate it further inside arm IK.
   // Legs' Z is less problematic (big, well-separated joints) so we leave it.
   armZAttenuation = 1;
+  /** Max angle (deg) the wrist target may sit behind the shoulder's coronal
+   *  plane. Depth ambiguity (arm toward/away from camera) can fling the hand
+   *  far back; this clamps it. 90 = off (no limit). User-tunable per clip. */
+  armBackLimitDeg = 90;
   /** Torso-direction Z damping (see setHighQualityMode). 1 = honest depth. */
   torsoDepthDamping = 3;
   /** Treat input world landmarks as geometrically trustworthy (file capture
@@ -143,6 +147,7 @@ export class DirectPoseSettings {
   setBodySmoothing(v: number): void { this.bodyLerp = clamp(v, 0.01, 1); }
   setSpineSmoothing(v: number): void { this.spineLerp = clamp(v, 0.01, 1); }
   setArmZAttenuation(v: number): void { this.armZAttenuation = clamp(v, 0, 1); }
+  setArmBackLimitDeg(v: number): void { this.armBackLimitDeg = clamp(v, 20, 90); }
   setPoleSmoothing(v: number): void { this.poleAlpha = clamp(v, 0.01, 1); }
   setArmPoleZ(v: number): void { this.armPoleZ = clamp(v, 0, 1); }
   setDepthScale(v: number): void { this.depthScale = clamp(v, 0, 1); }

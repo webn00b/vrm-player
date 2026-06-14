@@ -53,6 +53,8 @@ export class ArmIKApplier {
   private _v4 = new THREE.Vector3();
   private _v5 = new THREE.Vector3();
   private _v6 = new THREE.Vector3();
+  private _v5b = new THREE.Vector3(); // backward-guard scratch (forward dir)
+  private _q3 = new THREE.Quaternion(); // backward-guard scratch (hips world rot)
   private _qFade = new THREE.Quaternion();
   private _qFiltered = new THREE.Quaternion();
 
@@ -206,6 +208,32 @@ export class ArmIKApplier {
     if (smoothed.lengthSq() < 1e-6) smoothed.copy(this._v2);
     else smoothed.lerp(this._v2, settings.poleAlpha);
     getArmPoleSmoothed(debugTargets, side).copy(smoothed);
+
+    // Backward-reach guard: depth ambiguity (arm pointing toward/away from
+    // camera) can fling the wrist far behind the body. Clamp how far the
+    // target sits behind the shoulder's coronal plane to armBackLimitDeg
+    // (90 = off). User-tunable per clip; defends talk content where the hand
+    // rarely goes far back while preserving genuine moderate back-reach.
+    if (settings.armBackLimitDeg < 90) {
+      const hips = nodeCache.get('hips');
+      if (hips) {
+        hips.getWorldQuaternion(this._q3);
+        this._v5b.set(0, 0, -1).applyQuaternion(this._q3); // VRM faces -Z
+        this._v5b.y = 0;
+        if (this._v5b.lengthSq() > 1e-6) {
+          this._v5b.normalize();
+          this._v4.copy(target).sub(shoulderWorld);
+          const back = -this._v4.dot(this._v5b); // >0 = behind the shoulder
+          if (back > 0) {
+            const maxBack = Math.sin(settings.armBackLimitDeg * Math.PI / 180) * this._v4.length();
+            if (back > maxBack) {
+              this._v4.addScaledVector(this._v5b, back - maxBack); // pull forward
+              target.copy(shoulderWorld).add(this._v4);
+            }
+          }
+        }
+      }
+    }
 
     applyTwoBoneChain({
       rootWorld: shoulderWorld,

@@ -63,6 +63,16 @@ const CROP_REDETECT_STORAGE_KEY = 'vrm-player.mocap.cropRedetect';
 const CHAIN_SCALE_STORAGE_KEY = 'vrm-player.mocap.chainScale';
 const LIFTING_STORAGE_KEY = 'vrm-player.mocap.lifting';
 const AUTO_TRIM_STORAGE_KEY = 'vrm-player.mocap.autoTrim';
+const ARM_BACK_LIMIT_STORAGE_KEY = 'vrm-player.mocap.armBackLimitDeg';
+
+function readStorageNumber(key: string): number | null {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? null : Number(v);
+  } catch {
+    return null;
+  }
+}
 
 function readStorageToggle(key: string): boolean {
   try {
@@ -154,6 +164,8 @@ export class MocapController {
 
     this._calibration.onStatusChange = (s) => this.onCalibrationChange?.(s);
     this._calibration.setChainScaleEnabled(readStorageToggle(CHAIN_SCALE_STORAGE_KEY));
+    const storedArmBack = readStorageNumber(ARM_BACK_LIMIT_STORAGE_KEY);
+    if (storedArmBack !== null) this.applier.setArmBackLimitDeg(storedArmBack);
 
     this.detector.onFrame = (frame) => {
       // Accumulate calibration data every frame.
@@ -448,6 +460,12 @@ export class MocapController {
 
   setArmZAttenuation(v: number): void { this.applier.setArmZAttenuation(v); }
   get armZAttenuation(): number { return this.applier.armZAttenuation; }
+
+  setArmBackLimitDeg(v: number): void {
+    this.applier.setArmBackLimitDeg(v);
+    try { localStorage.setItem(ARM_BACK_LIMIT_STORAGE_KEY, String(this.applier.armBackLimitDeg)); } catch { /* private mode */ }
+  }
+  get armBackLimitDeg(): number { return this.applier.armBackLimitDeg; }
 
   setPoleSmoothing(v: number): void { this.applier.setPoleSmoothing(v); }
   get poleSmoothing(): number { return this.applier.poleSmoothing; }

@@ -27,6 +27,7 @@ import CaptureAgentOptions from './captureSection/CaptureAgentOptions.vue';
 import CaptureMultiviewPanel from './captureSection/CaptureMultiviewPanel.vue';
 import CapturePlaybackRow from './captureSection/CapturePlaybackRow.vue';
 import CapturePoseExportRow from './captureSection/CapturePoseExportRow.vue';
+import CaptureRetargetTuning from './captureSection/CaptureRetargetTuning.vue';
 import CaptureSourceSelector from './captureSection/CaptureSourceSelector.vue';
 import CaptureStatusLines from './captureSection/CaptureStatusLines.vue';
 import type { CaptureSource } from './captureSection/captureSectionTypes';
@@ -476,6 +477,8 @@ onUnmounted(() => {
       @export-pose="onExportPose"
       @export-pose-with-json="onExportPoseWithJson"
     />
+
+    <CaptureRetargetTuning :get-mocap="getMocap" />
   </div>
 </template>
 
