@@ -6,6 +6,7 @@ import { getCachedHumanoidRestAxes, HUMANOID_DIRECTION_CHILD } from '../../human
 import {
   FINGER_VRM_NAMES,
   LIMB_BONES,
+  LM,
   PALM_ROOT_SUFFIXES,
   PROCESS_ORDER,
 } from './directPoseConfig';
@@ -230,15 +231,22 @@ export class DirectPoseApplier {
     const calibration = this.rig.calibration;
     const ikReady = calibration?.calibrated === true;
     const legsReady = (calibration?.readiness().legs ?? 0) >= 1;
+    // Limbs default to direction retargeting (length-invariant joint angle);
+    // only use scaled position-IK when explicitly disabled.
+    const armIKMode = !this.settings.armDirectionRetarget;
+    const legIKMode = !this.settings.legDirectionRetarget;
+    // Contact fixup (доводка): when the performer's wrists are close (hands
+    // together) the direction pose leaves a gap between the avatar's hands —
+    // fall back to position-IK for THIS frame so the wrists meet exactly.
+    const armContact = ikReady && !armIKMode && this.settings.armContactFixup
+      && this._wristsClose(frame);
+    const useArmIK = armIKMode || armContact;
     for (const bone of PROCESS_ORDER) {
       const isArmUpper = bone === 'leftUpperArm' || bone === 'rightUpperArm';
       const isArmLower = bone === 'leftLowerArm' || bone === 'rightLowerArm';
       const isLegUpper = bone === 'leftUpperLeg' || bone === 'rightUpperLeg';
       const isLegLower = bone === 'leftLowerLeg' || bone === 'rightLowerLeg';
-      // Legs default to direction retargeting (length-invariant knee angle);
-      // only use scaled position-IK when explicitly disabled.
-      const legIKMode = !this.settings.legDirectionRetarget;
-      if (ikReady && isArmUpper) {
+      if (ikReady && isArmUpper && useArmIK) {
         this.armIK.apply(frame, bone.startsWith('left') ? 'left' : 'right');
         continue;
       }
@@ -247,9 +255,9 @@ export class DirectPoseApplier {
         else this.legIK.relaxToRest(bone.startsWith('left') ? 'left' : 'right');
         continue;
       }
-      // Skip lower bones handled by an upper IK pass; leg-lower in direction
-      // mode falls through to _applyLimb (its own landmark direction).
-      if (ikReady && (isArmLower || (isLegLower && legIKMode))) continue;
+      // Skip lower bones handled by an upper IK pass; a limb in direction mode
+      // falls through to _applyLimb (its own landmark direction).
+      if (ikReady && ((isArmLower && useArmIK) || (isLegLower && legIKMode))) continue;
       const [pIdx, cIdx] = LIMB_BONES[bone];
       this._applyLimb(bone, frame, pIdx, cIdx);
     }
@@ -398,6 +406,24 @@ export class DirectPoseApplier {
       effectiveDepthScale *= (1 - 0.6 * t);
     }
     mpDeltaToVrm(this.settings.mirrorX, dx, dy, dz, out, effectiveDepthScale);
+  }
+
+  /**
+   * Contact detector for the arm fixup: are the performer's wrists close enough
+   * (relative to shoulder width) to count as "hands together"? Scale-relative so
+   * it works at any camera distance.
+   */
+  private _wristsClose(frame: PoseFrame): boolean {
+    const w = frame.worldLandmarks;
+    const lw = w[LM.LEFT_WRIST], rw = w[LM.RIGHT_WRIST];
+    const ls = w[LM.LEFT_SHOULDER], rs = w[LM.RIGHT_SHOULDER];
+    if (!lw || !rw || !ls || !rs) return false;
+    if (!this.settings.isVisible(lw) || !this.settings.isVisible(rw)) return false;
+    const shoulderSpan = Math.hypot(ls.x - rs.x, ls.y - rs.y, ls.z - rs.z);
+    if (shoulderSpan < 1e-3) return false;
+    const wristGap = Math.hypot(lw.x - rw.x, lw.y - rw.y, lw.z - rw.z);
+    // Within ~0.6 shoulder-widths → hands meeting / clasped / one-on-other.
+    return wristGap < shoulderSpan * 0.6;
   }
 
   /** Pre-calibration / non-IK bones: angle-based direction retargeting. */

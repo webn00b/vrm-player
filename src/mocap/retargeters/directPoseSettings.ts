@@ -122,6 +122,22 @@ export class DirectPoseSettings {
    *  hip pin + foot-lock fixup, not by a position target. */
   legDirectionRetarget = true;
 
+  /** Pose the arms by aligning each bone to its landmark DIRECTION
+   *  (shoulder→elbow, elbow→wrist) instead of two-bone IK to a scaled wrist
+   *  position. Same rationale as legDirectionRetarget: the elbow angle becomes
+   *  independent of the performer's size / camera distance, so gestures lay the
+   *  same way on the VRM across videos. End-effector precision (hands meeting,
+   *  hand-on-body) is recovered by a contact IK fixup when a contact is
+   *  detected — see armContactFixup. */
+  armDirectionRetarget = true;
+  /** Contact IK fixup: when the performer's wrists are close, fall back to
+   *  position-IK so the avatar's wrists meet. Measured OFF by default: pure
+   *  direction already keeps clasped hands within ~3 cm, while the scaled
+   *  position-IK fixup (noisy anisotropic scale on untrusted footage) pushes
+   *  them to ~6 cm — it regresses the very case it targets. Kept as an opt-in
+   *  hook; a future midpoint-nudge fixup would be the better tool than armIK. */
+  armContactFixup = false;
+
   setShoulderSpread(deg: number): void { this.shoulderSpreadDeg = clamp(deg, -20, 20); }
   setLegSpreadX(v: number): void { this.legSpreadX = clamp(v, 0.5, 2.0); }
   setBodySmoothing(v: number): void { this.bodyLerp = clamp(v, 0.01, 1); }
