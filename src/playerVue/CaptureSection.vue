@@ -64,6 +64,8 @@ const videoAgentOgiEnabled = ref(false);
 /** Video staged for conversion — the picker stores it here so the user can
  *  review the conversion settings before starting the run. */
 const pendingVideo  = ref<File | null>(null);
+const saveCamVideo  = ref(true); // save webcam footage alongside the BVH
+const SAVE_CAM_VIDEO_KEY = 'vrm-player.capture.saveCameraVideo';
 const statusText    = ref('📷 Camera off');
 const framesText    = ref('');
 const sourceInfo    = ref('');
@@ -190,6 +192,14 @@ function setPreviewVisible(visible: boolean): void {
   if (previewPanel) previewPanel.style.display = visible ? 'flex' : 'none';
 }
 
+/** Show the live webcam feed as a corner thumbnail while capturing. */
+function setVideoPreview(visible: boolean, recording: boolean): void {
+  const v = props.getMocap()?.videoElement;
+  if (!v) return;
+  v.classList.toggle('preview', visible);
+  v.classList.toggle('recording', visible && recording);
+}
+
 function updateMocapUI(state: MocapState): void {
   clearTrackedTimer(framesTimer);
   isIdle.value = state === 'off';
@@ -197,6 +207,11 @@ function updateMocapUI(state: MocapState): void {
   framesText.value = '';
   primaryRecording.value = false;
   primaryDisabled.value = false;
+  // Live webcam thumbnail: visible only while the camera is on.
+  setVideoPreview(
+    currentSource.value === 'camera' && (state === 'live' || state === 'recording'),
+    state === 'recording',
+  );
   if (state === 'off') sourceInfo.value = '';
   else refreshSourceInfo();
 
@@ -419,12 +434,26 @@ onMounted(() => {
     notify({ severity: 'error', summary: 'Mocap error', detail: err.message, life: 4200 });
   };
 
+  // Save-camera-video preference (persisted), pushed into the controller.
+  try {
+    const s = localStorage.getItem(SAVE_CAM_VIDEO_KEY);
+    if (s !== null) saveCamVideo.value = s === '1';
+  } catch { /* ignore */ }
+  props.mocap.saveCameraVideo = saveCamVideo.value;
+
   // Paint initial UI based on current source + mocap state.
   updateMocapUI(props.mocap.state);
 });
 
+function toggleSaveVideo(): void {
+  saveCamVideo.value = !saveCamVideo.value;
+  props.mocap.saveCameraVideo = saveCamVideo.value;
+  try { localStorage.setItem(SAVE_CAM_VIDEO_KEY, saveCamVideo.value ? '1' : '0'); } catch { /* quota */ }
+}
+
 onUnmounted(() => {
   props.mocap.videoElement.removeEventListener('loadedmetadata', onLoadedMetadata);
+  setVideoPreview(false, false); // drop the corner thumbnail
 });
 </script>
 
@@ -441,6 +470,19 @@ onUnmounted(() => {
       v-if="currentSource === 'video'"
       v-model:agent-ogi-enabled="videoAgentOgiEnabled"
     />
+
+    <div v-if="currentSource === 'camera'" class="dbg-row">
+      <span class="dbg-label">💾 Save video</span>
+      <Button
+        class="dbg-toggle"
+        data-testid="capture-save-video"
+        :class="{ off: !saveCamVideo }"
+        :label="saveCamVideo ? 'ON' : 'OFF'"
+        text
+        size="small"
+        @click="toggleSaveVideo"
+      />
+    </div>
 
     <CaptureMultiviewPanel
       v-if="currentSource === 'multiview'"

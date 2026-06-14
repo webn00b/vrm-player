@@ -179,6 +179,8 @@ export class PoseDetector {
 
   get currentTime(): number { return this.video.currentTime; }
   get duration():    number  { return this.video.duration || 0; }
+  /** Live webcam stream (null for file capture). For recording the source. */
+  get cameraStream(): MediaStream | null { return this.stream; }
 
   constructor(video: HTMLVideoElement) {
     this.video = video;

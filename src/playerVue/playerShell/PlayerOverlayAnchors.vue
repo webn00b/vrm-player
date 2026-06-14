@@ -285,6 +285,29 @@ function onShellClick(event: MouseEvent): void {
   display: none;
 }
 
+/* Live webcam preview: a mirrored thumbnail in the corner while capturing,
+   so the performer can see themselves during recording. */
+#mocap-video.preview {
+  display: block;
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 240px;
+  height: auto;
+  max-height: 40vh;
+  z-index: 30;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  transform: scaleX(-1); /* mirror for a natural selfie view */
+  background: #000;
+  pointer-events: none;
+}
+#mocap-video.preview.recording {
+  border-color: #ff4d4f;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.6), 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
 @media (max-width: 860px) {
   #ui-overlay {
     display: grid;

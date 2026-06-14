@@ -154,6 +154,11 @@ export class MocapController {
   private _vrm: VRM;
   exportAgentOgiJsonForVideo = false;
 
+  /** Save a copy of the live webcam footage alongside the BVH (camera source). */
+  saveCameraVideo = true;
+  private _camRecorder: MediaRecorder | null = null;
+  private _camChunks: Blob[] = [];
+
   constructor(vrm: VRM, videoEl: HTMLVideoElement) {
     this._vrm         = vrm;
     this.detector     = new PoseDetector(videoEl);
@@ -775,9 +780,54 @@ export class MocapController {
   startRecording(): void {
     if (this._state !== 'live') return;
     this._faceTrack = [];
+    if (this.saveCameraVideo) this._startCameraVideoRecording();
     this.session.live.start();
     this.session.startReplay();
     this._setState('recording');
+  }
+
+  /** Start a MediaRecorder on the live webcam stream so the raw footage can be
+   *  saved alongside the BVH. No-op if there is no stream or no MediaRecorder. */
+  private _startCameraVideoRecording(): void {
+    this._camRecorder = null;
+    this._camChunks = [];
+    const stream = this.detector.cameraStream;
+    if (!stream || typeof MediaRecorder === 'undefined') return;
+    const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+      .find((t) => MediaRecorder.isTypeSupported(t));
+    try {
+      const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      rec.ondataavailable = (e) => { if (e.data.size > 0) this._camChunks.push(e.data); };
+      rec.start();
+      this._camRecorder = rec;
+    } catch {
+      this._camRecorder = null; // codec/permission issue — skip video save silently
+    }
+  }
+
+  /** Stop the camera MediaRecorder and download the footage as `${name}.webm`. */
+  private _finishCameraVideoRecording(name: string): void {
+    const rec = this._camRecorder;
+    this._camRecorder = null;
+    if (!rec) return;
+    rec.onstop = () => {
+      if (this._camChunks.length === 0) return;
+      const blob = new Blob(this._camChunks, { type: rec.mimeType || 'video/webm' });
+      this._camChunks = [];
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement('a'), { href: url, download: `${name}.webm` });
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    if (rec.state !== 'inactive') rec.stop();
+  }
+
+  /** Abort the camera recording without saving (discarded session). */
+  private _discardCameraVideoRecording(): void {
+    const rec = this._camRecorder;
+    this._camRecorder = null;
+    this._camChunks = [];
+    if (rec && rec.state !== 'inactive') { rec.onstop = null; rec.stop(); }
   }
 
   /**
@@ -793,6 +843,7 @@ export class MocapController {
     const { name, replayText } = this.session.finishRecording('camera');
     this._publishFaceTrack();
     downloadBvh(replayText, `${name}.bvh`);
+    this._finishCameraVideoRecording(name); // save the raw footage next to the BVH
     this.onBvhReady?.(replayText, name, { source: 'camera' });
     this._setState('live');
   }
@@ -847,6 +898,7 @@ export class MocapController {
   /** Stop everything, close camera. */
   stop(): void {
     if (this._state === 'recording' && this.session.live.recording) this.session.live.stop(); // discard
+    this._discardCameraVideoRecording();
     this.session.discardReplay();
     this._fixedFileFramePending = false;
     this.detector.stop();
