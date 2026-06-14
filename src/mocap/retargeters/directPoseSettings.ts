@@ -66,6 +66,13 @@ export class DirectPoseSettings {
    *  but DESTROY clean input (measured 90°+ arm direction error from the
    *  anisotropic x/y/z scaling alone). */
   trustInputGeometry = false;
+  /** Max per-frame change (deg) of a leg bone's world rotation. Half-body
+   *  footage has no real leg signal — MediaPipe hallucinates the hidden legs,
+   *  and a landmark that momentarily crosses the visibility gate fires a
+   *  single-frame teleport (measured up to 43°/frame). A real leg moves
+   *  gradually, so this rate-limit kills the teleport without touching genuine
+   *  motion. 180 = off; engaged only in the guarded (low-coverage) profile. */
+  legStepMaxDeg = 180;
   /** EMA alpha on pole smoothing. 1 = no smoothing (use current frame). */
   poleAlpha = 0.6;
   /** Z-axis weight applied to the arm pole vector (shoulder→elbow direction).
@@ -189,6 +196,10 @@ export class DirectPoseSettings {
     // yaw range, leaving the rate limiter as the only guard); untrusted footage
     // has unreliable hip depth, so a large hips yaw is a flip artefact — clamp.
     this.hipsYawMaxDeg = enabled ? 150 : 35;
+    // Legs: trusted footage carries real leg motion (no rate limit); guarded
+    // (half-body) footage has only hallucinated legs, so cap their per-frame
+    // step to kill single-frame teleport spikes.
+    this.legStepMaxDeg = enabled ? 180 : 6;
   }
 
   /**

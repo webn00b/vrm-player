@@ -83,8 +83,12 @@ export class DirectPoseApplier {
   private _q1 = new THREE.Quaternion();
   private _qFade = new THREE.Quaternion();
   private _qBack = new THREE.Quaternion();
+  private _qLeg = new THREE.Quaternion();
   private _vFwd = new THREE.Vector3();
   private _m2 = new THREE.Matrix4();
+  /** Previous-frame world quaternion per leg bone, for the guarded-mode
+   *  per-frame step limit. Cleared at each session boundary. */
+  private _legPrev = new Map<string, THREE.Quaternion>();
 
   // IK debug targets — updated each frame, read by MocapDebugViz
   readonly debugTargets: MocapDebugTargets = createMocapDebugTargets();
@@ -181,6 +185,7 @@ export class DirectPoseApplier {
   /** Trusted-geometry retarget — gate on full-body coverage, see settings. */
   setTrustedInputMode(enabled: boolean): void {
     this.settings.setTrustedInputMode(enabled);
+    this._legPrev.clear(); // new run — drop stale per-bone step history
   }
 
   /** Honest torso depth — gate on a successful 3D lift, see settings. */
@@ -490,12 +495,37 @@ export class DirectPoseApplier {
         worldDirection: this._v1,
         lerp: this.settings.bodyLerp,
       });
+      this._rateLimitLeg(boneName, node);
       // Capture the resulting local quaternion as last-good for the tracker.
       this.rig.boneTracker.markObserved(boneName, node.quaternion, this.rig.now);
     } else {
       // A1: instead of snap-freezing, fade toward rest via state machine.
       const fadeTarget = this.rig.boneTracker.fade(boneName, this.rig.now, this._qFade);
       node.quaternion.slerp(fadeTarget, this.settings.bodyLerp);
+      this._rateLimitLeg(boneName, node);
     }
+  }
+
+  /** Guarded-mode per-frame step limit for the four leg bones: clamp this
+   *  frame's WORLD rotation to within `legStepMaxDeg` of the previous frame's,
+   *  killing single-frame hallucination teleports on half-body footage.
+   *  No-op for non-leg bones or when the limit is off (trusted mode). */
+  private _rateLimitLeg(boneName: string, node: THREE.Object3D): void {
+    if (this.settings.legStepMaxDeg >= 180) return;
+    if (boneName !== 'leftUpperLeg' && boneName !== 'rightUpperLeg'
+      && boneName !== 'leftLowerLeg' && boneName !== 'rightLowerLeg') return;
+    let prev = this._legPrev.get(boneName);
+    if (prev) {
+      const maxRad = (this.settings.legStepMaxDeg * Math.PI) / 180;
+      if (prev.angleTo(node.quaternion) > maxRad) {
+        this._qLeg.copy(prev).rotateTowards(node.quaternion, maxRad);
+        node.quaternion.copy(this._qLeg);
+        node.updateWorldMatrix(false, true); // propagate to child leg bone
+      }
+    } else {
+      prev = new THREE.Quaternion();
+      this._legPrev.set(boneName, prev);
+    }
+    prev.copy(node.quaternion);
   }
 }
