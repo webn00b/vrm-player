@@ -85,6 +85,13 @@ export class DirectPoseApplier {
   private _qBack = new THREE.Quaternion();
   private _qLeg = new THREE.Quaternion();
   private _vFwd = new THREE.Vector3();
+  // Forearm de-penetration scratch (elbow/wrist world points + separation dir).
+  private _pLE = new THREE.Vector3();
+  private _pLW = new THREE.Vector3();
+  private _pRE = new THREE.Vector3();
+  private _pRW = new THREE.Vector3();
+  private _depAxis = new THREE.Vector3();
+  private _depDir  = new THREE.Vector3();
   private _m2 = new THREE.Matrix4();
   /** Previous-frame world quaternion per leg bone, for the guarded-mode
    *  per-frame step limit. Cleared at each session boundary. */
@@ -272,7 +279,79 @@ export class DirectPoseApplier {
       this._applyLimb(bone, frame, pIdx, cIdx);
     }
 
+    if (this.settings.forearmClearance > 0) this._depenetrateForearms();
+
     this.applyTrackedHands(frame, this.settings.handTrackingPriorityEnabled);
+  }
+
+  /**
+   * Push the two forearms apart when they get closer than `forearmClearance`.
+   * Folding the arms collapses both forearms onto one depth plane (MediaPipe
+   * can't separate two overlapping limbs in Z), so the meshes pass through each
+   * other. We nudge each wrist target along the segments' nearest-points axis
+   * (half the deficit each) and re-aim the lower-arm bone at it — only the
+   * already-overlapping frames move, the rest are untouched.
+   */
+  private _depenetrateForearms(): void {
+    const clearance = this.settings.forearmClearance;
+    const lE = this.nodeCache.get('leftLowerArm');
+    const lW = this.nodeCache.get('leftHand');
+    const rE = this.nodeCache.get('rightLowerArm');
+    const rW = this.nodeCache.get('rightHand');
+    if (!lE || !lW || !rE || !rW) return;
+    lE.getWorldPosition(this._pLE); lW.getWorldPosition(this._pLW);
+    rE.getWorldPosition(this._pRE); rW.getWorldPosition(this._pRW);
+
+    // Nearest points between the two forearm segments → separation axis + gap.
+    const dist = this._segNearest(this._pLE, this._pLW, this._pRE, this._pRW, this._depAxis);
+    if (dist >= clearance) return;
+
+    if (this._depAxis.lengthSq() < 1e-8) {
+      // Segments coincide — split along world depth, keeping any existing order.
+      this._depAxis.set(0, 0, this._pLW.z - this._pRW.z >= 0 ? 1 : -1);
+    } else {
+      this._depAxis.normalize();
+    }
+    const push = (clearance - dist) * 0.5;
+    this._pLW.addScaledVector(this._depAxis,  push); // left wrist target
+    this._pRW.addScaledVector(this._depAxis, -push); // right wrist target
+    this._reaimLowerArm('leftLowerArm', lE, this._pLE, this._pLW);
+    this._reaimLowerArm('rightLowerArm', rE, this._pRE, this._pRW);
+  }
+
+  /** Re-aim a lower-arm bone so it points from its elbow at a new wrist target. */
+  private _reaimLowerArm(
+    bone: string,
+    node: THREE.Object3D,
+    elbowWorld: THREE.Vector3,
+    wristTarget: THREE.Vector3,
+  ): void {
+    const restAxis = this.restLocalAxis.get(bone);
+    if (!restAxis) return;
+    this._depDir.copy(wristTarget).sub(elbowWorld);
+    if (this._depDir.lengthSq() < 1e-8) return;
+    applyWorldDirectionToBone({ node, restAxis, worldDirection: this._depDir, lerp: 1 });
+  }
+
+  /** Closest distance between segments [a1,a2] and [b1,b2]; writes the
+   *  (segA-point − segB-point) vector into `outAxis`. */
+  private _segNearest(
+    a1: THREE.Vector3, a2: THREE.Vector3,
+    b1: THREE.Vector3, b2: THREE.Vector3,
+    outAxis: THREE.Vector3,
+  ): number {
+    const d1 = this._v1.copy(a2).sub(a1);
+    const d2 = this._v2.copy(b2).sub(b1);
+    const r  = this._v3.copy(a1).sub(b1);
+    const a = d1.dot(d1), e = d2.dot(d2), f = d2.dot(r), c = d1.dot(r), b = d1.dot(d2);
+    const den = a * e - b * b;
+    let s = den > 1e-9 ? THREE.MathUtils.clamp((b * f - c * e) / den, 0, 1) : 0;
+    let t = (b * s + f) / (e || 1);
+    if (t < 0) { t = 0; s = THREE.MathUtils.clamp(-c / (a || 1), 0, 1); }
+    else if (t > 1) { t = 1; s = THREE.MathUtils.clamp((b - c) / (a || 1), 0, 1); }
+    // closest points: a1 + d1*s , b1 + d2*t
+    outAxis.copy(a1).addScaledVector(d1, s).sub(b1).addScaledVector(d2, -t);
+    return outAxis.length();
   }
 
   /**

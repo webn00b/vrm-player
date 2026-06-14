@@ -66,6 +66,12 @@ export class DirectPoseSettings {
    *  but DESTROY clean input (measured 90°+ arm direction error from the
    *  anisotropic x/y/z scaling alone). */
   trustInputGeometry = false;
+  /** Minimum clearance (m) kept between the two forearm segments. Folding the
+   *  arms collapses both forearms onto one depth plane (MediaPipe can't separate
+   *  two overlapping limbs in Z), so the meshes pass through each other. When the
+   *  forearms get closer than this, they are nudged apart in depth. 0 = off.
+   *  ~0.06 ≈ a forearm's diameter. */
+  forearmClearance = 0.06;
   /** Max per-frame change (deg) of a leg bone's world rotation. Half-body
    *  footage has no real leg signal — MediaPipe hallucinates the hidden legs,
    *  and a landmark that momentarily crosses the visibility gate fires a
