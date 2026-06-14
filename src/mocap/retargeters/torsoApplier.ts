@@ -19,7 +19,18 @@ const HIP_HEIGHT_EMA_ALPHA = 0.25;
 // Enter standing above 94% of the leg chain, leave below 92% (hysteresis),
 // pin at 98.5% — visually straight without singular full extension.
 const STAND_ENTER_RATIO = 0.94;
-const STAND_EXIT_RATIO = 0.92;
+// Sticky exit: once standing, only drop the pin on a real crouch (below 88% of
+// the leg chain). A raised arm perturbs the lifted hip-above-ankle estimate
+// enough to briefly cross a 0.92 exit, unlatching the stand pin and dropping the
+// pelvis ~7 cm for a fraction of a second — a visible vertical bob. 0.88 rejects
+// that noise while still releasing for a genuine squat.
+const STAND_EXIT_RATIO = 0.88;
+// Max per-APPLIER-TICK change of the hips' vertical position, metres. The
+// applier can tick ~2× per recorded frame (60 fps source → 30 fps capture), so
+// the recorded step is up to ~2× this. 1.2 cm/tick ≈ 2.4 cm/recorded-frame
+// (~0.7 m/s) — fast enough for a brisk squat, slow enough that a latch snap
+// can never read as a jump. Belt-and-braces with the stickier exit above.
+const HIP_Y_MAX_STEP = 0.012;
 const STAND_HEIGHT_RATIO = 0.985;
 // Pin ratio for the avatar's own straight-leg stand height. Higher than
 // STAND_HEIGHT_RATIO: 0.985 of full leg leaves a ~20° knee bend (asin(0.985)≈80°
@@ -68,6 +79,9 @@ export class TorsoApplier {
   // through its knees while the performer stands still.
   private _hipHeightEma = 0;
   private _standing = false;
+  // Previous applied hips local Y — rate-limits vertical motion so a latch snap
+  // can't teleport the pelvis (visible as the camera bobbing). NaN until set.
+  private _prevHipLocalY = Number.NaN;
   private _torsoForwardBaseline: number | null = null;
   // Previous frame's applied torso yaw (radians). Feeds the spine solver's
   // rate limiter so a single bad-depth frame can't teleport the torso 180°.
@@ -105,6 +119,7 @@ export class TorsoApplier {
   resetBaselines(): void {
     this._hipHeightEma = 0;
     this._standing = false;
+    this._prevHipLocalY = Number.NaN;
     this._hipPerfBaseline = null;
     this._torsoForwardBaseline = null;
     this._torsoTwistYaw = null;
@@ -375,6 +390,17 @@ export class TorsoApplier {
 
       // Untrusted footage: hold rest height, the landmark Y is unusable.
       if (!settings.hipVerticalTracking) positionTarget.y = this._hipRestLocalY;
+
+      // Rate-limit vertical motion: a standing-latch toggle would otherwise snap
+      // the pelvis ~7 cm in one frame (the gap between the avatar stand height
+      // and the performer-tracked height), which reads as the camera bobbing.
+      if (Number.isFinite(this._prevHipLocalY)) {
+        const dy = positionTarget.y - this._prevHipLocalY;
+        if (Math.abs(dy) > HIP_Y_MAX_STEP) {
+          positionTarget.y = this._prevHipLocalY + Math.sign(dy) * HIP_Y_MAX_STEP;
+        }
+      }
+      this._prevHipLocalY = positionTarget.y;
 
       if (settings.hipPositionLerp >= 1) hipsNode.position.copy(positionTarget);
       else                               hipsNode.position.lerp(positionTarget, settings.hipPositionLerp);
