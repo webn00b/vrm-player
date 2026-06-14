@@ -11,11 +11,10 @@ interface CaptureVideoFileOptions {
 }
 
 export function useCaptureVideoFile(options: CaptureVideoFileOptions) {
-  async function onVideoFileChange(e: Event): Promise<void> {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file) return;
+  /** Run the two-pass conversion on a staged file. The picker no longer
+   *  starts this directly — the user reviews the conversion settings first,
+   *  then triggers it from the primary CTA. */
+  async function convertVideo(file: File): Promise<void> {
     const mocap = options.getMocap();
     if (!mocap || mocap.state !== 'off') return;
     mocap.exportAgentOgiJsonForVideo = options.agentOgiEnabled.value;
@@ -31,5 +30,5 @@ export function useCaptureVideoFile(options: CaptureVideoFileOptions) {
     }
   }
 
-  return { onVideoFileChange };
+  return { convertVideo };
 }

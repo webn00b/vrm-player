@@ -26,8 +26,8 @@ import { notify } from '../ui';
 import CaptureAgentOptions from './captureSection/CaptureAgentOptions.vue';
 import CaptureMultiviewPanel from './captureSection/CaptureMultiviewPanel.vue';
 import CapturePlaybackRow from './captureSection/CapturePlaybackRow.vue';
+import CaptureConvertSettings from './captureSection/CaptureConvertSettings.vue';
 import CapturePoseExportRow from './captureSection/CapturePoseExportRow.vue';
-import CaptureRetargetTuning from './captureSection/CaptureRetargetTuning.vue';
 import CaptureSourceSelector from './captureSection/CaptureSourceSelector.vue';
 import CaptureStatusLines from './captureSection/CaptureStatusLines.vue';
 import type { CaptureSource } from './captureSection/captureSectionTypes';
@@ -61,6 +61,9 @@ const currentSource = ref<CaptureSource>(
   validCaptureSource(localStorage.getItem(CAPTURE_SOURCE_STORAGE_KEY)),
 );
 const videoAgentOgiEnabled = ref(false);
+/** Video staged for conversion — the picker stores it here so the user can
+ *  review the conversion settings before starting the run. */
+const pendingVideo  = ref<File | null>(null);
 const statusText    = ref('📷 Camera off');
 const framesText    = ref('');
 const sourceInfo    = ref('');
@@ -69,6 +72,7 @@ const primaryDisabled = ref(false);
 const primaryRecording = ref(false);
 const showStopCam   = ref(false);
 const showPlayback  = ref(false);
+const isIdle        = ref(true); // mocap state === 'off' (pre-run)
 const presetCaption = computed(() => capturePresetCaption(currentSource.value));
 
 const fileInputRef     = ref<HTMLInputElement | null>(null);
@@ -92,12 +96,24 @@ const {
   getMocap: props.getMocap,
   framesText,
 });
-const { onVideoFileChange } = useCaptureVideoFile({
+const { convertVideo } = useCaptureVideoFile({
   getMocap: props.getMocap,
   dbgRecorder: props.dbgRecorder,
   agentOgiEnabled: videoAgentOgiEnabled,
   statusText,
 });
+
+// ── Video staging ───────────────────────────────────────────────────────────
+// Picking a file no longer auto-converts: it stages the file and repaints the
+// CTA to "Convert", so conversion settings can be reviewed first.
+function onVideoFilePicked(e: Event): void {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = ''; // allow re-selecting the same file
+  if (!file) return;
+  pendingVideo.value = file;
+  updateMocapUI(props.getMocap()?.state ?? 'off');
+}
 
 // ── Browser multi-view state ───────────────────────────────────────────────
 const {
@@ -176,6 +192,7 @@ function setPreviewVisible(visible: boolean): void {
 
 function updateMocapUI(state: MocapState): void {
   clearTrackedTimer(framesTimer);
+  isIdle.value = state === 'off';
   const m = props.getMocap();
   framesText.value = '';
   primaryRecording.value = false;
@@ -207,8 +224,13 @@ function updateMocapUI(state: MocapState): void {
       statusText.value  = hasFrozenFrame ? '📷 Camera off (last frame)' : '📷 Camera off';
       primaryLabel.value = 'Start camera';
     } else if (currentSource.value === 'video') {
-      statusText.value  = '📁 Pick a video to process';
-      primaryLabel.value = 'Choose video…';
+      if (pendingVideo.value) {
+        statusText.value   = `🎬 ${pendingVideo.value.name}`;
+        primaryLabel.value = '▶ Convert to BVH';
+      } else {
+        statusText.value   = '📁 Pick a video to process';
+        primaryLabel.value = 'Choose video…';
+      }
     } else {
       statusText.value  = '🎬 Pick animation / motion JSON';
       primaryLabel.value = 'Choose animation…';
@@ -286,7 +308,14 @@ async function onPrimaryClick(): Promise<void> {
       m.startRecording();
     }
   } else if (currentSource.value === 'video') {
-    if (m.state === 'off') fileInputRef.value?.click();
+    if (m.state !== 'off') return;
+    if (pendingVideo.value) {
+      const file = pendingVideo.value;
+      pendingVideo.value = null;
+      await convertVideo(file);
+    } else {
+      fileInputRef.value?.click();
+    }
   } else {
     // Anim file / multiview offline processing
     if (currentSource.value === 'multiview') {
@@ -320,6 +349,7 @@ function setSource(next: CaptureSource): void {
     m.stop();
   }
   currentSource.value = next;
+  pendingVideo.value = null; // staged file belongs to the previous source
   try { localStorage.setItem(CAPTURE_SOURCE_STORAGE_KEY, currentSource.value); } catch { /* quota */ }
   updateMocapUI(props.getMocap()?.state ?? 'off');
 }
@@ -424,16 +454,34 @@ onUnmounted(() => {
       @choose-side="mvSideInputRef?.click()"
     />
 
+    <!-- Conversion settings come BEFORE the run trigger for the video source,
+         so the user reviews quality knobs first, then converts. -->
+    <CaptureConvertSettings
+      v-if="currentSource === 'video' && isIdle"
+      :get-mocap="getMocap"
+    />
+
     <Button
       class="capture-primary"
       data-testid="capture-primary"
-      :class="{ recording: primaryRecording }"
+      :class="{ recording: primaryRecording, convert: currentSource === 'video' && !!pendingVideo && isIdle }"
       :disabled="primaryDisabled"
       :label="primaryLabel"
       size="small"
       @click="onPrimaryClick"
     />
-    <input ref="fileInputRef"     type="file" accept="video/*" data-testid="capture-video-input" hidden @change="onVideoFileChange">
+
+    <Button
+      v-if="currentSource === 'video' && !!pendingVideo && isIdle"
+      class="dbg-toggle off"
+      data-testid="capture-change-video"
+      label="Choose another video…"
+      text
+      size="small"
+      style="width:100%"
+      @click="fileInputRef?.click()"
+    />
+    <input ref="fileInputRef"     type="file" accept="video/*" data-testid="capture-video-input" hidden @change="onVideoFilePicked">
     <input ref="animFileInputRef" type="file" accept=".bvh,.vrma,.fbx,.json,.motion.json,.wham.json,.gvhmr.json" data-testid="capture-anim-input" hidden @change="onAnimFileChange">
     <input ref="mvFrontInputRef"  type="file" accept="video/*" hidden @change="onMultiviewFrontChange">
     <input ref="mvSideInputRef"   type="file" accept="video/*" hidden @change="onMultiviewSideChange">
@@ -477,8 +525,6 @@ onUnmounted(() => {
       @export-pose="onExportPose"
       @export-pose-with-json="onExportPoseWithJson"
     />
-
-    <CaptureRetargetTuning :get-mocap="getMocap" />
   </div>
 </template>
 
@@ -502,6 +548,14 @@ onUnmounted(() => {
 :deep(.p-button.capture-primary.recording) {
   background: #c92a2a;
   border-color: #c92a2a;
+}
+:deep(.p-button.capture-primary.convert) {
+  background: #2f9e44;
+  border-color: #2f9e44;
+}
+:deep(.p-button.capture-primary.convert:hover) {
+  background: #37b24d;
+  border-color: #37b24d;
 }
 :deep(.p-button.dbg-toggle) {
   min-width: 34px;
