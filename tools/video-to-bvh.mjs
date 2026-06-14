@@ -381,8 +381,13 @@ export async function runVideoToBvh(options) {
     await page.getByTestId('capture-primary').waitFor({ state: 'visible', timeout: options.timeoutMs });
 
     mkdirSync(dirname(options.output), { recursive: true });
-    const downloadPromise = page.waitForEvent('download', { timeout: options.timeoutMs });
+    // Staging flow: picking the file no longer auto-converts — it stages the
+    // clip and turns the primary CTA into "Convert to BVH". Pick, then click.
     await page.getByTestId('capture-video-input').setInputFiles(options.video);
+    const convertBtn = page.getByTestId('capture-primary').filter({ hasText: /Convert/ });
+    await convertBtn.waitFor({ timeout: options.timeoutMs });
+    const downloadPromise = page.waitForEvent('download', { timeout: options.timeoutMs });
+    await convertBtn.click();
     const download = await downloadPromise;
     await download.saveAs(options.output);
     assertBvhHasFrames(readFileSync(options.output, 'utf8'), options.output);
