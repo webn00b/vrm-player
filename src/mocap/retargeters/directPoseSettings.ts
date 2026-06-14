@@ -70,8 +70,8 @@ export class DirectPoseSettings {
    *  arms collapses both forearms onto one depth plane (MediaPipe can't separate
    *  two overlapping limbs in Z), so the meshes pass through each other. When the
    *  forearms get closer than this, they are nudged apart in depth. 0 = off.
-   *  ~0.06 ≈ a forearm's diameter. */
-  forearmClearance = 0.06;
+   *  ~0.07 ≈ a forearm's diameter (two ~3.5cm radii). */
+  forearmClearance = 0.07;
   /** Max per-frame change (deg) of a leg bone's world rotation. Half-body
    *  footage has no real leg signal — MediaPipe hallucinates the hidden legs,
    *  and a landmark that momentarily crosses the visibility gate fires a

@@ -299,24 +299,31 @@ export class DirectPoseApplier {
     const rE = this.nodeCache.get('rightLowerArm');
     const rW = this.nodeCache.get('rightHand');
     if (!lE || !lW || !rE || !rW) return;
-    lE.getWorldPosition(this._pLE); lW.getWorldPosition(this._pLW);
-    rE.getWorldPosition(this._pRE); rW.getWorldPosition(this._pRW);
+    // Elbows are fixed by the upper-arm pose; only the wrists move as we re-aim.
+    lE.getWorldPosition(this._pLE);
+    rE.getWorldPosition(this._pRE);
 
-    // Nearest points between the two forearm segments → separation axis + gap.
-    const dist = this._segNearest(this._pLE, this._pLW, this._pRE, this._pRW, this._depAxis);
-    if (dist >= clearance) return;
+    // Re-aiming the lower arm at a pushed wrist target only partly closes the
+    // gap (the nearest point is mid-segment, the bone length is fixed), so a
+    // single pass undershoots the clearance. Iterate until the gap is met.
+    for (let iter = 0; iter < 4; iter++) {
+      lW.getWorldPosition(this._pLW);
+      rW.getWorldPosition(this._pRW);
+      const dist = this._segNearest(this._pLE, this._pLW, this._pRE, this._pRW, this._depAxis);
+      if (dist >= clearance) break;
 
-    if (this._depAxis.lengthSq() < 1e-8) {
-      // Segments coincide — split along world depth, keeping any existing order.
-      this._depAxis.set(0, 0, this._pLW.z - this._pRW.z >= 0 ? 1 : -1);
-    } else {
-      this._depAxis.normalize();
+      if (this._depAxis.lengthSq() < 1e-8) {
+        // Segments coincide — split along world depth, keeping any existing order.
+        this._depAxis.set(0, 0, this._pLW.z - this._pRW.z >= 0 ? 1 : -1);
+      } else {
+        this._depAxis.normalize();
+      }
+      const push = (clearance - dist) * 0.5;
+      this._pLW.addScaledVector(this._depAxis,  push); // left wrist target
+      this._pRW.addScaledVector(this._depAxis, -push); // right wrist target
+      this._reaimLowerArm('leftLowerArm', lE, this._pLE, this._pLW);
+      this._reaimLowerArm('rightLowerArm', rE, this._pRE, this._pRW);
     }
-    const push = (clearance - dist) * 0.5;
-    this._pLW.addScaledVector(this._depAxis,  push); // left wrist target
-    this._pRW.addScaledVector(this._depAxis, -push); // right wrist target
-    this._reaimLowerArm('leftLowerArm', lE, this._pLE, this._pLW);
-    this._reaimLowerArm('rightLowerArm', rE, this._pRE, this._pRW);
   }
 
   /** Re-aim a lower-arm bone so it points from its elbow at a new wrist target. */
