@@ -113,6 +113,15 @@ export class DirectPoseSettings {
    *  mirror partner's local quaternions while the partner is live. */
   symmetryFallback = false;
 
+  /** Pose the legs by aligning each bone to its landmark DIRECTION
+   *  (hip→knee, knee→ankle) instead of two-bone IK to a scaled ankle position.
+   *  Direction is a unit vector, so the knee angle is independent of the
+   *  performer's size / camera distance — the SAME motion lays the same way on
+   *  the VRM across different videos. (Scaled-IK leaks the per-video legScale
+   *  estimate into the knee flexion.) Foot grounding is handled by the standing
+   *  hip pin + foot-lock fixup, not by a position target. */
+  legDirectionRetarget = true;
+
   setShoulderSpread(deg: number): void { this.shoulderSpreadDeg = clamp(deg, -20, 20); }
   setLegSpreadX(v: number): void { this.legSpreadX = clamp(v, 0.5, 2.0); }
   setBodySmoothing(v: number): void { this.bodyLerp = clamp(v, 0.01, 1); }

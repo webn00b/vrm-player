@@ -235,16 +235,21 @@ export class DirectPoseApplier {
       const isArmLower = bone === 'leftLowerArm' || bone === 'rightLowerArm';
       const isLegUpper = bone === 'leftUpperLeg' || bone === 'rightUpperLeg';
       const isLegLower = bone === 'leftLowerLeg' || bone === 'rightLowerLeg';
+      // Legs default to direction retargeting (length-invariant knee angle);
+      // only use scaled position-IK when explicitly disabled.
+      const legIKMode = !this.settings.legDirectionRetarget;
       if (ikReady && isArmUpper) {
         this.armIK.apply(frame, bone.startsWith('left') ? 'left' : 'right');
         continue;
       }
-      if (ikReady && isLegUpper) {
+      if (ikReady && isLegUpper && legIKMode) {
         if (legsReady) this.legIK.apply(frame, bone.startsWith('left') ? 'left' : 'right');
         else this.legIK.relaxToRest(bone.startsWith('left') ? 'left' : 'right');
         continue;
       }
-      if (ikReady && (isArmLower || isLegLower)) continue; // handled in the upper pass
+      // Skip lower bones handled by an upper IK pass; leg-lower in direction
+      // mode falls through to _applyLimb (its own landmark direction).
+      if (ikReady && (isArmLower || (isLegLower && legIKMode))) continue;
       const [pIdx, cIdx] = LIMB_BONES[bone];
       this._applyLimb(bone, frame, pIdx, cIdx);
     }
