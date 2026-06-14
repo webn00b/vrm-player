@@ -134,6 +134,12 @@ export class PoseDetector {
   private _paused   = false;
   private _rafId    = 0;
   private _lastTs   = -1;
+  /** Last timestamp (ms) actually handed to holistic.detectForVideo. The
+   *  landmarker demands STRICTLY increasing timestamps for its whole lifetime,
+   *  but live capture feeds performance.now() (huge) while file capture restarts
+   *  near 0 — mixing them throws "Packet timestamp mismatch". Route every detect
+   *  call through _monoTs so the value never goes backwards across sessions. */
+  private _detectTs = 0;
   private _fileUrl: string | null = null;
 
   private _poseQuality: PoseModelQuality = 'full';
@@ -507,11 +513,18 @@ export class PoseDetector {
     });
   }
 
+  /** Monotonic timestamp for detectForVideo — never less than the previous one,
+   *  so live→file→live transitions don't trip MediaPipe's strict-increase rule. */
+  private _monoTs(requestedMs: number): number {
+    this._detectTs = Math.max(Math.round(requestedMs), this._detectTs + 1);
+    return this._detectTs;
+  }
+
   private _detectOnce(timestampMs = performance.now()): void {
     if (this.video.readyState < 2) return;
     try {
       const result: HolisticLandmarkerResult =
-        this.holistic!.detectForVideo(this.video, timestampMs);
+        this.holistic!.detectForVideo(this.video, this._monoTs(timestampMs));
 
       if (!result.poseLandmarks.length || !this.onFrame) return;
 
@@ -553,7 +566,7 @@ export class PoseDetector {
         0, 0, CROP_CANVAS_SIZE, CROP_CANVAS_SIZE,
       );
       const result: HolisticLandmarkerResult =
-        this.holistic!.detectForVideo(this._cropCanvas!, timestampMs);
+        this.holistic!.detectForVideo(this._cropCanvas!, this._monoTs(timestampMs));
       if (!result.poseLandmarks.length) return null;
       const frame = this._composeFrame(result, timestampMs / 1000, false);
       if (frame) remapCroppedPoseFrame(frame, crop, videoWidth, videoHeight);
@@ -574,7 +587,7 @@ export class PoseDetector {
     if (this.video.readyState < 2) return null;
     try {
       const result: HolisticLandmarkerResult =
-        this.holistic!.detectForVideo(this.video, timestampMs);
+        this.holistic!.detectForVideo(this.video, this._monoTs(timestampMs));
       if (!result.poseLandmarks.length) return null;
       const frame = this._composeFrame(result, timestampMs / 1000, false);
       if (frame && this._canvas && this._ctx) this._draw(frame, result);
