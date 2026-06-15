@@ -489,3 +489,82 @@ export async function generateBrowserMultiviewMotion(opts: BrowserMultiviewOptio
 
   return { motion, report };
 }
+
+// ── Multi-view → production applier path ────────────────────────────────────
+// The canonical-joints path above feeds the offline motionRetargeter, which is
+// tuned for dense SMPL joints and produces bent/wrong poses from sparse
+// MediaPipe input. This path instead fuses the RAW 33 MediaPipe world landmarks
+// (front X/Y + side depth) into PoseFrame[] so the controller can replay them
+// through the production directPoseApplier (with all its anatomical guards).
+
+export interface MultiviewFramesResult {
+  frames: (import('../pipeline/poseDetector').PoseFrame | null)[];
+  report: { fps: number; framesFront: number; framesSide: number; fused: number };
+}
+
+interface RawView { norm: Landmark3D[][]; world: Landmark3D[][] }
+
+async function extractRawView(
+  file: File,
+  fps: number,
+  maxFrames: number | undefined,
+  label: string,
+  onProgress?: BrowserMultiviewOptions['onProgress'],
+): Promise<RawView> {
+  const { video, url } = await loadVideo(file);
+  const landmarker = await createLandmarker();
+  const frameCount = Math.max(0, Math.floor((video.duration || 0) * fps));
+  const limit = maxFrames ? Math.min(frameCount, maxFrames) : frameCount;
+  const norm: Landmark3D[][] = [];
+  const world: Landmark3D[][] = [];
+  try {
+    for (let i = 0; i < limit; i++) {
+      await seekVideo(video, i / fps);
+      const result: HolisticLandmarkerResult = landmarker.detectForVideo(video, Math.round((i / fps) * 1000));
+      norm.push((result.poseLandmarks[0] ?? []) as Landmark3D[]);
+      world.push((result.poseWorldLandmarks[0] ?? []) as Landmark3D[]);
+      onProgress?.(`${label} ${i + 1}/${limit}`, i + 1, limit * 2);
+    }
+  } finally {
+    landmarker.close();
+    video.remove();
+    URL.revokeObjectURL(url);
+  }
+  return { norm, world };
+}
+
+/**
+ * Fuse front + side into RAW-MediaPipe PoseFrame[]: front supplies image-plane
+ * X/Y, the side view supplies depth (its horizontal axis → the front's Z). No
+ * coordinate conversion or mirroring here — the applier does both. depthScale /
+ * sideDepthAxis / sideOffsetFrames calibrate the side mapping.
+ */
+export async function generateMultiviewPoseFrames(
+  opts: BrowserMultiviewOptions,
+): Promise<MultiviewFramesResult> {
+  const front = await extractRawView(opts.front, opts.fps, opts.maxFrames, 'front', opts.onProgress);
+  const side = await extractRawView(opts.side, opts.fps, opts.maxFrames, 'side', opts.onProgress);
+
+  const sign = opts.sideDepthAxis.startsWith('-') ? -1 : 1;
+  const useX = opts.sideDepthAxis.endsWith('x');
+  const frames: MultiviewFramesResult['frames'] = [];
+  let fused = 0;
+  for (let i = 0; i < front.world.length; i++) {
+    const fw = front.world[i];
+    const fn = front.norm[i] ?? [];
+    if (!fw || fw.length === 0) { frames.push(null); continue; }
+    const sw = side.world[i + opts.sideOffsetFrames];
+    const haveSide = !!sw && sw.length === fw.length;
+    const worldLandmarks = fw.map((p, j) => {
+      const s = haveSide ? sw[j] : undefined;
+      const depth = s ? sign * (useX ? s.x : s.z) * opts.depthScale + opts.depthOffset : p.z;
+      return { x: p.x, y: s ? (p.y + s.y) * 0.5 : p.y, z: depth, visibility: p.visibility };
+    });
+    if (haveSide) fused++;
+    frames.push({ landmarks: fn, worldLandmarks, faceLandmarks: [], hands: [] });
+  }
+  return {
+    frames,
+    report: { fps: opts.fps, framesFront: front.world.length, framesSide: side.world.length, fused },
+  };
+}

@@ -16,6 +16,10 @@ import {
 } from '../bvh/faceTrack';
 import { downloadBvh, BVH_FRAME_RATE } from '../bvh/bvhRecorder';
 import { smoothMocapFrames } from './offlineLandmarkSmoother';
+import {
+  generateMultiviewPoseFrames,
+  type BrowserMultiviewOptions,
+} from '../offline/multiviewMediapipe';
 import { debiasTorsoLean, debiasLegLean } from './torsoDebias';
 import { autoTrimRange } from './autoTrim';
 import { MotionBertLifter, readLiftingEnabled } from './poseLifter';
@@ -345,8 +349,19 @@ export class MocapController {
       ),
     };
 
-    this._fileProgress = { phase: 'smooth', frameIndex: 0, totalFrames: collected.frames.length };
-    const smoothed = smoothMocapFrames(collected.frames, { fps: BVH_FRAME_RATE });
+    return this._smoothCalibrateReplay(collected.frames);
+  }
+
+  /**
+   * Shared offline tail: zero-phase smooth → auto-trim → one-shot calibration →
+   * replay each frame through the applier (pass B) → quaternion-space cleanup.
+   * Used by both the video two-pass capture and the multi-view path, so both
+   * get the same anatomically-guarded applier instead of the offline canonical
+   * retargeter. Returns false if recording was cancelled mid-replay.
+   */
+  private async _smoothCalibrateReplay(collectedFrames: (PoseFrame | null)[]): Promise<boolean> {
+    this._fileProgress = { phase: 'smooth', frameIndex: 0, totalFrames: collectedFrames.length };
+    const smoothed = smoothMocapFrames(collectedFrames, { fps: BVH_FRAME_RATE });
 
     // Auto-trim idle/empty head and tail (performer not yet in frame, settling
     // into rest, holding still at the end). Only the static bookends go.
@@ -884,6 +899,62 @@ export class MocapController {
         source: 'video',
         exportAgentOgiJson: this.exportAgentOgiJsonForVideo,
       });
+      this._setState('off');
+    } catch (err) {
+      this.detector.stop();
+      if (this.session.live.recording) this.session.live.stop();
+      this.session.discardReplay();
+      throw err;
+    } finally {
+      this._teardownFileCapture();
+    }
+  }
+
+  /**
+   * Multi-view capture: detect front + side, fuse into RAW MediaPipe PoseFrame[]
+   * (front X/Y + side depth), then replay through the production applier — the
+   * same anatomically-guarded path as video/live, NOT the offline canonical
+   * retargeter (which bent the bones). Downloads the BVH + fires onBvhReady.
+   */
+  async startFromMultiview(opts: BrowserMultiviewOptions): Promise<void> {
+    if (this._state !== 'off') return;
+    this._latestFrame = null;
+    this._frameRecorded = false;
+    this._faceTrack = [];
+    this._teardownFileCapture();
+
+    this.applier.setHighQualityMode(true);
+    // Two calibrated cameras give real 3D → trusted geometry (hip height, wide
+    // yaw). Torso depth stays damped (fused depth is still noisy; tune via
+    // depthScale rather than honouring it raw).
+    this.applier.setTrustedInputMode(true);
+    this._fileCaptureActive = true;
+    this._fixedFileCaptureActive = true;
+
+    try {
+      this.session.live.start();
+      this.session.startReplay();
+      this._setState('recording');
+
+      const result = await generateMultiviewPoseFrames({
+        ...opts,
+        onProgress: (_m, done, total) => {
+          this._fileProgress = { phase: 'analyze', frameIndex: done, totalFrames: total };
+        },
+      });
+      if (this.state !== 'recording') return;
+      console.info(
+        `[mocap:multiview] fused ${result.report.fused}/${result.report.framesFront} frames ` +
+        `(side ${result.report.framesSide})`,
+      );
+
+      const completed = await this._smoothCalibrateReplay(result.frames);
+      if (!completed || this.state !== 'recording') return;
+
+      const { name, replayText } = this.session.finishRecording('video');
+      this._publishFaceTrack();
+      downloadBvh(replayText, `${name}.bvh`);
+      this.onBvhReady?.(replayText, name, { source: 'video' });
       this._setState('off');
     } catch (err) {
       this.detector.stop();

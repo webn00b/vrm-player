@@ -150,6 +150,7 @@ const {
   onSideChange: onMultiviewSideChange,
   generate: generateMultiview,
 } = useCaptureMultiview({
+  getMocap: props.getMocap,
   statusText,
   framesText,
   onAnimFile: props.onAnimFile,
