@@ -483,6 +483,15 @@ export async function runMotionJsonToBvh(options) {
     await download.saveAs(options.output);
     assertBvhHasFrames(readFileSync(options.output, 'utf8'), options.output);
 
+    // Plain-coordinate external BVH (the saved one is VRM0 x/z pre-flipped) —
+    // required for any external parser / GT benchmark, same as the video path.
+    const externalBvh = await page.evaluate(() => window.__mocapLastExternalBvh ?? null);
+    if (externalBvh) {
+      const externalPath = `${options.output}.external.bvh`;
+      writeFileSync(externalPath, externalBvh);
+      console.log(`[motion-json-to-bvh] external-coordinates BVH: ${externalPath}`);
+    }
+
     return {
       output: options.output,
       suggestedFilename: download.suggestedFilename(),
