@@ -26,7 +26,9 @@ import { notify } from '../ui';
 import CaptureAgentOptions from './captureSection/CaptureAgentOptions.vue';
 import CaptureMultiviewPanel from './captureSection/CaptureMultiviewPanel.vue';
 import CapturePlaybackRow from './captureSection/CapturePlaybackRow.vue';
+import CaptureProgressBar from './captureSection/CaptureProgressBar.vue';
 import CaptureConvertSettings from './captureSection/CaptureConvertSettings.vue';
+import { friendlyCaptureError } from './captureSection/captureErrors';
 import CapturePoseExportRow from './captureSection/CapturePoseExportRow.vue';
 import CaptureSourceSelector from './captureSection/CaptureSourceSelector.vue';
 import CaptureStatusLines from './captureSection/CaptureStatusLines.vue';
@@ -66,6 +68,20 @@ const videoAgentOgiEnabled = ref(false);
 const pendingVideo  = ref<File | null>(null);
 const saveCamVideo  = ref(true); // save webcam footage alongside the BVH
 const SAVE_CAM_VIDEO_KEY = 'vrm-player.capture.saveCameraVideo';
+
+// Visual progress for the multi-minute file→BVH conversion.
+const progressActive = ref(false);
+const progressPct    = ref(0);
+const progressPhase  = ref('');
+const progressStep   = ref(1);
+const progressDetail = ref('');
+const PROGRESS_PHASES = ['analyze', 'lift', 'smooth', 'replay'] as const;
+const PHASE_LABEL: Record<string, string> = {
+  analyze: 'Analyzing video',
+  lift: 'Lifting to 3D',
+  smooth: 'Smoothing motion',
+  replay: 'Recording BVH',
+};
 const statusText    = ref('📷 Camera off');
 const framesText    = ref('');
 const sourceInfo    = ref('');
@@ -205,6 +221,7 @@ function updateMocapUI(state: MocapState): void {
   isIdle.value = state === 'off';
   const m = props.getMocap();
   framesText.value = '';
+  if (state !== 'recording') progressActive.value = false;
   primaryRecording.value = false;
   primaryDisabled.value = false;
   // Live webcam thumbnail: visible only while the camera is on.
@@ -277,17 +294,19 @@ function updateMocapUI(state: MocapState): void {
       if (!mm) return;
       const progress = mm.fileCaptureProgress;
       if (progress) {
-        // Two-pass file conversion: phase + frame fraction.
-        const label = progress.phase === 'analyze' ? 'analyzing'
-          : progress.phase === 'lift' ? 'lifting 3D'
-          : progress.phase === 'smooth' ? 'smoothing'
-          : 'rendering';
+        // Two-pass file conversion: drive the visual progress bar.
         const pct = progress.totalFrames > 0
           ? Math.min(100, Math.round((100 * progress.frameIndex) / progress.totalFrames))
           : 0;
-        framesText.value = `${label} ${progress.frameIndex}/${progress.totalFrames} · ${pct}%`;
+        progressActive.value = true;
+        progressPhase.value  = PHASE_LABEL[progress.phase] ?? progress.phase;
+        progressStep.value   = Math.max(1, PROGRESS_PHASES.indexOf(progress.phase) + 1);
+        progressPct.value    = pct;
+        progressDetail.value = `${progress.frameIndex} / ${progress.totalFrames} frames`;
+        framesText.value = '';
         return;
       }
+      progressActive.value = false;
       const dur = mm.duration;
       framesText.value = dur > 0
         ? `${mm.currentTime.toFixed(1)}s / ${dur.toFixed(1)}s`
@@ -314,9 +333,9 @@ async function onPrimaryClick(): Promise<void> {
       primaryDisabled.value = true;
       try { await m.startLive(); }
       catch (e) {
-        const msg = e instanceof Error ? e.message : 'Camera permission or device error';
-        statusText.value = '❌ Camera error';
-        notify({ severity: 'error', summary: 'Camera error', detail: msg, life: 4200 });
+        const f = friendlyCaptureError(e);
+        statusText.value = f.status;
+        notify({ severity: 'error', summary: f.status.replace(/^\S+\s/, ''), detail: f.detail, life: 5000 });
       }
       finally { primaryDisabled.value = false; }
     } else if (m.state === 'live') {
@@ -430,8 +449,10 @@ onMounted(() => {
   // (different channel, no conflict).
   props.mocap.onStateChange = updateMocapUI;
   props.mocap.onError = (err) => {
-    statusText.value = `❌ ${err.message.slice(0, 30)}`;
-    notify({ severity: 'error', summary: 'Mocap error', detail: err.message, life: 4200 });
+    const f = friendlyCaptureError(err);
+    progressActive.value = false;
+    statusText.value = f.status;
+    notify({ severity: 'error', summary: f.status.replace(/^\S+\s/, ''), detail: f.detail, life: 5000 });
   };
 
   // Save-camera-video preference (persisted), pushed into the controller.
@@ -532,6 +553,15 @@ onUnmounted(() => {
       :status-text="statusText"
       :frames-text="framesText"
       :source-info="sourceInfo"
+    />
+
+    <CaptureProgressBar
+      v-if="progressActive"
+      :pct="progressPct"
+      :phase-label="progressPhase"
+      :step="progressStep"
+      :total-steps="PROGRESS_PHASES.length"
+      :detail="progressDetail"
     />
 
     <Button

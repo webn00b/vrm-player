@@ -24,3 +24,5 @@ coverage/
 
 # regression-check temp BVH artifacts (golden JSON in tools/ is committed)
 data/.regression-*
+.conda-wilor/
+__pycache__/

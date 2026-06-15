@@ -2,6 +2,7 @@ import type { Ref } from 'vue';
 import type { MocapController } from '../../mocap/pipeline/mocapController';
 import type { MocapDebugRecorder } from '../../mocap/diagnostics/mocapDebugRecorder';
 import { notify } from '../../ui';
+import { friendlyCaptureError } from './captureErrors';
 
 interface CaptureVideoFileOptions {
   getMocap: () => MocapController | null;
@@ -24,9 +25,9 @@ export function useCaptureVideoFile(options: CaptureVideoFileOptions) {
       await mocap.startFromFile(file);
     } catch (e) {
       options.dbgRecorder.stop();
-      const msg = (e instanceof Error ? e.message : String(e)) || 'unknown error';
-      options.statusText.value = `❌ ${msg.slice(0, 28)}`;
-      notify({ severity: 'error', summary: 'Video processing failed', detail: msg, life: 4200 });
+      const f = friendlyCaptureError(e);
+      options.statusText.value = f.status;
+      notify({ severity: 'error', summary: f.status.replace(/^\S+\s/, ''), detail: f.detail, life: 5000 });
     }
   }
 
