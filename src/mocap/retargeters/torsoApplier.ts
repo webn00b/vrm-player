@@ -16,15 +16,15 @@ import type { DirectPoseRig } from './directPoseRig';
 // Hip-height smoothing/latch tuning (see _hipHeightEma field docs).
 // EMA alpha 0.25 ≈ 3-frame lag at 30 fps — imperceptible, kills jitter.
 const HIP_HEIGHT_EMA_ALPHA = 0.25;
-// Enter standing above 94% of the leg chain, leave below 92% (hysteresis),
-// pin at 98.5% — visually straight without singular full extension.
+// Standing latch from the hip-above-ankle ratio (enter >0.94, exit <0.88).
 const STAND_ENTER_RATIO = 0.94;
-// Sticky exit: once standing, only drop the pin on a real crouch (below 88% of
-// the leg chain). A raised arm perturbs the lifted hip-above-ankle estimate
-// enough to briefly cross a 0.92 exit, unlatching the stand pin and dropping the
-// pelvis ~7 cm for a fraction of a second — a visible vertical bob. 0.88 rejects
-// that noise while still releasing for a genuine squat.
 const STAND_EXIT_RATIO = 0.88;
+// A raised arm shifts MediaPipe's whole-body world-landmark scale, corrupting
+// the hip-above-ankle estimate (drops the pelvis ~18cm while the arm is up). So
+// the hip-height estimate + standing latch are FROZEN while a wrist is this far
+// (metres, hip-centred world) above the shoulder line — held at the last
+// arms-down value. Crouch tracking still works whenever the arms are down.
+const ARM_RAISE_FREEZE_M = 0.05;
 // Max per-APPLIER-TICK change of the hips' vertical position, metres. The
 // applier can tick ~2× per recorded frame (60 fps source → 30 fps capture), so
 // the recorded step is up to ~2× this. 1.2 cm/tick ≈ 2.4 cm/recorded-frame
@@ -344,29 +344,36 @@ export class TorsoApplier {
           const hipY = (lh.y + rh.y) * 0.5;
           // MediaPipe world y points DOWN: lowest ankle has the LARGEST y.
           const hipHeightRaw = Math.max(la.y, ra.y) - hipY;
-          if (hipHeightRaw > 0.2) {
-            // EMA kills per-frame jitter; the standing latch pins an
-            // almost-straight leg to exactly straight (with hysteresis) so
-            // measurement noise can't pulse the knees while standing.
+          // Arm raised? World y-down ⇒ a wrist above the shoulder line has the
+          // SMALLER y. The hip-height estimate is unreliable then, so we freeze
+          // it (below) rather than letting the arm drop the pelvis.
+          const lw = lms[LM.LEFT_WRIST], rw = lms[LM.RIGHT_WRIST];
+          const lsh = lms[LM.LEFT_SHOULDER], rsh = lms[LM.RIGHT_SHOULDER];
+          const shY = lsh && rsh ? (lsh.y + rsh.y) * 0.5 : Number.POSITIVE_INFINITY;
+          const armRaised =
+            (!!lw && lw.y < shY - ARM_RAISE_FREEZE_M) ||
+            (!!rw && rw.y < shY - ARM_RAISE_FREEZE_M);
+          if (hipHeightRaw > 0.2 && !armRaised) {
+            // EMA kills per-frame jitter; the standing latch (hip-above-ankle
+            // ratio, hysteresis) pins an almost-straight leg so measurement
+            // noise can't pulse the knees while standing.
             this._hipHeightEma = this._hipHeightEma <= 0
               ? hipHeightRaw
               : this._hipHeightEma * (1 - HIP_HEIGHT_EMA_ALPHA) + hipHeightRaw * HIP_HEIGHT_EMA_ALPHA;
-            const hipHeightM = this._hipHeightEma;
             const perfChain = calibration?.performerLegChainLength() ?? 0;
-            const legScale = calibration?.legScale() ?? 1;
-            let standing = this._standing;
             if (perfChain > 1e-3) {
-              const ratio = hipHeightM / perfChain;
-              standing = this._standing ? ratio > STAND_EXIT_RATIO : ratio > STAND_ENTER_RATIO;
+              const ratio = this._hipHeightEma / perfChain;
+              this._standing = this._standing ? ratio > STAND_EXIT_RATIO : ratio > STAND_ENTER_RATIO;
             }
-            this._standing = standing;
-            // Standing → pin to the AVATAR's own straight-leg height (proportion-
-            // independent), so legs straighten regardless of how the performer's
-            // projected leg compares. Otherwise (crouch/squat) track the
-            // performer's metric hip-above-ankle, scaled to avatar metres.
-            const worldY = (standing && Number.isFinite(this._standHipWorldY))
+          }
+          // Apply the (possibly frozen) height + latch. Standing → pin to the
+          // avatar's own straight-leg height; otherwise track the performer's
+          // metric hip-above-ankle (crouch/squat), scaled to avatar metres.
+          if (this._hipHeightEma > 0) {
+            const legScale = calibration?.legScale() ?? 1;
+            const worldY = (this._standing && Number.isFinite(this._standHipWorldY))
               ? this._standHipWorldY
-              : this._groundWorldY + hipHeightM * legScale;
+              : this._groundWorldY + this._hipHeightEma * legScale;
             absoluteHeight = { worldY };
           }
         }
