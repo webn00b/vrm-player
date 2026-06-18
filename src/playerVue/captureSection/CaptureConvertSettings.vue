@@ -210,7 +210,7 @@ onUnmounted(() => clearInterval(hipTimer));
     <div class="dbg-stat">{{ hipText.hipOff }}</div>
 
     <div class="dbg-row" style="margin-top:6px">
-      <span class="dbg-label">⟳ CoM rotation (rotate)</span>
+      <span class="dbg-label">⟳ CoM rotation (spine bend)</span>
       <SelectButton
         class="prime-compact-select"
         v-model="rotEnabled"
