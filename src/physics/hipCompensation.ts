@@ -156,6 +156,17 @@ export class HipCompensator {
   private readonly _hipParentPos = new THREE.Vector3();
   private readonly _localOffset = new THREE.Vector3();
 
+  // Idempotency state. apply() ADDS a local offset to hips.position; if nothing
+  // upstream rewrites the hip each frame (idle / static pose), a naive add would
+  // accumulate and the avatar would slide away. We remember what we wrote and
+  // the offset we added, then on the next frame decide: if hips.position is
+  // still (≈) our last write, upstream did NOT refresh it → strip our previous
+  // offset to recover the true base before re-applying. If it changed, upstream
+  // (animation / mocap) wrote a fresh base → use it as-is.
+  private readonly _lastWritten = new THREE.Vector3();
+  private readonly _lastOffsetLocal = new THREE.Vector3();
+  private _hasWritten = false;
+
   constructor(vrm: VRM, opts: HipCompensatorOptions = {}) {
     this.gainV = opts.gain ?? 0.5;
     this.horizontalOnlyV = opts.horizontalOnly ?? true;
@@ -187,13 +198,25 @@ export class HipCompensator {
   }
 
   reset(): void {
+    // Drop bookkeeping but DON'T touch hips.position — reset() fires on clip
+    // change, exactly when upstream is writing a fresh base; subtracting here
+    // would corrupt it. Stale offset gets overwritten by the new pose anyway.
+    this._hasWritten = false;
+    this._lastOffsetLocal.set(0, 0, 0);
     this._latest = null;
   }
 
   set enabled(v: boolean) {
     if (v === this.enabledV) return;
     this.enabledV = v;
-    if (!v) this.reset();
+    if (!v) {
+      // Turning off: restore the base by removing whatever we last added, so a
+      // static/idle pose snaps back instead of staying shifted.
+      if (this._hasWritten && this.hipNode) {
+        this.hipNode.position.sub(this._lastOffsetLocal);
+      }
+      this.reset();
+    }
   }
   get enabled(): boolean { return this.enabledV; }
 
@@ -216,6 +239,14 @@ export class HipCompensator {
   apply(): void {
     if (!this.enabledV || !this.hipNode) return;
     if (this.massBones.length === 0 || this.supportNodes.length === 0) return;
+
+    // Recover the upstream base position. If hips.position still matches what we
+    // wrote last frame, nothing refreshed it (idle/static) → strip our previous
+    // offset so it doesn't accumulate. Otherwise upstream wrote a fresh base.
+    if (this._hasWritten &&
+        this.hipNode.position.distanceToSquared(this._lastWritten) < 1e-12) {
+      this.hipNode.position.sub(this._lastOffsetLocal);
+    }
 
     for (let i = 0; i < this.massBones.length; i++) {
       this.massBones[i].node.getWorldPosition(this._segments[i].position);
@@ -251,5 +282,10 @@ export class HipCompensator {
       this._localOffset.copy(result.offset);
     }
     this.hipNode.position.add(this._localOffset);
+
+    // Record what we wrote so next frame can detect upstream refresh vs. drift.
+    this._lastOffsetLocal.copy(this._localOffset);
+    this._lastWritten.copy(this.hipNode.position);
+    this._hasWritten = true;
   }
 }
