@@ -172,6 +172,7 @@ export const playerUiModule: PlayerModule = {
       boneDrag,
       hipForce,
       hipBalance,
+      hipCompensator,
       validator,
       poseValidator,
     } = tooling;
@@ -386,6 +387,7 @@ export const playerUiModule: PlayerModule = {
       // so any inertia computed across the boundary would be a teleport spike.
       hipForce.reset();
       hipBalance.reset();
+      hipCompensator.reset();
     });
     registerCleanup(unsubscribePlaybackChange);
 

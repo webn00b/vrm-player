@@ -19,6 +19,7 @@ declare global {
     dumpSkeleton?: () => void;
     __skelLog?: ToolingSystems['skeletonLogger'];
     __motionTrace?: ToolingSystems['motionTraceRecorder'];
+    __hipComp?: ToolingSystems['hipCompensator'];
   }
 }
 

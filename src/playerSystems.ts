@@ -13,6 +13,7 @@ import type { BonePosePanel } from './bonePosePanel';
 import type { BoneDragController } from './boneDragController';
 import type { HipForceTracker } from './physics/hipForce';
 import type { HipBalanceCorrector } from './physics/hipBalanceCorrector';
+import type { HipCompensator } from './physics/hipCompensation';
 import type { SkeletonLogger } from './diagnostics/skeletonLogger';
 import type { MotionTraceRecorder } from './diagnostics/motionTraceRecorder';
 
@@ -38,6 +39,7 @@ export interface ToolingSystems {
   boneDrag: BoneDragController;
   hipForce: HipForceTracker;
   hipBalance: HipBalanceCorrector;
+  hipCompensator: HipCompensator;
   skeletonLogger: SkeletonLogger;
   motionTraceRecorder: MotionTraceRecorder;
 }

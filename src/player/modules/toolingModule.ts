@@ -7,6 +7,7 @@ import { BonePosePanel } from '../../bonePosePanel';
 import { createSkeletonLogger } from '../../diagnostics/skeletonLogger';
 import { MotionTraceRecorder } from '../../diagnostics/motionTraceRecorder';
 import { HipBalanceCorrector } from '../../physics/hipBalanceCorrector';
+import { HipCompensator } from '../../physics/hipCompensation';
 import { HipForceTracker } from '../../physics/hipForce';
 import type { ToolingSystems } from '../../playerSystems';
 import { sceneControlsState } from '../../playerVue/sceneControlsState';
@@ -40,6 +41,7 @@ export const toolingModule: PlayerModule = {
     );
     const hipForce = new HipForceTracker(vrm, { isPaused: () => controller.paused });
     const hipBalance = new HipBalanceCorrector(vrm);
+    const hipCompensator = new HipCompensator(vrm);
     const skeletonLogger = createSkeletonLogger(vrm, validator);
     const motionTraceRecorder = new MotionTraceRecorder(vrm);
 
@@ -70,6 +72,9 @@ export const toolingModule: PlayerModule = {
     renderLoopHooks.motionTraceCaptureSink = () => motionTraceRecorder.capture();
     window.__skelLog = skeletonLogger;
     window.__motionTrace = motionTraceRecorder;
+    // Console handle for tuning hip CoM compensation live: e.g.
+    //   __hipComp.enabled = true; __hipComp.gain = 0.6
+    window.__hipComp = hipCompensator;
 
     const tooling: ToolingSystems = {
       skelViz,
@@ -79,6 +84,7 @@ export const toolingModule: PlayerModule = {
       boneDrag,
       hipForce,
       hipBalance,
+      hipCompensator,
       skeletonLogger,
       motionTraceRecorder,
     };
@@ -93,6 +99,7 @@ export const toolingModule: PlayerModule = {
         delete window.__motionTrace;
       }
       if (window.__skelLog === skeletonLogger) delete window.__skelLog;
+      if (window.__hipComp === hipCompensator) delete window.__hipComp;
       if (ctx.tooling === tooling) ctx.tooling = undefined;
       skelViz.dispose();
       boneDrag.dispose();
