@@ -22,6 +22,8 @@ import type { VRM } from '@pixiv/three-vrm';
 import type { MocapController } from '../mocap/pipeline/mocapController';
 import type { AnimationController } from '../animationController';
 import type { MocapDebugRecorder } from '../mocap/diagnostics/mocapDebugRecorder';
+import type { HipCompensator } from '../physics/hipCompensation';
+import type { HipComRotator } from '../physics/hipComRotation';
 import CalibrationBlock from './CalibrationBlock.vue';
 import BvhVerifyFold from './BvhVerifyFold.vue';
 import CaptureSection from './CaptureSection.vue';
@@ -37,6 +39,9 @@ const props = defineProps<{
   mocapVrm: VRM;
   getController: () => AnimationController | null;
   dbgRecorder: MocapDebugRecorder;
+  /** Live hip balancers — forwarded to CaptureSection's conversion settings. */
+  hipCompensator: HipCompensator;
+  hipComRotator: HipComRotator;
   /** Wired in main.ts: imports a picked .bvh/.vrma/.fbx onto the queue. */
   onAnimFile?: (file: File) => Promise<void> | void;
 }>();
@@ -108,6 +113,8 @@ onMounted(() => {
       :getMocap="getMocap"
       :getController="getController"
       :dbgRecorder="dbgRecorder"
+      :hipCompensator="hipCompensator"
+      :hipComRotator="hipComRotator"
       :onAnimFile="onAnimFile"
     />
 

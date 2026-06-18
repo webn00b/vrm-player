@@ -36,8 +36,6 @@ import type { MicroAnimations } from '../microAnimations';
 import type { AnimationController } from '../animationController';
 import type { HipForceTracker } from '../physics/hipForce';
 import type { HipBalanceCorrector } from '../physics/hipBalanceCorrector';
-import type { HipCompensator } from '../physics/hipCompensation';
-import type { HipComRotator } from '../physics/hipComRotation';
 import type { MocapController } from '../mocap/pipeline/mocapController';
 import type { MocapDebugViz } from '../mocap/diagnostics/mocapDebugViz';
 import type { MocapDebugRecorder } from '../mocap/diagnostics/mocapDebugRecorder';
@@ -65,8 +63,6 @@ const props = defineProps<{
   controller: AnimationController;
   hipForce:   HipForceTracker;
   hipBalance: HipBalanceCorrector;
-  hipCompensator: HipCompensator;
-  hipComRotator: HipComRotator;
   getMocap:      () => MocapController | null;
   mocapDebugViz: MocapDebugViz;
   // Props for the Vue-migrated tools sections (Skeleton, Validation, etc).
@@ -278,8 +274,6 @@ onMounted(() => {
           <HipForcePanel
             :hipForce="hipForce"
             :hipBalance="hipBalance"
-            :hipCompensator="hipCompensator"
-            :hipComRotator="hipComRotator"
             :open="!!foldOpen['fold-hipforce']"
           />
         </div>

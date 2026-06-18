@@ -12,13 +12,18 @@
  * State mirrors the MocapController (single source of truth); we read it on
  * mount and write through the setters on change.
  */
-import { ref, onMounted } from 'vue';
+import { reactive, ref, onMounted, onUnmounted } from 'vue';
 import SelectButton from 'primevue/selectbutton';
 import Slider from 'primevue/slider';
 import type { MocapController } from '../../mocap/pipeline/mocapController';
+import type { HipCompensator } from '../../physics/hipCompensation';
+import type { HipComRotator } from '../../physics/hipComRotation';
 
 const props = defineProps<{
   getMocap: () => MocapController | null;
+  /** Live hip balancers (player overlay) — tuned here, applied each frame. */
+  hipCompensator: HipCompensator;
+  hipComRotator: HipComRotator;
   /** Disable the model swap while a conversion is in flight. */
   busy?: boolean;
 }>();
@@ -69,6 +74,66 @@ function setDepth(v: 0 | 0.5 | 1 | null): void {
 function onArmBackLimit(): void {
   props.getMocap()?.setArmBackLimitDeg(armBackLimit.value);
 }
+
+// ── Hips CoM balance (live player overlay) ────────────────────────────────
+const onOffOptions: Array<{ label: string; value: boolean }> = [
+  { label: 'OFF', value: false },
+  { label: 'ON', value: true },
+];
+
+const compEnabled = ref(props.hipCompensator.enabled);
+const compGain    = ref(props.hipCompensator.gain);
+const rotEnabled  = ref(props.hipComRotator.enabled);
+const rotGain     = ref(props.hipComRotator.gain);
+
+const hipText = reactive({
+  comErr: 'CoM→feet: —',
+  hipOff: 'hip offset: —',
+  rotAng: 'rot angle: —',
+});
+
+function setCompEnabled(v: boolean | null): void {
+  if (v == null) return;
+  props.hipCompensator.enabled = v;
+  compEnabled.value = props.hipCompensator.enabled;
+}
+function onCompGain(): void {
+  props.hipCompensator.gain = compGain.value;
+  compGain.value = props.hipCompensator.gain;
+}
+function setRotEnabled(v: boolean | null): void {
+  if (v == null) return;
+  props.hipComRotator.enabled = v;
+  rotEnabled.value = props.hipComRotator.enabled;
+}
+function onRotGain(): void {
+  props.hipComRotator.gain = rotGain.value;
+  rotGain.value = props.hipComRotator.gain;
+}
+
+let hipTimer = 0;
+function refreshHips(): void {
+  const c = props.hipCompensator.latest;
+  if (c && c.totalMass > 0) {
+    const dx = (c.supportCenter.x - c.com.x) * 100;
+    const dz = (c.supportCenter.z - c.com.z) * 100;
+    hipText.comErr = `CoM→feet: ΔX=${dx.toFixed(1)} ΔZ=${dz.toFixed(1)} cm`;
+    hipText.hipOff = `hip offset: ${(c.offset.length() * 100).toFixed(1)} cm`;
+  } else {
+    hipText.comErr = 'CoM→feet: —';
+    hipText.hipOff = 'hip offset: (off)';
+  }
+  const r = props.hipComRotator.latest;
+  hipText.rotAng = (r && r.totalMass > 0)
+    ? `rot angle: ${(r.angle * 180 / Math.PI).toFixed(1)}°`
+    : 'rot angle: (off)';
+}
+
+onMounted(() => {
+  refreshHips();
+  hipTimer = window.setInterval(refreshHips, 150);
+});
+onUnmounted(() => clearInterval(hipTimer));
 </script>
 
 <template>
@@ -115,6 +180,59 @@ function onArmBackLimit(): void {
         @update:modelValue="onArmBackLimit"
       />
     </div>
+
+    <p class="convert-settings-title" style="margin-top:10px">Hips balance</p>
+
+    <div class="dbg-row">
+      <span class="dbg-label">⊕ CoM compensation (move)</span>
+      <SelectButton
+        class="prime-compact-select"
+        v-model="compEnabled"
+        :options="onOffOptions"
+        optionLabel="label"
+        optionValue="value"
+        :allowEmpty="false"
+        @update:modelValue="setCompEnabled"
+      />
+    </div>
+    <div class="dbg-row">
+      <span class="dbg-label">gain {{ compGain.toFixed(2) }}</span>
+      <Slider
+        class="dbg-slider"
+        v-model="compGain"
+        :min="0"
+        :max="1"
+        :step="0.05"
+        @update:modelValue="onCompGain"
+      />
+    </div>
+    <div class="dbg-stat">{{ hipText.comErr }}</div>
+    <div class="dbg-stat">{{ hipText.hipOff }}</div>
+
+    <div class="dbg-row" style="margin-top:6px">
+      <span class="dbg-label">⟳ CoM rotation (rotate)</span>
+      <SelectButton
+        class="prime-compact-select"
+        v-model="rotEnabled"
+        :options="onOffOptions"
+        optionLabel="label"
+        optionValue="value"
+        :allowEmpty="false"
+        @update:modelValue="setRotEnabled"
+      />
+    </div>
+    <div class="dbg-row">
+      <span class="dbg-label">gain {{ rotGain.toFixed(2) }}</span>
+      <Slider
+        class="dbg-slider"
+        v-model="rotGain"
+        :min="0"
+        :max="1"
+        :step="0.05"
+        @update:modelValue="onRotGain"
+      />
+    </div>
+    <div class="dbg-stat">{{ hipText.rotAng }}</div>
   </div>
 </template>
 

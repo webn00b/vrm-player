@@ -64,7 +64,7 @@ export function mountDebugPanel(
     // mocap stats (MocapStatsPanel) all live inside this Vue tree and own
     // their own polling timers. Replaces the old `wireDebugPanelStats` +
     // `wireDebugPanelMocapStats` imperative pipelines.
-    hipForce, hipBalance, hipCompensator, hipComRotator,
+    hipForce, hipBalance,
     getMocap, mocapDebugViz,
     // Tools sections (Skeleton / Validation / Mocap-advanced / Debug record)
     // — fully migrated into the Vue tree. Replaces `wireDebugPanelTools` +
@@ -99,6 +99,7 @@ export function mountDebugPanel(
       // mocap.onError; we only need to pass it the deps + the anim-file
       // import callback.
       mocap, mocapVrm: mocap.vrm, getController, dbgRecorder, onAnimFile,
+      hipCompensator, hipComRotator,
       onHipDiag: () => hipDiag.open(),
       onCalibrationMounted: (handles: { calibStat: HTMLElement }) => {
         calibStat = handles.calibStat;

@@ -22,6 +22,8 @@ import type { VRM } from '@pixiv/three-vrm';
 import type { MocapController, MocapState } from '../mocap/pipeline/mocapController';
 import type { AnimationController } from '../animationController';
 import type { MocapDebugRecorder } from '../mocap/diagnostics/mocapDebugRecorder';
+import type { HipCompensator } from '../physics/hipCompensation';
+import type { HipComRotator } from '../physics/hipComRotation';
 import { notify } from '../ui';
 import CaptureAgentOptions from './captureSection/CaptureAgentOptions.vue';
 import CaptureMultiviewPanel from './captureSection/CaptureMultiviewPanel.vue';
@@ -53,6 +55,9 @@ const props = defineProps<{
   getMocap: () => MocapController | null;
   getController: () => AnimationController | null;
   dbgRecorder: MocapDebugRecorder;
+  /** Live hip balancers — surfaced in the conversion-settings fold. */
+  hipCompensator: HipCompensator;
+  hipComRotator: HipComRotator;
   /** Wired in main.ts. When user picks a .bvh/.vrma/.fbx/.motion.json via the anim-file
    *  input, this loads + retargets it onto the queue. */
   onAnimFile?: (file: File) => Promise<void> | void;
@@ -523,6 +528,8 @@ onUnmounted(() => {
     <CaptureConvertSettings
       v-if="currentSource === 'video' && isIdle"
       :get-mocap="getMocap"
+      :hip-compensator="hipCompensator"
+      :hip-com-rotator="hipComRotator"
     />
 
     <Button
