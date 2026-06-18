@@ -61,7 +61,7 @@ export function startRenderLoop(
 ): CleanupFn {
   const { controller, pa, micro, idle } = playback;
   const { mocap, debugViz: mocapDebugViz, dbgRecorder, faceTrackPlayer } = mocapSys;
-  const { skelViz, validator, poseValidator, bonePanel, boneDrag, hipForce, hipBalance, hipCompensator } = tooling;
+  const { skelViz, validator, poseValidator, bonePanel, boneDrag, hipForce, hipBalance, hipCompensator, hipComRotator } = tooling;
 
   let stopped = false;
   let rafId = 0;
@@ -208,6 +208,12 @@ export function startRenderLoop(
     // secondary motion respond to the corrected orientation. No-op when
     // disabled (default OFF).
     hipBalance.apply();
+
+    // 4b-bis. Hip CoM rotation balance — rotates the hip so the upper-body CoM
+    // (relative to the hip) points straight up. Mass-driven alternative to the
+    // balance corrector above. No-op when disabled (default OFF). See
+    // hipComRotation.ts.
+    hipComRotator.apply();
 
     // 4c. Hip CoM compensation — translates the hip horizontally so the body's
     // centre of mass sits over the feet (support base). Orthogonal to the

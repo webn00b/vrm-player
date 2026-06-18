@@ -14,11 +14,13 @@ import { reactive, ref, onMounted, onUnmounted } from 'vue';
 import type { HipForceTracker } from '../physics/hipForce';
 import type { HipBalanceCorrector } from '../physics/hipBalanceCorrector';
 import type { HipCompensator } from '../physics/hipCompensation';
+import type { HipComRotator } from '../physics/hipComRotation';
 
 const props = defineProps<{
   hipForce: HipForceTracker;
   hipBalance: HipBalanceCorrector;
   hipCompensator: HipCompensator;
+  hipComRotator: HipComRotator;
   /** True when the parent's Hip force fold is open. We poll the
    *  cheap `pa.levelSnapshot` always, but skip the costly hip-force
    *  formatting when the fold is collapsed. */
@@ -35,6 +37,7 @@ const text = reactive({
   angles: 'corr. angles: —',
   comErr: 'CoM→feet: —',
   hipOff: 'hip offset: —',
+  rotAng: 'rot angle: —',
 });
 
 const enabled = ref(props.hipBalance.enabled);
@@ -53,6 +56,18 @@ function onGainInput(e: Event): void {
   const v = Number((e.target as HTMLInputElement).value);
   props.hipCompensator.gain = v;
   compGain.value = props.hipCompensator.gain;
+}
+
+const rotEnabled = ref(props.hipComRotator.enabled);
+const rotGain = ref(props.hipComRotator.gain);
+function toggleRotator(): void {
+  props.hipComRotator.enabled = !props.hipComRotator.enabled;
+  rotEnabled.value = props.hipComRotator.enabled;
+}
+function onRotGainInput(e: Event): void {
+  const v = Number((e.target as HTMLInputElement).value);
+  props.hipComRotator.gain = v;
+  rotGain.value = props.hipComRotator.gain;
 }
 
 let timer = 0;
@@ -108,6 +123,14 @@ function refresh(): void {
     text.comErr = 'CoM→feet: —';
     text.hipOff = 'hip offset: (off)';
   }
+
+  // Hip CoM rotation readout (degrees).
+  const r2 = props.hipComRotator.latest;
+  if (r2 && r2.totalMass > 0) {
+    text.rotAng = `rot angle: ${(r2.angle * 180 / Math.PI).toFixed(1)}°`;
+  } else {
+    text.rotAng = 'rot angle: (off)';
+  }
 }
 
 onMounted(() => {
@@ -152,4 +175,22 @@ onUnmounted(() => clearInterval(timer));
   </div>
   <div class="dbg-stat">{{ text.comErr }}</div>
   <div class="dbg-stat">{{ text.hipOff }}</div>
+
+  <div class="dbg-row" style="margin-top:6px">
+    <span class="dbg-label">⟳ Hip CoM rotation</span>
+    <button
+      class="dbg-toggle"
+      :class="{ off: !rotEnabled }"
+      @click="toggleRotator"
+    >{{ rotEnabled ? 'ON' : 'OFF' }}</button>
+  </div>
+  <div class="dbg-row">
+    <span class="dbg-label">gain {{ rotGain.toFixed(2) }}</span>
+    <input
+      type="range" min="0" max="1" step="0.05"
+      :value="rotGain"
+      @input="onRotGainInput"
+    />
+  </div>
+  <div class="dbg-stat">{{ text.rotAng }}</div>
 </template>

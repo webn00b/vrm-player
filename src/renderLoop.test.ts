@@ -153,6 +153,8 @@ test('render loop captures the red skeleton pose before validation clamps the fr
       },
       hipForce: { update: () => order.push('hipForce.update') },
       hipBalance: { apply: () => order.push('hipBalance.apply') },
+      hipCompensator: { apply: () => order.push('hipCompensator.apply') },
+      hipComRotator: { apply: () => order.push('hipComRotator.apply') },
     } as never,
   );
 
@@ -230,6 +232,8 @@ test('render loop soft-clamps all bones while recording mocap', () => {
       },
       hipForce: { update: () => undefined },
       hipBalance: { apply: () => undefined },
+      hipCompensator: { apply: () => undefined },
+      hipComRotator: { apply: () => undefined },
     } as never,
   );
 

@@ -165,6 +165,8 @@ function createContext(animation = createAnimationBridge()): PlayerContext {
       boneDrag: {},
       hipForce: { reset: vi.fn() },
       hipBalance: { reset: vi.fn() },
+      hipCompensator: { reset: vi.fn() },
+      hipComRotator: { reset: vi.fn() },
     } as unknown as PlayerContext['tooling'],
     animation,
   };

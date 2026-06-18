@@ -173,6 +173,7 @@ export const playerUiModule: PlayerModule = {
       hipForce,
       hipBalance,
       hipCompensator,
+      hipComRotator,
       validator,
       poseValidator,
     } = tooling;
@@ -388,6 +389,7 @@ export const playerUiModule: PlayerModule = {
       hipForce.reset();
       hipBalance.reset();
       hipCompensator.reset();
+      hipComRotator.reset();
     });
     registerCleanup(unsubscribePlaybackChange);
 
